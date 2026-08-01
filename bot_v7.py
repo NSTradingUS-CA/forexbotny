@@ -418,7 +418,7 @@ def check_signal(df, instrument):
 
 def main():
     global trades_today, last_trade_date, last_close_time
-    start_msg = f"🟢 Bot OANDA V10 démarré – max {MAX_TRADES_PER_DAY} trades/jour, délai {MIN_MINUTES_BETWEEN_TRADES}min, achat+vente"
+    start_msg = f"🟢 MyForexBotNY has started – max {MAX_TRADES_PER_DAY} trades/day, buffer {MIN_MINUTES_BETWEEN_TRADES}min, Buy & Sell."
     print(start_msg)
     send_telegram_message(start_msg)
 
@@ -427,7 +427,7 @@ def main():
             now = datetime.now(tz)
 
             if now.hour > TRADING_HOURS_END or (now.hour == TRADING_HOURS_END and now.minute >= 5):
-                stop_msg = f"🔴 Bot arrêté – fin de la séance ({now.strftime('%H:%M')}), {trades_today} trade(s) pris"
+                stop_msg = f"🔴 MyForexBotNY has stopped – End of session ({now.strftime('%H:%M')}), {trades_today} trade(s) taken today."
                 print(stop_msg)
                 send_telegram_message(stop_msg)
                 break
