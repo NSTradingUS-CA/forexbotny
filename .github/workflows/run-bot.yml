@@ -1,0 +1,31 @@
+name: Forex Bot NY Session
+
+on:
+  workflow_dispatch:          # permet le test manuel
+  repository_dispatch:        # déclenché par Cron-job.org
+
+jobs:
+  run-bot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 210
+
+    env:
+      OANDA_API_KEY: ${{ secrets.OANDA_API_KEY }}
+      OANDA_ACCOUNT_ID: ${{ secrets.OANDA_ACCOUNT_ID }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install v20 pandas python-dotenv requests pytz pyyaml
+
+      - name: Run bot
+        run: python bot_v7.py
