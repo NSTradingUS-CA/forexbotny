@@ -21,7 +21,8 @@ RISK_PERCENT = 1.0
 TRADING_HOURS_START = 8
 TRADING_HOURS_END = 11
 TIMEZONE = 'America/Toronto'
-MAX_TRADES_PER_DAY = 1
+MAX_TRADES_PER_DAY = 2
+MIN_MINUTES_BETWEEN_TRADES = 15
 TRAILING_DISTANCE_PIPS = 20
 ATR_PERIOD = 14
 ATR_MULTIPLIER = 1.5
@@ -41,22 +42,18 @@ VOLUME_MA_PERIOD = 20
 ctx = v20.Context(OANDA_URL, token=API_KEY)
 trades_today = 0
 last_trade_date = None
+last_close_time = None
 news_cache = {"time": None, "events": []}
 tz = pytz.timezone(TIMEZONE)
-active_trade = None   # stocke les infos du trade en cours : { 'trade_id', 'pair', 'units', 'entry_price' }
+active_trade = None
 
 
 def send_telegram_message(text):
-    """Envoie un message via le bot Telegram configuré."""
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
-        print("Telegram not configured (missing token or chat ID). Skipping notification.")
+        print("Telegram not configured. Skipping notification.")
         return
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-    payload = {
-        "chat_id": TELEGRAM_CHAT_ID,
-        "text": text,
-        "parse_mode": "HTML"
-    }
+    payload = {"chat_id": TELEGRAM_CHAT_ID, "text": text, "parse_mode": "HTML"}
     try:
         resp = requests.post(url, json=payload, timeout=10)
         if resp.status_code != 200:
@@ -69,7 +66,6 @@ def get_high_impact_news():
     global news_cache
     if news_cache["time"] and (datetime.now(tz) - news_cache["time"]).seconds < 3600:
         return news_cache["events"]
-
     url = "https://nfs.faireconomy.media/ff_calendar_thisweek.json"
     headers = {'User-Agent': 'Mozilla/5.0'}
     try:
@@ -147,11 +143,7 @@ def compute_macd(df, fast=12, slow=26, signal=9):
 
 
 def get_candles(instrument, count=300):
-    params = {
-        "count": count,
-        "granularity": "H1",
-        "price": "M"
-    }
+    params = {"count": count, "granularity": "H1", "price": "M"}
     response = retry_api_call(ctx.instrument.candles, instrument, **params)
     candles = response.body['candles']
     rows = []
@@ -166,7 +158,6 @@ def get_candles(instrument, count=300):
                 'volume': int(c['volume'])
             })
     df = pd.DataFrame(rows)
-
     df['ema50'] = df['c'].ewm(span=50, adjust=False).mean()
     df['ema200'] = df['c'].ewm(span=200, adjust=False).mean()
     df['atr'] = (df['h'] - df['l']).rolling(ATR_PERIOD).mean()
@@ -175,13 +166,10 @@ def get_candles(instrument, count=300):
     loss = -delta.clip(upper=0).ewm(alpha=1/14, adjust=False).mean()
     rs = gain / loss
     df['rsi'] = 100 - (100 / (1 + rs))
-
     df = compute_adx(df, ADX_PERIOD)
     df = compute_macd(df, MACD_FAST, MACD_SLOW, MACD_SIGNAL)
-
     if USE_VOLUME_FILTER:
         df['volume_ma'] = df['volume'].rolling(window=VOLUME_MA_PERIOD).mean()
-
     return df
 
 
@@ -214,8 +202,13 @@ def calculate_units(balance, sl_price_distance, instrument):
     return max(1000, units)
 
 
-def place_trade(instrument, entry, sl, tp, units):
+def place_trade(instrument, entry, sl, tp, units, direction):
+    """
+    direction: 'buy' -> units positifs, 'sell' -> units négatifs
+    """
     global active_trade
+    if direction == 'sell':
+        units = -units
     trailing_distance = str(round(TRAILING_DISTANCE_PIPS * 0.0001, 5))
     order_data = {
         "order": {
@@ -228,8 +221,6 @@ def place_trade(instrument, entry, sl, tp, units):
         }
     }
     r = retry_api_call(ctx.order.create, ACCOUNT_ID, order_data)
-
-    # Extraire les infos du trade ouvert
     try:
         trade_opened = r.body['orderFillTransaction']['tradeOpened']
         trade_id = trade_opened['tradeID']
@@ -241,90 +232,98 @@ def place_trade(instrument, entry, sl, tp, units):
             'units': units_filled,
             'entry_price': entry_price,
             'sl': sl,
-            'tp': tp
+            'tp': tp,
+            'direction': direction
         }
     except (KeyError, TypeError) as e:
         print(f"Warning: Could not extract trade details: {e}")
         active_trade = None
 
-    # Message Telegram
-    msg = (f"<b>✅ Trade ouvert</b>\n"
+    # Calcul du ratio R/R
+    if direction == 'buy':
+        risk = entry - sl
+        reward = tp - entry
+    else:
+        risk = sl - entry
+        reward = entry - tp
+    rr = round(reward / risk, 2) if risk > 0 else 0.0
+
+    msg = (f"<b>✅ Trade ouvert ({trades_today}/{MAX_TRADES_PER_DAY})</b>\n"
            f"Paire : {instrument}\n"
-           f"Type : {'Achat' if units > 0 else 'Vente'}\n"
-           f"Volume : {units} unités\n"
+           f"Type : {'Achat' if direction == 'buy' else 'Vente'}\n"
+           f"Volume : {abs(units)} unités\n"
            f"Entrée : {entry:.5f}\n"
            f"Stop Loss : {sl:.5f}\n"
            f"Take Profit : {tp:.5f}\n"
            f"Trailing Stop : {TRAILING_DISTANCE_PIPS} pips\n"
+           f"R/R : 1:{rr}\n"
            f"Heure : {datetime.now(tz).strftime('%Y-%m-%d %H:%M:%S')}")
     send_telegram_message(msg)
 
-    print(f"✅ Trade placed on {instrument} - {units} units")
+    print(f"✅ Trade placed on {instrument} ({direction}) - {abs(units)} units")
     log_trade({
         "time": datetime.now(tz).isoformat(),
         "pair": instrument,
         "entry": entry,
         "sl": sl,
         "tp": tp,
-        "units": units,
+        "units": abs(units),
+        "direction": direction,
+        "rr": rr,
         "status": "OPEN"
     })
 
 
 def check_closed_trade():
-    """Si un trade était actif et que la position n'est plus ouverte, envoie la notification de clôture."""
-    global active_trade
+    global active_trade, last_close_time
     if active_trade is None:
         return
-
     pair = active_trade['pair']
     if has_open_position(pair):
-        return  # toujours ouvert
-
-    # Récupérer le dernier trade fermé pour cette paire
+        return
     try:
         resp = retry_api_call(ctx.trade.list, ACCOUNT_ID,
-                              instrument=pair,
-                              count=1,
-                              state='CLOSED')
+                              instrument=pair, count=1, state='CLOSED')
         closed_trades = resp.body.get('trades', [])
         if closed_trades:
             last_trade = closed_trades[0]
             realized_pl = float(last_trade['realizedPL'])
-            close_price = float(last_trade['price'])  # prix de clôture
+            close_price = float(last_trade['price'])
             entry_price = active_trade['entry_price']
             units = active_trade['units']
+            direction = active_trade.get('direction', 'buy')
 
-            msg = (f"<b>🔴 Trade clôturé</b>\n"
+            msg = (f"<b>🔴 Trade clôturé ({trades_today}/{MAX_TRADES_PER_DAY})</b>\n"
                    f"Paire : {pair}\n"
+                   f"Type : {'Achat' if direction == 'buy' else 'Vente'}\n"
                    f"Entrée : {entry_price:.5f}\n"
                    f"Sortie : {close_price:.5f}\n"
-                   f"Volume : {units}\n"
-                   f"P&L : {realized_pl:.2f} {('USD' if pair.endswith('USD') else '')}\n"
+                   f"Volume : {abs(units)}\n"
+                   f"P&L : {realized_pl:.2f} USD\n"
                    f"Heure : {datetime.now(tz).strftime('%Y-%m-%d %H:%M:%S')}")
             send_telegram_message(msg)
 
-            # Mise à jour du log local
             log_trade({
                 "time": datetime.now(tz).isoformat(),
                 "pair": pair,
                 "entry": entry_price,
                 "exit": close_price,
-                "units": units,
+                "units": abs(units),
                 "pnl": realized_pl,
+                "direction": direction,
                 "status": "CLOSED"
             })
+            last_close_time = datetime.now(tz)
     except Exception as e:
-        print(f"Erreur lors de la récupération du trade fermé : {e}")
-        # On envoie quand même une notification sans détails
+        print(f"Erreur récupération trade fermé : {e}")
         send_telegram_message(f"⚠️ Trade sur {pair} clôturé (détails non disponibles).")
-
+        last_close_time = datetime.now(tz)
     active_trade = None
 
 
 def check_signal(df, instrument):
     if len(df) < 200:
-        return False, 0, 0, 0, 0
+        return False, 0, 0, 0, 0, None
 
     last_candle = df.iloc[-2]
     price = last_candle['c']
@@ -337,65 +336,124 @@ def check_signal(df, instrument):
     minus_di = last_candle['minus_di']
 
     if pd.isna(atr) or pd.isna(ema50) or pd.isna(adx):
-        return False, 0, 0, 0, 0
+        return False, 0, 0, 0, 0, None
 
-    if adx < ADX_THRESHOLD or plus_di <= minus_di:
-        return False, 0, 0, 0, 0
+    # --- Signal ACHAT ---
+    if adx >= ADX_THRESHOLD and plus_di > minus_di:
+        # Filtres MACD haussier
+        if USE_MACD_FILTER:
+            macd_line = last_candle['macd_line']
+            macd_signal = last_candle['macd_signal']
+            if pd.isna(macd_line) or macd_line <= macd_signal or macd_line <= 0:
+                pass  # échec MACD achat
+            else:
+                if USE_VOLUME_FILTER:
+                    volume = last_candle['volume']
+                    vol_ma = last_candle['volume_ma']
+                    if pd.notna(vol_ma) and volume >= vol_ma:
+                        # Vérifier le setup pullback haussier
+                        trend_up = ema50 > ema200
+                        touched_ema = (last_candle['l'] <= ema50 <= last_candle['h'])
+                        bullish_rejection = (last_candle['c'] > last_candle['o']) and \
+                                            ((last_candle['o'] - last_candle['l']) > (last_candle['h'] - last_candle['c']))
+                        rsi_ok = 30 < rsi < 70
+                        if trend_up and touched_ema and bullish_rejection and rsi_ok:
+                            sl = ema200 - (ATR_MULTIPLIER * atr)
+                            sl_distance = price - sl
+                            sl_pips = sl_distance / 0.0001
+                            tp = price + 2 * sl_distance
+                            return True, price, sl, tp, sl_pips, 'buy'
+                else:
+                    # Sans filtre volume, même logique
+                    trend_up = ema50 > ema200
+                    touched_ema = (last_candle['l'] <= ema50 <= last_candle['h'])
+                    bullish_rejection = (last_candle['c'] > last_candle['o']) and \
+                                        ((last_candle['o'] - last_candle['l']) > (last_candle['h'] - last_candle['c']))
+                    rsi_ok = 30 < rsi < 70
+                    if trend_up and touched_ema and bullish_rejection and rsi_ok:
+                        sl = ema200 - (ATR_MULTIPLIER * atr)
+                        sl_distance = price - sl
+                        sl_pips = sl_distance / 0.0001
+                        tp = price + 2 * sl_distance
+                        return True, price, sl, tp, sl_pips, 'buy'
 
-    if USE_MACD_FILTER:
-        macd_line = last_candle['macd_line']
-        macd_signal = last_candle['macd_signal']
-        if pd.isna(macd_line) or pd.isna(macd_signal):
-            return False, 0, 0, 0, 0
-        if macd_line <= macd_signal or macd_line <= 0:
-            return False, 0, 0, 0, 0
+    # --- Signal VENTE ---
+    if adx >= ADX_THRESHOLD and minus_di > plus_di:
+        if USE_MACD_FILTER:
+            macd_line = last_candle['macd_line']
+            macd_signal = last_candle['macd_signal']
+            if pd.isna(macd_line) or macd_line >= macd_signal or macd_line >= 0:
+                pass
+            else:
+                if USE_VOLUME_FILTER:
+                    volume = last_candle['volume']
+                    vol_ma = last_candle['volume_ma']
+                    if pd.notna(vol_ma) and volume >= vol_ma:
+                        trend_down = ema50 < ema200
+                        touched_ema = (last_candle['h'] >= ema50 >= last_candle['l'])
+                        bearish_rejection = (last_candle['c'] < last_candle['o']) and \
+                                            ((last_candle['h'] - last_candle['o']) < (last_candle['c'] - last_candle['l']))
+                        rsi_ok = 30 < rsi < 70
+                        if trend_down and touched_ema and bearish_rejection and rsi_ok:
+                            sl = ema200 + (ATR_MULTIPLIER * atr)
+                            sl_distance = sl - price
+                            sl_pips = sl_distance / 0.0001
+                            tp = price - 2 * sl_distance
+                            return True, price, sl, tp, sl_pips, 'sell'
+                else:
+                    trend_down = ema50 < ema200
+                    touched_ema = (last_candle['h'] >= ema50 >= last_candle['l'])
+                    bearish_rejection = (last_candle['c'] < last_candle['o']) and \
+                                        ((last_candle['h'] - last_candle['o']) < (last_candle['c'] - last_candle['l']))
+                    rsi_ok = 30 < rsi < 70
+                    if trend_down and touched_ema and bearish_rejection and rsi_ok:
+                        sl = ema200 + (ATR_MULTIPLIER * atr)
+                        sl_distance = sl - price
+                        sl_pips = sl_distance / 0.0001
+                        tp = price - 2 * sl_distance
+                        return True, price, sl, tp, sl_pips, 'sell'
 
-    if USE_VOLUME_FILTER:
-        volume = last_candle['volume']
-        vol_ma = last_candle['volume_ma']
-        if pd.isna(vol_ma) or volume < vol_ma:
-            return False, 0, 0, 0, 0
-
-    trend_up = ema50 > ema200
-    touched_ema = (last_candle['l'] <= ema50 <= last_candle['h'])
-    bullish_rejection = (last_candle['c'] > last_candle['o']) and \
-                        ((last_candle['o'] - last_candle['l']) > (last_candle['h'] - last_candle['c']))
-    rsi_ok = 30 < rsi < 70
-
-    if trend_up and touched_ema and bullish_rejection and rsi_ok:
-        sl = ema200 - (ATR_MULTIPLIER * atr)
-        sl_price_distance = price - sl
-        sl_pips = sl_price_distance / 0.0001
-        tp = price + 2 * sl_price_distance
-        return True, price, sl, tp, sl_pips
-
-    return False, 0, 0, 0, 0
+    return False, 0, 0, 0, 0, None
 
 
 def main():
-    global trades_today, last_trade_date
-    print(f"OANDA Bot V7 (Telegram notifications) started. Timezone: {TIMEZONE}")
-    print(f"Trading window: {TRADING_HOURS_START:02d}:00 - {TRADING_HOURS_END:02d}:00 local")
+    global trades_today, last_trade_date, last_close_time
+    start_msg = f"🟢 Bot OANDA V10 démarré – max {MAX_TRADES_PER_DAY} trades/jour, délai {MIN_MINUTES_BETWEEN_TRADES}min, achat+vente"
+    print(start_msg)
+    send_telegram_message(start_msg)
+
     try:
         while True:
             now = datetime.now(tz)
 
-            # Arrêt automatique 5 minutes après la fin de la séance
             if now.hour > TRADING_HOURS_END or (now.hour == TRADING_HOURS_END and now.minute >= 5):
-                print(f"🛑 Trading window closed ({now.strftime('%H:%M')}). Bot shutting down.")
+                stop_msg = f"🔴 Bot arrêté – fin de la séance ({now.strftime('%H:%M')}), {trades_today} trade(s) pris"
+                print(stop_msg)
+                send_telegram_message(stop_msg)
                 break
 
             today = now.date()
             if last_trade_date != today:
                 trades_today = 0
                 last_trade_date = today
+                last_close_time = None
 
-            # Vérifier la clôture d'un trade existant (même hors heures de trading)
             check_closed_trade()
 
             in_trading_hours = TRADING_HOURS_START <= now.hour < TRADING_HOURS_END
             news_blocked = is_news_time_blocked()
-            can_trade = (trades_today < MAX_TRADES_PER_DAY and in_trading_hours and not news_blocked)
+
+            can_trade_time = True
+            if last_close_time is not None:
+                elapsed = now - last_close_time
+                if elapsed < timedelta(minutes=MIN_MINUTES_BETWEEN_TRADES):
+                    can_trade_time = False
+                    print(f"⏳ Délai post-clôture en cours ({int(elapsed.total_seconds()/60)} min restantes)")
+
+            can_trade = (trades_today < MAX_TRADES_PER_DAY
+                         and in_trading_hours
+                         and not news_blocked
+                         and can_trade_time)
 
             if can_trade:
                 for pair in PAIRS:
@@ -407,13 +465,13 @@ def main():
                         print(f"{pair}: spread too high ({spread:.5f}). Skip.")
                         continue
                     df = get_candles(pair)
-                    signal, price, sl, tp, sl_pips = check_signal(df, pair)
+                    signal, price, sl, tp, sl_pips, direction = check_signal(df, pair)
                     if signal:
                         balance_response = retry_api_call(ctx.account.summary, ACCOUNT_ID)
                         balance = float(balance_response.body['account']['balance'])
-                        sl_price_distance = price - sl
-                        units = calculate_units(balance, sl_price_distance, pair)
-                        place_trade(pair, price, sl, tp, units)
+                        sl_distance = price - sl if direction == 'buy' else sl - price
+                        units = calculate_units(balance, sl_distance, pair)
+                        place_trade(pair, price, sl, tp, units, direction)
                         trades_today += 1
                         break
             elif news_blocked:
@@ -424,7 +482,9 @@ def main():
             time.sleep(30)
 
     except KeyboardInterrupt:
-        print("\nBot stopped manually.")
+        stop_msg = "🔴 Bot arrêté manuellement (Ctrl+C)"
+        print(stop_msg)
+        send_telegram_message(stop_msg)
 
 
 if __name__ == "__main__":
