@@ -1,4 +1,4 @@
-name: Forex Bot NY Session
+name: 💹 Forex Bot NY Session
 
 on:
   workflow_dispatch:          # permet le test manuel
