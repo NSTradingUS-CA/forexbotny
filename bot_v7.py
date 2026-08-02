@@ -10,12 +10,13 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# ========== CONFIG ==========
+# ========== CONFIGURATION ==========
 API_KEY = os.getenv("OANDA_API_KEY")
 ACCOUNT_ID = os.getenv("OANDA_ACCOUNT_ID")
 OANDA_URL = "https://api-fxpractice.oanda.com"
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+FINNHUB_API_KEY = os.getenv("FINNHUB_API_KEY")          # votre clé secrète
 PAIRS = ["EUR_USD", "GBP_USD"]
 RISK_PERCENT = 1.0
 TRADING_HOURS_START = 8
@@ -28,6 +29,7 @@ ATR_PERIOD = 14
 ATR_MULTIPLIER = 1.5
 MAX_SPREAD_PIPS = 2.0
 NEWS_BLOCK_MINUTES = 30
+BREAKING_NEWS_BLOCK_MINUTES = 15          # durée du filtre directionnel après une news
 HIGH_IMPACT_EVENTS = ["NFP", "CPI", "FOMC", "Interest Rate", "GDP", "Retail Sales"]
 ADX_PERIOD = 14
 ADX_THRESHOLD = 25
@@ -46,9 +48,12 @@ last_close_time = None
 news_cache = {"time": None, "events": []}
 tz = pytz.timezone(TIMEZONE)
 active_trade = None
+last_news_block_time = None          # heure de début du filtre directionnel actuel
+news_sentiment_filter = {}           # {paire: 'bullish'/'bearish'/'neutral'}
 
 
 def send_telegram_message(text):
+    """Envoie un message via le bot Telegram configuré."""
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
         print("Telegram not configured. Skipping notification.")
         return
@@ -62,7 +67,72 @@ def send_telegram_message(text):
         print(f"Telegram error: {e}")
 
 
+# ---------- FONCTIONS DE NEWS (Finnhub uniquement) ----------
+def get_finnhub_sentiment(pair):
+    """
+    Retourne 'bullish', 'bearish' ou 'neutral' pour la paire donnée.
+    Si Finnhub n'est pas configuré ou en cas d'échec, retourne 'neutral' (pas de filtre).
+    """
+    if not FINNHUB_API_KEY:
+        return 'neutral'
+    try:
+        url = f"https://finnhub.io/api/v1/news-sentiment?symbol={pair.replace('_', '')}&token={FINNHUB_API_KEY}"
+        resp = requests.get(url, timeout=10)
+        data = resp.json()
+        if 'sentiment' in data and data['sentiment'] is not None:
+            bullish = data['sentiment'].get('bullishPercent', 0)
+            bearish = data['sentiment'].get('bearishPercent', 0)
+            if bullish > 60:
+                return 'bullish'
+            elif bearish > 60:
+                return 'bearish'
+        # Vérifier les articles récents si le sentiment global est neutre
+        articles = data.get('news', [])
+        if articles:
+            for article in articles[:3]:
+                published = article.get('datetime', 0)
+                now_ts = int(datetime.now(tz).timestamp())
+                if (now_ts - published) < 1800:          # moins de 30 minutes
+                    sentiment = article.get('sentiment', 'neutral')
+                    if sentiment == 'positive':
+                        return 'bullish'
+                    elif sentiment == 'negative':
+                        return 'bearish'
+        return 'neutral'
+    except Exception as e:
+        print(f"Finnhub API error: {e}")
+        return 'neutral'
+
+
+def update_news_filters():
+    """Vérifie Finnhub pour les news de dernière minute et met à jour les filtres directionnels."""
+    global last_news_block_time, news_sentiment_filter
+    now = datetime.now(tz)
+
+    # Si un filtre est actif, vérifier s'il est temps de le lever
+    if last_news_block_time:
+        if now - last_news_block_time > timedelta(minutes=BREAKING_NEWS_BLOCK_MINUTES):
+            last_news_block_time = None
+            news_sentiment_filter = {}
+            send_telegram_message("🟢 News sentiment filter lifted – normal trading resumed")
+            print("News sentiment filter lifted.")
+
+    # Utilisation de Finnhub uniquement (pas de fallback RSS)
+    for pair in PAIRS:
+        sentiment = get_finnhub_sentiment(pair)
+        if sentiment != 'neutral':
+            if last_news_block_time is None:
+                last_news_block_time = now
+            news_sentiment_filter[pair] = sentiment
+            msg = (f"⚠️ Breaking news sentiment for {pair}: {sentiment} "
+                   f"(directional filter active for {BREAKING_NEWS_BLOCK_MINUTES} min)")
+            send_telegram_message(msg)
+            print(msg)
+
+
+# ---------- NEWS CALENDRIER ----------
 def get_high_impact_news():
+    """Récupère les événements économiques à fort impact depuis l'API de ForexFactory."""
     global news_cache
     if news_cache["time"] and (datetime.now(tz) - news_cache["time"]).seconds < 3600:
         return news_cache["events"]
@@ -86,18 +156,21 @@ def get_high_impact_news():
 
 
 def is_news_time_blocked():
+    """Vérifie si on se trouve dans une fenêtre de blocage autour d'un événement économique."""
     now_local = datetime.now(tz)
     events = get_high_impact_news()
     for event in events:
         block_start = event["time"] - timedelta(minutes=NEWS_BLOCK_MINUTES)
         block_end = event["time"] + timedelta(minutes=NEWS_BLOCK_MINUTES)
         if block_start <= now_local <= block_end:
-            print(f"⛔ News block: {event['title']} at {event['time'].strftime('%H:%M')} local")
+            print(f"⛔ Calendar news block: {event['title']} at {event['time'].strftime('%H:%M')} local")
             return True
     return False
 
 
+# ---------- FONCTIONS DE TRADING ----------
 def log_trade(data):
+    """Enregistre une transaction dans le fichier CSV."""
     file_exists = os.path.isfile('trades_log.csv')
     with open('trades_log.csv', 'a', newline='') as f:
         writer = csv.DictWriter(f, fieldnames=data.keys())
@@ -107,6 +180,7 @@ def log_trade(data):
 
 
 def retry_api_call(func, *args, **kwargs):
+    """Tente un appel API jusqu'à 3 fois en cas d'échec."""
     for i in range(3):
         try:
             return func(*args, **kwargs)
@@ -117,6 +191,7 @@ def retry_api_call(func, *args, **kwargs):
 
 
 def compute_adx(df, period=14):
+    """Calcule les indicateurs ADX, +DI et -DI sur le DataFrame."""
     high, low, close = df['h'], df['l'], df['c']
     df['tr'] = pd.concat([high - low,
                           (high - close.shift()).abs(),
@@ -134,6 +209,7 @@ def compute_adx(df, period=14):
 
 
 def compute_macd(df, fast=12, slow=26, signal=9):
+    """Ajoute les colonnes MACD (ligne, signal, histogramme) au DataFrame."""
     df['ema_fast'] = df['c'].ewm(span=fast, adjust=False).mean()
     df['ema_slow'] = df['c'].ewm(span=slow, adjust=False).mean()
     df['macd_line'] = df['ema_fast'] - df['ema_slow']
@@ -143,6 +219,7 @@ def compute_macd(df, fast=12, slow=26, signal=9):
 
 
 def get_candles(instrument, count=300):
+    """Récupère les chandeliers H1 et calcule tous les indicateurs techniques."""
     params = {"count": count, "granularity": "H1", "price": "M"}
     response = retry_api_call(ctx.instrument.candles, instrument, **params)
     candles = response.body['candles']
@@ -158,6 +235,7 @@ def get_candles(instrument, count=300):
                 'volume': int(c['volume'])
             })
     df = pd.DataFrame(rows)
+    # Calcul des indicateurs de base
     df['ema50'] = df['c'].ewm(span=50, adjust=False).mean()
     df['ema200'] = df['c'].ewm(span=200, adjust=False).mean()
     df['atr'] = (df['h'] - df['l']).rolling(ATR_PERIOD).mean()
@@ -174,6 +252,7 @@ def get_candles(instrument, count=300):
 
 
 def get_spread(instrument):
+    """Retourne le spread actuel (ask - bid) pour l'instrument."""
     response = retry_api_call(ctx.pricing.get, instrument)
     price = response.body['prices'][0]
     spread = float(price['asks'][0]['price']) - float(price['bids'][0]['price'])
@@ -181,6 +260,7 @@ def get_spread(instrument):
 
 
 def has_open_position(instrument):
+    """Vérifie si une position est déjà ouverte sur la paire donnée."""
     try:
         response = retry_api_call(ctx.position.get, ACCOUNT_ID)
         for pos in response.body['positions']:
@@ -196,6 +276,7 @@ def has_open_position(instrument):
 
 
 def calculate_units(balance, sl_price_distance, instrument):
+    """Calcule le nombre d'unités à trader en fonction du risque défini."""
     risk_amount = balance * (RISK_PERCENT / 100)
     pip_value = 0.0001
     units = int(risk_amount / (sl_price_distance * pip_value))
@@ -204,7 +285,8 @@ def calculate_units(balance, sl_price_distance, instrument):
 
 def place_trade(instrument, entry, sl, tp, units, direction):
     """
-    direction: 'buy' -> units positifs, 'sell' -> units négatifs
+    Passe un ordre de marché (achat ou vente) avec SL, TP et trailing stop.
+    direction: 'buy' -> unités positives, 'sell' -> unités négatives
     """
     global active_trade
     if direction == 'sell':
@@ -248,16 +330,17 @@ def place_trade(instrument, entry, sl, tp, units, direction):
         reward = entry - tp
     rr = round(reward / risk, 2) if risk > 0 else 0.0
 
-    msg = (f"<b>✅ Trade ouvert ({trades_today}/{MAX_TRADES_PER_DAY})</b>\n"
-           f"Paire : {instrument}\n"
-           f"Type : {'Achat' if direction == 'buy' else 'Vente'}\n"
-           f"Volume : {abs(units)} unités\n"
-           f"Entrée : {entry:.5f}\n"
-           f"Stop Loss : {sl:.5f}\n"
-           f"Take Profit : {tp:.5f}\n"
-           f"Trailing Stop : {TRAILING_DISTANCE_PIPS} pips\n"
-           f"R/R : 1:{rr}\n"
-           f"Heure : {datetime.now(tz).strftime('%Y-%m-%d %H:%M:%S')}")
+    # Notification Telegram (en anglais)
+    msg = (f"<b>✅ Trade opened ({trades_today}/{MAX_TRADES_PER_DAY})</b>\n"
+           f"Pair: {instrument}\n"
+           f"Type: {'Buy' if direction == 'buy' else 'Sell'}\n"
+           f"Volume: {abs(units)} units\n"
+           f"Entry: {entry:.5f}\n"
+           f"Stop Loss: {sl:.5f}\n"
+           f"Take Profit: {tp:.5f}\n"
+           f"Trailing Stop: {TRAILING_DISTANCE_PIPS} pips\n"
+           f"R/R: 1:{rr}\n"
+           f"Time: {datetime.now(tz).strftime('%Y-%m-%d %H:%M:%S')}")
     send_telegram_message(msg)
 
     print(f"✅ Trade placed on {instrument} ({direction}) - {abs(units)} units")
@@ -275,6 +358,7 @@ def place_trade(instrument, entry, sl, tp, units, direction):
 
 
 def check_closed_trade():
+    """Vérifie si le trade actif a été clôturé et envoie la notification associée."""
     global active_trade, last_close_time
     if active_trade is None:
         return
@@ -293,14 +377,15 @@ def check_closed_trade():
             units = active_trade['units']
             direction = active_trade.get('direction', 'buy')
 
-            msg = (f"<b>🔴 Trade clôturé ({trades_today}/{MAX_TRADES_PER_DAY})</b>\n"
-                   f"Paire : {pair}\n"
-                   f"Type : {'Achat' if direction == 'buy' else 'Vente'}\n"
-                   f"Entrée : {entry_price:.5f}\n"
-                   f"Sortie : {close_price:.5f}\n"
-                   f"Volume : {abs(units)}\n"
-                   f"P&L : {realized_pl:.2f} USD\n"
-                   f"Heure : {datetime.now(tz).strftime('%Y-%m-%d %H:%M:%S')}")
+            # Notification Telegram (en anglais)
+            msg = (f"<b>🔴 Trade closed ({trades_today}/{MAX_TRADES_PER_DAY})</b>\n"
+                   f"Pair: {pair}\n"
+                   f"Type: {'Buy' if direction == 'buy' else 'Sell'}\n"
+                   f"Entry: {entry_price:.5f}\n"
+                   f"Exit: {close_price:.5f}\n"
+                   f"Volume: {abs(units)}\n"
+                   f"P&L: {realized_pl:.2f} USD\n"
+                   f"Time: {datetime.now(tz).strftime('%Y-%m-%d %H:%M:%S')}")
             send_telegram_message(msg)
 
             log_trade({
@@ -315,13 +400,18 @@ def check_closed_trade():
             })
             last_close_time = datetime.now(tz)
     except Exception as e:
-        print(f"Erreur récupération trade fermé : {e}")
-        send_telegram_message(f"⚠️ Trade sur {pair} clôturé (détails non disponibles).")
+        print(f"Error retrieving closed trade: {e}")
+        send_telegram_message(f"⚠️ Trade on {pair} closed (details unavailable).")
         last_close_time = datetime.now(tz)
     active_trade = None
 
 
 def check_signal(df, instrument):
+    """
+    Détecte les signaux d'achat ou de vente selon la stratégie (pullback sur EMA,
+    avec filtres ADX, MACD, volume et sentiment des news).
+    Retourne (signal, prix, sl, tp, sl_pips, direction) ou (False, ...) si aucun signal.
+    """
     if len(df) < 200:
         return False, 0, 0, 0, 0, None
 
@@ -338,33 +428,26 @@ def check_signal(df, instrument):
     if pd.isna(atr) or pd.isna(ema50) or pd.isna(adx):
         return False, 0, 0, 0, 0, None
 
-    # --- Signal ACHAT ---
-    if adx >= ADX_THRESHOLD and plus_di > minus_di:
-        # Filtres MACD haussier
-        if USE_MACD_FILTER:
-            macd_line = last_candle['macd_line']
-            macd_signal = last_candle['macd_signal']
-            if pd.isna(macd_line) or macd_line <= macd_signal or macd_line <= 0:
-                pass  # échec MACD achat
-            else:
+    # Filtre directionnel provenant des news de dernière minute
+    sentiment = news_sentiment_filter.get(instrument, None)
+
+    # --- Signal ACHAT (autorisé si pas de filtre ou filtre bullish) ---
+    if sentiment is None or sentiment == 'bullish':
+        if adx >= ADX_THRESHOLD and plus_di > minus_di:
+            macd_ok = True
+            if USE_MACD_FILTER:
+                macd_line = last_candle['macd_line']
+                macd_signal = last_candle['macd_signal']
+                if pd.isna(macd_line) or macd_line <= macd_signal or macd_line <= 0:
+                    macd_ok = False
+            if macd_ok:
+                vol_ok = True
                 if USE_VOLUME_FILTER:
                     volume = last_candle['volume']
                     vol_ma = last_candle['volume_ma']
-                    if pd.notna(vol_ma) and volume >= vol_ma:
-                        # Vérifier le setup pullback haussier
-                        trend_up = ema50 > ema200
-                        touched_ema = (last_candle['l'] <= ema50 <= last_candle['h'])
-                        bullish_rejection = (last_candle['c'] > last_candle['o']) and \
-                                            ((last_candle['o'] - last_candle['l']) > (last_candle['h'] - last_candle['c']))
-                        rsi_ok = 30 < rsi < 70
-                        if trend_up and touched_ema and bullish_rejection and rsi_ok:
-                            sl = ema200 - (ATR_MULTIPLIER * atr)
-                            sl_distance = price - sl
-                            sl_pips = sl_distance / 0.0001
-                            tp = price + 2 * sl_distance
-                            return True, price, sl, tp, sl_pips, 'buy'
-                else:
-                    # Sans filtre volume, même logique
+                    if pd.isna(vol_ma) or volume < vol_ma:
+                        vol_ok = False
+                if vol_ok:
                     trend_up = ema50 > ema200
                     touched_ema = (last_candle['l'] <= ema50 <= last_candle['h'])
                     bullish_rejection = (last_candle['c'] > last_candle['o']) and \
@@ -377,30 +460,23 @@ def check_signal(df, instrument):
                         tp = price + 2 * sl_distance
                         return True, price, sl, tp, sl_pips, 'buy'
 
-    # --- Signal VENTE ---
-    if adx >= ADX_THRESHOLD and minus_di > plus_di:
-        if USE_MACD_FILTER:
-            macd_line = last_candle['macd_line']
-            macd_signal = last_candle['macd_signal']
-            if pd.isna(macd_line) or macd_line >= macd_signal or macd_line >= 0:
-                pass
-            else:
+    # --- Signal VENTE (autorisé si pas de filtre ou filtre bearish) ---
+    if sentiment is None or sentiment == 'bearish':
+        if adx >= ADX_THRESHOLD and minus_di > plus_di:
+            macd_ok = True
+            if USE_MACD_FILTER:
+                macd_line = last_candle['macd_line']
+                macd_signal = last_candle['macd_signal']
+                if pd.isna(macd_line) or macd_line >= macd_signal or macd_line >= 0:
+                    macd_ok = False
+            if macd_ok:
+                vol_ok = True
                 if USE_VOLUME_FILTER:
                     volume = last_candle['volume']
                     vol_ma = last_candle['volume_ma']
-                    if pd.notna(vol_ma) and volume >= vol_ma:
-                        trend_down = ema50 < ema200
-                        touched_ema = (last_candle['h'] >= ema50 >= last_candle['l'])
-                        bearish_rejection = (last_candle['c'] < last_candle['o']) and \
-                                            ((last_candle['h'] - last_candle['o']) < (last_candle['c'] - last_candle['l']))
-                        rsi_ok = 30 < rsi < 70
-                        if trend_down and touched_ema and bearish_rejection and rsi_ok:
-                            sl = ema200 + (ATR_MULTIPLIER * atr)
-                            sl_distance = sl - price
-                            sl_pips = sl_distance / 0.0001
-                            tp = price - 2 * sl_distance
-                            return True, price, sl, tp, sl_pips, 'sell'
-                else:
+                    if pd.isna(vol_ma) or volume < vol_ma:
+                        vol_ok = False
+                if vol_ok:
                     trend_down = ema50 < ema200
                     touched_ema = (last_candle['h'] >= ema50 >= last_candle['l'])
                     bearish_rejection = (last_candle['c'] < last_candle['o']) and \
@@ -417,8 +493,10 @@ def check_signal(df, instrument):
 
 
 def main():
+    """Boucle principale du robot de trading."""
     global trades_today, last_trade_date, last_close_time
-    start_msg = f"🟢 MyForexBotNY has started – max {MAX_TRADES_PER_DAY} trades/day, buffer {MIN_MINUTES_BETWEEN_TRADES}min, Buy & Sell."
+    start_msg = (f"🟢 MyForexBotNY started – max {MAX_TRADES_PER_DAY} trades/day, "
+                 f"buffer {MIN_MINUTES_BETWEEN_TRADES}min, Buy & Sell.")
     print(start_msg)
     send_telegram_message(start_msg)
 
@@ -426,8 +504,10 @@ def main():
         while True:
             now = datetime.now(tz)
 
+            # Arrêt automatique 5 minutes après la fin de la séance
             if now.hour > TRADING_HOURS_END or (now.hour == TRADING_HOURS_END and now.minute >= 5):
-                stop_msg = f"🔴 MyForexBotNY has stopped – End of session ({now.strftime('%H:%M')}), {trades_today} trade(s) taken today."
+                stop_msg = (f"🔴 MyForexBotNY stopped – End of session ({now.strftime('%H:%M')}), "
+                            f"{trades_today} trade(s) taken today.")
                 print(stop_msg)
                 send_telegram_message(stop_msg)
                 break
@@ -440,19 +520,28 @@ def main():
 
             check_closed_trade()
 
+            # Mise à jour du filtre de sentiment toutes les 60 secondes
+            if not hasattr(main, "next_news_check"):
+                main.next_news_check = now
+            if now >= main.next_news_check:
+                update_news_filters()
+                main.next_news_check = now + timedelta(seconds=60)
+
             in_trading_hours = TRADING_HOURS_START <= now.hour < TRADING_HOURS_END
-            news_blocked = is_news_time_blocked()
+            calendar_blocked = is_news_time_blocked()
 
             can_trade_time = True
             if last_close_time is not None:
                 elapsed = now - last_close_time
                 if elapsed < timedelta(minutes=MIN_MINUTES_BETWEEN_TRADES):
                     can_trade_time = False
-                    print(f"⏳ Délai post-clôture en cours ({int(elapsed.total_seconds()/60)} min restantes)")
+                    remaining = MIN_MINUTES_BETWEEN_TRADES - int(elapsed.total_seconds()/60)
+                    print(f"⏳ Post-close cooldown – {remaining} min remaining")
 
+            # Pas de blocage total : le filtre directionnel est géré dans check_signal
             can_trade = (trades_today < MAX_TRADES_PER_DAY
                          and in_trading_hours
-                         and not news_blocked
+                         and not calendar_blocked
                          and can_trade_time)
 
             if can_trade:
@@ -474,15 +563,17 @@ def main():
                         place_trade(pair, price, sl, tp, units, direction)
                         trades_today += 1
                         break
-            elif news_blocked:
-                print(f"{now.strftime('%H:%M:%S')} - News block active")
+            elif calendar_blocked:
+                print(f"{now.strftime('%H:%M:%S')} - Calendar news block active")
+            elif not can_trade_time:
+                pass
             else:
                 print(f"{now.strftime('%H:%M:%S')} - Waiting... Trades today: {trades_today}")
 
             time.sleep(30)
 
     except KeyboardInterrupt:
-        stop_msg = "🔴 Bot arrêté manuellement (Ctrl+C)"
+        stop_msg = "🔴 Bot stopped manually (Ctrl+C)"
         print(stop_msg)
         send_telegram_message(stop_msg)
 
