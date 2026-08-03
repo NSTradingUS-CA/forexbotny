@@ -252,12 +252,11 @@ def get_candles(instrument, count=300):
 
 
 def get_spread(instrument):
-    """Retourne le spread actuel (ask - bid) pour l'instrument."""
-    response = retry_api_call(ctx.pricing.get, instrument)
+    response = retry_api_call(ctx.pricing.get, ACCOUNT_ID, instruments=instrument)
     price = response.body['prices'][0]
     spread = float(price['asks'][0]['price']) - float(price['bids'][0]['price'])
     return spread
-
+    
 
 def has_open_position(instrument):
     """Vérifie si une position est déjà ouverte sur la paire donnée."""
