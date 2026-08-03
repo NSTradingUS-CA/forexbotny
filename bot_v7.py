@@ -1,3 +1,4 @@
+```python
 import v20
 import pandas as pd
 import pytz
@@ -252,12 +253,14 @@ def get_candles(instrument, count=300):
 
 
 def get_spread(instrument):
+    """Retourne le spread actuel (ask - bid) pour l'instrument."""
     response = retry_api_call(ctx.pricing.get, ACCOUNT_ID, instruments=instrument)
-    # response.body est un PricingGetResponse, contenant une liste 'prices' d'objets ClientPrice
-    price = response.body.prices[0]
+    # response.body est un dictionnaire contenant la clé 'prices'
+    price = response.body['prices'][0]
+    # Chaque élément de la liste 'prices' est un objet ClientPrice
     spread = float(price.asks[0].price) - float(price.bids[0].price)
     return spread
-    
+
 
 def has_open_position(instrument):
     """Vérifie si une position est déjà ouverte sur la paire donnée."""
@@ -580,3 +583,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+```
