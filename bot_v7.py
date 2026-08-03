@@ -20,7 +20,7 @@ FINNHUB_API_KEY = os.getenv("FINNHUB_API_KEY")
 PAIRS = ["EUR_USD", "GBP_USD"]
 RISK_PERCENT = 1.0
 TRADING_HOURS_START = 8
-TRADING_HOURS_END = 11
+TRADING_HOURS_END = 12
 TIMEZONE = 'America/Toronto'
 MAX_TRADES_PER_DAY = 2
 MIN_MINUTES_BETWEEN_TRADES = 30
@@ -202,7 +202,6 @@ def get_candles(instrument, count=300):
     """Récupère les chandeliers H1 et calcule tous les indicateurs techniques."""
     params = {"count": count, "granularity": "H1", "price": "M"}
     response = retry_api_call(ctx.instrument.candles, instrument, **params)
-    # response.body est un dictionnaire contenant une liste 'candles' d'objets Candlestick
     candles = response.body['candles']
     rows = []
     for c in candles:
