@@ -1,4 +1,3 @@
-```python
 import v20
 import pandas as pd
 import pytz
@@ -14,10 +13,10 @@ load_dotenv()
 # ========== CONFIGURATION ==========
 API_KEY = os.getenv("OANDA_API_KEY")
 ACCOUNT_ID = os.getenv("OANDA_ACCOUNT_ID")
-OANDA_URL = "api-fxpractice.oanda.com"
+OANDA_URL = "api-fxpractice.oanda.com"               # sans https://
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
-FINNHUB_API_KEY = os.getenv("FINNHUB_API_KEY")          # votre clé secrète
+FINNHUB_API_KEY = os.getenv("FINNHUB_API_KEY")       # votre clé secrète
 PAIRS = ["EUR_USD", "GBP_USD"]
 RISK_PERCENT = 1.0
 TRADING_HOURS_START = 8
@@ -252,6 +251,7 @@ def get_candles(instrument, count=300):
     return df
 
 
+# ----- LES DEUX FONCTIONS CORRIGÉES -----
 def get_spread(instrument):
     """Retourne le spread actuel (ask - bid) pour l'instrument."""
     response = retry_api_call(ctx.pricing.get, ACCOUNT_ID, instruments=instrument)
@@ -265,7 +265,8 @@ def get_spread(instrument):
 def has_open_position(instrument):
     """Vérifie si une position est déjà ouverte sur la paire donnée."""
     try:
-        response = retry_api_call(ctx.position.get, ACCOUNT_ID)
+        # Utilisation de position.list qui renvoie toutes les positions
+        response = retry_api_call(ctx.position.list, ACCOUNT_ID)
         for pos in response.body['positions']:
             if pos['instrument'] == instrument:
                 long_units = float(pos['long']['units'])
@@ -276,6 +277,7 @@ def has_open_position(instrument):
     except Exception as e:
         print(f"Position check failed: {e}")
         return False
+# ----------------------------------------
 
 
 def calculate_units(balance, sl_price_distance, instrument):
@@ -541,7 +543,6 @@ def main():
                     remaining = MIN_MINUTES_BETWEEN_TRADES - int(elapsed.total_seconds()/60)
                     print(f"⏳ Post-close cooldown – {remaining} min remaining")
 
-            # Pas de blocage total : le filtre directionnel est géré dans check_signal
             can_trade = (trades_today < MAX_TRADES_PER_DAY
                          and in_trading_hours
                          and not calendar_blocked
@@ -583,4 +584,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-```
