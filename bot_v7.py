@@ -253,8 +253,9 @@ def get_candles(instrument, count=300):
 
 def get_spread(instrument):
     response = retry_api_call(ctx.pricing.get, ACCOUNT_ID, instruments=instrument)
-    price = response.body['prices'][0]
-    spread = float(price['asks'][0]['price']) - float(price['bids'][0]['price'])
+    # response.body est un PricingGetResponse, contenant une liste 'prices' d'objets ClientPrice
+    price = response.body.prices[0]
+    spread = float(price.asks[0].price) - float(price.bids[0].price)
     return spread
     
 
