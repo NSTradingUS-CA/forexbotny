@@ -1,4 +1,3 @@
-```python
 import v20
 import pandas as pd
 import pytz
@@ -219,7 +218,6 @@ def compute_macd(df, fast=12, slow=26, signal=9):
     return df
 
 
-# ----- FONCTION GET_CANDLES CORRIGÉE -----
 def get_candles(instrument, count=300):
     """Récupère les chandeliers H1 et calcule tous les indicateurs techniques."""
     params = {"count": count, "granularity": "H1", "price": "M"}
@@ -252,7 +250,6 @@ def get_candles(instrument, count=300):
     if USE_VOLUME_FILTER:
         df['volume_ma'] = df['volume'].rolling(window=VOLUME_MA_PERIOD).mean()
     return df
-# ----------------------------------------
 
 
 def get_spread(instrument):
@@ -583,4 +580,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-```
