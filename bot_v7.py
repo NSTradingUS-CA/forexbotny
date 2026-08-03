@@ -13,10 +13,10 @@ load_dotenv()
 # ========== CONFIGURATION ==========
 API_KEY = os.getenv("OANDA_API_KEY")
 ACCOUNT_ID = os.getenv("OANDA_ACCOUNT_ID")
-OANDA_URL = "api-fxpractice.oanda.com"               # sans https://
+OANDA_URL = "api-fxpractice.oanda.com"
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
-FINNHUB_API_KEY = os.getenv("FINNHUB_API_KEY")       # votre clé secrète
+FINNHUB_API_KEY = os.getenv("FINNHUB_API_KEY")
 PAIRS = ["EUR_USD", "GBP_USD"]
 RISK_PERCENT = 1.0
 TRADING_HOURS_START = 8
@@ -29,7 +29,7 @@ ATR_PERIOD = 14
 ATR_MULTIPLIER = 1.5
 MAX_SPREAD_PIPS = 2.0
 NEWS_BLOCK_MINUTES = 30
-BREAKING_NEWS_BLOCK_MINUTES = 15          # durée du filtre directionnel après une news
+BREAKING_NEWS_BLOCK_MINUTES = 15
 HIGH_IMPACT_EVENTS = ["NFP", "CPI", "FOMC", "Interest Rate", "GDP", "Retail Sales"]
 ADX_PERIOD = 14
 ADX_THRESHOLD = 25
@@ -48,12 +48,11 @@ last_close_time = None
 news_cache = {"time": None, "events": []}
 tz = pytz.timezone(TIMEZONE)
 active_trade = None
-last_news_block_time = None          # heure de début du filtre directionnel actuel
-news_sentiment_filter = {}           # {paire: 'bullish'/'bearish'/'neutral'}
+last_news_block_time = None
+news_sentiment_filter = {}
 
 
 def send_telegram_message(text):
-    """Envoie un message via le bot Telegram configuré."""
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
         print("Telegram not configured. Skipping notification.")
         return
@@ -67,12 +66,7 @@ def send_telegram_message(text):
         print(f"Telegram error: {e}")
 
 
-# ---------- FONCTIONS DE NEWS (Finnhub uniquement) ----------
 def get_finnhub_sentiment(pair):
-    """
-    Retourne 'bullish', 'bearish' ou 'neutral' pour la paire donnée.
-    Si Finnhub n'est pas configuré ou en cas d'échec, retourne 'neutral' (pas de filtre).
-    """
     if not FINNHUB_API_KEY:
         return 'neutral'
     try:
@@ -86,13 +80,12 @@ def get_finnhub_sentiment(pair):
                 return 'bullish'
             elif bearish > 60:
                 return 'bearish'
-        # Vérifier les articles récents si le sentiment global est neutre
         articles = data.get('news', [])
         if articles:
             for article in articles[:3]:
                 published = article.get('datetime', 0)
                 now_ts = int(datetime.now(tz).timestamp())
-                if (now_ts - published) < 1800:          # moins de 30 minutes
+                if (now_ts - published) < 1800:
                     sentiment = article.get('sentiment', 'neutral')
                     if sentiment == 'positive':
                         return 'bullish'
@@ -105,19 +98,14 @@ def get_finnhub_sentiment(pair):
 
 
 def update_news_filters():
-    """Vérifie Finnhub pour les news de dernière minute et met à jour les filtres directionnels."""
     global last_news_block_time, news_sentiment_filter
     now = datetime.now(tz)
-
-    # Si un filtre est actif, vérifier s'il est temps de le lever
     if last_news_block_time:
         if now - last_news_block_time > timedelta(minutes=BREAKING_NEWS_BLOCK_MINUTES):
             last_news_block_time = None
             news_sentiment_filter = {}
             send_telegram_message("🟢 News sentiment filter lifted – normal trading resumed")
             print("News sentiment filter lifted.")
-
-    # Utilisation de Finnhub uniquement (pas de fallback RSS)
     for pair in PAIRS:
         sentiment = get_finnhub_sentiment(pair)
         if sentiment != 'neutral':
@@ -130,9 +118,7 @@ def update_news_filters():
             print(msg)
 
 
-# ---------- NEWS CALENDRIER ----------
 def get_high_impact_news():
-    """Récupère les événements économiques à fort impact depuis l'API de ForexFactory."""
     global news_cache
     if news_cache["time"] and (datetime.now(tz) - news_cache["time"]).seconds < 3600:
         return news_cache["events"]
@@ -156,7 +142,6 @@ def get_high_impact_news():
 
 
 def is_news_time_blocked():
-    """Vérifie si on se trouve dans une fenêtre de blocage autour d'un événement économique."""
     now_local = datetime.now(tz)
     events = get_high_impact_news()
     for event in events:
@@ -168,9 +153,7 @@ def is_news_time_blocked():
     return False
 
 
-# ---------- FONCTIONS DE TRADING ----------
 def log_trade(data):
-    """Enregistre une transaction dans le fichier CSV."""
     file_exists = os.path.isfile('trades_log.csv')
     with open('trades_log.csv', 'a', newline='') as f:
         writer = csv.DictWriter(f, fieldnames=data.keys())
@@ -180,7 +163,6 @@ def log_trade(data):
 
 
 def retry_api_call(func, *args, **kwargs):
-    """Tente un appel API jusqu'à 3 fois en cas d'échec."""
     for i in range(3):
         try:
             return func(*args, **kwargs)
@@ -191,7 +173,6 @@ def retry_api_call(func, *args, **kwargs):
 
 
 def compute_adx(df, period=14):
-    """Calcule les indicateurs ADX, +DI et -DI sur le DataFrame."""
     high, low, close = df['h'], df['l'], df['c']
     df['tr'] = pd.concat([high - low,
                           (high - close.shift()).abs(),
@@ -209,7 +190,6 @@ def compute_adx(df, period=14):
 
 
 def compute_macd(df, fast=12, slow=26, signal=9):
-    """Ajoute les colonnes MACD (ligne, signal, histogramme) au DataFrame."""
     df['ema_fast'] = df['c'].ewm(span=fast, adjust=False).mean()
     df['ema_slow'] = df['c'].ewm(span=slow, adjust=False).mean()
     df['macd_line'] = df['ema_fast'] - df['ema_slow']
@@ -222,8 +202,8 @@ def get_candles(instrument, count=300):
     """Récupère les chandeliers H1 et calcule tous les indicateurs techniques."""
     params = {"count": count, "granularity": "H1", "price": "M"}
     response = retry_api_call(ctx.instrument.candles, instrument, **params)
-    # response.body est un objet CandlesResponse, contenant une liste 'candles' d'objets Candlestick
-    candles = response.body.candles
+    # response.body est un dictionnaire contenant une liste 'candles' d'objets Candlestick
+    candles = response.body['candles']
     rows = []
     for c in candles:
         if c.complete:
@@ -236,7 +216,6 @@ def get_candles(instrument, count=300):
                 'volume': int(c.volume)
             })
     df = pd.DataFrame(rows)
-    # Calcul des indicateurs de base
     df['ema50'] = df['c'].ewm(span=50, adjust=False).mean()
     df['ema200'] = df['c'].ewm(span=200, adjust=False).mean()
     df['atr'] = (df['h'] - df['l']).rolling(ATR_PERIOD).mean()
@@ -253,7 +232,6 @@ def get_candles(instrument, count=300):
 
 
 def get_spread(instrument):
-    """Retourne le spread actuel (ask - bid) pour l'instrument."""
     response = retry_api_call(ctx.pricing.get, ACCOUNT_ID, instruments=instrument)
     price = response.body['prices'][0]
     spread = float(price.asks[0].price) - float(price.bids[0].price)
@@ -261,7 +239,6 @@ def get_spread(instrument):
 
 
 def has_open_position(instrument):
-    """Vérifie si une position est déjà ouverte sur la paire donnée."""
     try:
         response = retry_api_call(ctx.position.list, ACCOUNT_ID)
         for pos in response.body['positions']:
@@ -277,7 +254,6 @@ def has_open_position(instrument):
 
 
 def calculate_units(balance, sl_price_distance, instrument):
-    """Calcule le nombre d'unités à trader en fonction du risque défini."""
     risk_amount = balance * (RISK_PERCENT / 100)
     pip_value = 0.0001
     units = int(risk_amount / (sl_price_distance * pip_value))
@@ -285,10 +261,6 @@ def calculate_units(balance, sl_price_distance, instrument):
 
 
 def place_trade(instrument, entry, sl, tp, units, direction):
-    """
-    Passe un ordre de marché (achat ou vente) avec SL, TP et trailing stop.
-    direction: 'buy' -> unités positives, 'sell' -> unités négatives
-    """
     global active_trade
     if direction == 'sell':
         units = -units
@@ -322,7 +294,6 @@ def place_trade(instrument, entry, sl, tp, units, direction):
         print(f"Warning: Could not extract trade details: {e}")
         active_trade = None
 
-    # Calcul du ratio R/R
     if direction == 'buy':
         risk = entry - sl
         reward = tp - entry
@@ -331,7 +302,6 @@ def place_trade(instrument, entry, sl, tp, units, direction):
         reward = entry - tp
     rr = round(reward / risk, 2) if risk > 0 else 0.0
 
-    # Notification Telegram (en anglais)
     msg = (f"<b>✅ Trade opened ({trades_today}/{MAX_TRADES_PER_DAY})</b>\n"
            f"Pair: {instrument}\n"
            f"Type: {'Buy' if direction == 'buy' else 'Sell'}\n"
@@ -359,7 +329,6 @@ def place_trade(instrument, entry, sl, tp, units, direction):
 
 
 def check_closed_trade():
-    """Vérifie si le trade actif a été clôturé et envoie la notification associée."""
     global active_trade, last_close_time
     if active_trade is None:
         return
@@ -378,7 +347,6 @@ def check_closed_trade():
             units = active_trade['units']
             direction = active_trade.get('direction', 'buy')
 
-            # Notification Telegram (en anglais)
             msg = (f"<b>🔴 Trade closed ({trades_today}/{MAX_TRADES_PER_DAY})</b>\n"
                    f"Pair: {pair}\n"
                    f"Type: {'Buy' if direction == 'buy' else 'Sell'}\n"
@@ -408,11 +376,6 @@ def check_closed_trade():
 
 
 def check_signal(df, instrument):
-    """
-    Détecte les signaux d'achat ou de vente selon la stratégie (pullback sur EMA,
-    avec filtres ADX, MACD, volume et sentiment des news).
-    Retourne (signal, prix, sl, tp, sl_pips, direction) ou (False, ...) si aucun signal.
-    """
     if len(df) < 200:
         return False, 0, 0, 0, 0, None
 
@@ -429,10 +392,9 @@ def check_signal(df, instrument):
     if pd.isna(atr) or pd.isna(ema50) or pd.isna(adx):
         return False, 0, 0, 0, 0, None
 
-    # Filtre directionnel provenant des news de dernière minute
     sentiment = news_sentiment_filter.get(instrument, None)
 
-    # --- Signal ACHAT (autorisé si pas de filtre ou filtre bullish) ---
+    # --- Signal ACHAT ---
     if sentiment is None or sentiment == 'bullish':
         if adx >= ADX_THRESHOLD and plus_di > minus_di:
             macd_ok = True
@@ -461,7 +423,7 @@ def check_signal(df, instrument):
                         tp = price + 2 * sl_distance
                         return True, price, sl, tp, sl_pips, 'buy'
 
-    # --- Signal VENTE (autorisé si pas de filtre ou filtre bearish) ---
+    # --- Signal VENTE ---
     if sentiment is None or sentiment == 'bearish':
         if adx >= ADX_THRESHOLD and minus_di > plus_di:
             macd_ok = True
@@ -494,7 +456,6 @@ def check_signal(df, instrument):
 
 
 def main():
-    """Boucle principale du robot de trading."""
     global trades_today, last_trade_date, last_close_time
     start_msg = (f"🟢 MyForexBotNY started – max {MAX_TRADES_PER_DAY} trades/day, "
                  f"buffer {MIN_MINUTES_BETWEEN_TRADES}min, Buy & Sell.")
@@ -505,7 +466,6 @@ def main():
         while True:
             now = datetime.now(tz)
 
-            # Arrêt automatique 5 minutes après la fin de la séance
             if now.hour > TRADING_HOURS_END or (now.hour == TRADING_HOURS_END and now.minute >= 5):
                 stop_msg = (f"🔴 MyForexBotNY stopped – End of session ({now.strftime('%H:%M')}), "
                             f"{trades_today} trade(s) taken today.")
@@ -521,7 +481,6 @@ def main():
 
             check_closed_trade()
 
-            # Mise à jour du filtre de sentiment toutes les 60 secondes
             if not hasattr(main, "next_news_check"):
                 main.next_news_check = now
             if now >= main.next_news_check:
