@@ -13,7 +13,7 @@ load_dotenv()
 # ========== CONFIGURATION ==========
 API_KEY = os.getenv("OANDA_API_KEY")
 ACCOUNT_ID = os.getenv("OANDA_ACCOUNT_ID")
-OANDA_URL = "https://api-fxpractice.oanda.com"
+OANDA_URL = "api-fxpractice.oanda.com"
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 FINNHUB_API_KEY = os.getenv("FINNHUB_API_KEY")          # votre clé secrète
