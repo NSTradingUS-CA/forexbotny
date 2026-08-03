@@ -1,3 +1,4 @@
+```python
 import v20
 import pandas as pd
 import pytz
@@ -218,21 +219,23 @@ def compute_macd(df, fast=12, slow=26, signal=9):
     return df
 
 
+# ----- FONCTION GET_CANDLES CORRIGÉE -----
 def get_candles(instrument, count=300):
     """Récupère les chandeliers H1 et calcule tous les indicateurs techniques."""
     params = {"count": count, "granularity": "H1", "price": "M"}
     response = retry_api_call(ctx.instrument.candles, instrument, **params)
-    candles = response.body['candles']
+    # response.body est un objet CandlesResponse, contenant une liste 'candles' d'objets Candlestick
+    candles = response.body.candles
     rows = []
     for c in candles:
-        if c['complete']:
+        if c.complete:
             rows.append({
-                'time': pd.to_datetime(c['time']),
-                'o': float(c['mid']['o']),
-                'h': float(c['mid']['h']),
-                'l': float(c['mid']['l']),
-                'c': float(c['mid']['c']),
-                'volume': int(c['volume'])
+                'time': pd.to_datetime(c.time),
+                'o': float(c.mid.o),
+                'h': float(c.mid.h),
+                'l': float(c.mid.l),
+                'c': float(c.mid.c),
+                'volume': int(c.volume)
             })
     df = pd.DataFrame(rows)
     # Calcul des indicateurs de base
@@ -249,15 +252,13 @@ def get_candles(instrument, count=300):
     if USE_VOLUME_FILTER:
         df['volume_ma'] = df['volume'].rolling(window=VOLUME_MA_PERIOD).mean()
     return df
+# ----------------------------------------
 
 
-# ----- LES DEUX FONCTIONS CORRIGÉES -----
 def get_spread(instrument):
     """Retourne le spread actuel (ask - bid) pour l'instrument."""
     response = retry_api_call(ctx.pricing.get, ACCOUNT_ID, instruments=instrument)
-    # response.body est un dictionnaire contenant la clé 'prices'
     price = response.body['prices'][0]
-    # Chaque élément de la liste 'prices' est un objet ClientPrice
     spread = float(price.asks[0].price) - float(price.bids[0].price)
     return spread
 
@@ -265,7 +266,6 @@ def get_spread(instrument):
 def has_open_position(instrument):
     """Vérifie si une position est déjà ouverte sur la paire donnée."""
     try:
-        # Utilisation de position.list qui renvoie toutes les positions
         response = retry_api_call(ctx.position.list, ACCOUNT_ID)
         for pos in response.body['positions']:
             if pos['instrument'] == instrument:
@@ -277,7 +277,6 @@ def has_open_position(instrument):
     except Exception as e:
         print(f"Position check failed: {e}")
         return False
-# ----------------------------------------
 
 
 def calculate_units(balance, sl_price_distance, instrument):
@@ -584,3 +583,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+```
