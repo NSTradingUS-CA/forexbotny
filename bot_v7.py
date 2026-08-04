@@ -23,22 +23,31 @@ TRADING_HOURS_START = 8
 TRADING_HOURS_END = 12
 TIMEZONE = 'America/Toronto'
 MAX_TRADES_PER_DAY = 2
-MIN_MINUTES_BETWEEN_TRADES = 30
-TRAILING_DISTANCE_PIPS = 20
+MIN_MINUTES_BETWEEN_TRADES = 20
+TRAILING_DISTANCE_PIPS = 15
 ATR_PERIOD = 14
-ATR_MULTIPLIER = 1.5
-MAX_SPREAD_PIPS = 2.5
 NEWS_BLOCK_MINUTES = 30
 BREAKING_NEWS_BLOCK_MINUTES = 15
 HIGH_IMPACT_EVENTS = ["NFP", "CPI", "FOMC", "Interest Rate", "GDP", "Retail Sales"]
-ADX_PERIOD = 14
-ADX_THRESHOLD = 25
 USE_MACD_FILTER = True
-USE_VOLUME_FILTER = True
-MACD_FAST = 12
-MACD_SLOW = 26
+MACD_FAST = 8
+MACD_SLOW = 21
 MACD_SIGNAL = 9
-VOLUME_MA_PERIOD = 20
+USE_VOLUME_FILTER = False
+
+# Paramètres spécifiques par paire
+PAIR_CONFIG = {
+    "EUR_USD": {
+        "MAX_SPREAD_PIPS": 2.5,
+        "ADX_THRESHOLD": 20,
+        "ATR_MULTIPLIER": 2.0,
+    },
+    "GBP_USD": {
+        "MAX_SPREAD_PIPS": 3.0,
+        "ADX_THRESHOLD": 20,
+        "ATR_MULTIPLIER": 2.0,
+    }
+}
 # ============================
 
 ctx = v20.Context(OANDA_URL, token=API_KEY)
@@ -50,6 +59,24 @@ tz = pytz.timezone(TIMEZONE)
 active_trade = None
 last_news_block_time = None
 news_sentiment_filter = {}
+
+# --- NOUVEAU : historique des spreads pour moyenne glissante ---
+spread_history = {pair: [] for pair in PAIRS}
+SPREAD_WINDOW = 5  # nombre de relevés pour la moyenne
+
+
+def is_spread_ok(pair, current_spread):
+    """
+    Vérifie si le spread est acceptable en utilisant la moyenne des derniers relevés.
+    Retourne True si la moyenne ne dépasse pas le seuil, False sinon.
+    """
+    max_spread = PAIR_CONFIG[pair]["MAX_SPREAD_PIPS"] * 0.0001
+    history = spread_history[pair]
+    history.append(current_spread)
+    if len(history) > SPREAD_WINDOW:
+        history.pop(0)
+    avg_spread = sum(history) / len(history)
+    return avg_spread <= max_spread
 
 
 def send_telegram_message(text):
@@ -391,11 +418,15 @@ def check_signal(df, instrument):
     if pd.isna(atr) or pd.isna(ema50) or pd.isna(adx):
         return False, 0, 0, 0, 0, None
 
+    config = PAIR_CONFIG[instrument]
+    adx_threshold = config["ADX_THRESHOLD"]
+    atr_multiplier = config["ATR_MULTIPLIER"]
+
     sentiment = news_sentiment_filter.get(instrument, None)
 
     # --- Signal ACHAT ---
     if sentiment is None or sentiment == 'bullish':
-        if adx >= ADX_THRESHOLD and plus_di > minus_di:
+        if adx >= adx_threshold and plus_di > minus_di:
             macd_ok = True
             if USE_MACD_FILTER:
                 macd_line = last_candle['macd_line']
@@ -416,7 +447,7 @@ def check_signal(df, instrument):
                                         ((last_candle['o'] - last_candle['l']) > (last_candle['h'] - last_candle['c']))
                     rsi_ok = 30 < rsi < 70
                     if trend_up and touched_ema and bullish_rejection and rsi_ok:
-                        sl = ema200 - (ATR_MULTIPLIER * atr)
+                        sl = ema200 - (atr_multiplier * atr)
                         sl_distance = price - sl
                         sl_pips = sl_distance / 0.0001
                         tp = price + 2 * sl_distance
@@ -424,7 +455,7 @@ def check_signal(df, instrument):
 
     # --- Signal VENTE ---
     if sentiment is None or sentiment == 'bearish':
-        if adx >= ADX_THRESHOLD and minus_di > plus_di:
+        if adx >= adx_threshold and minus_di > plus_di:
             macd_ok = True
             if USE_MACD_FILTER:
                 macd_line = last_candle['macd_line']
@@ -445,7 +476,7 @@ def check_signal(df, instrument):
                                         ((last_candle['h'] - last_candle['o']) < (last_candle['c'] - last_candle['l']))
                     rsi_ok = 30 < rsi < 70
                     if trend_down and touched_ema and bearish_rejection and rsi_ok:
-                        sl = ema200 + (ATR_MULTIPLIER * atr)
+                        sl = ema200 + (atr_multiplier * atr)
                         sl_distance = sl - price
                         sl_pips = sl_distance / 0.0001
                         tp = price - 2 * sl_distance
@@ -507,10 +538,13 @@ def main():
                     if has_open_position(pair):
                         print(f"{pair}: position already open. Skip.")
                         continue
+
                     spread = get_spread(pair)
-                    if spread > MAX_SPREAD_PIPS * 0.0001:
-                        print(f"{pair}: spread too high ({spread:.5f}). Skip.")
+                    # --- Utilisation de la moyenne glissante ---
+                    if not is_spread_ok(pair, spread):
+                        print(f"{pair}: spread too high (avg above threshold). Current: {spread:.5f}. Skip.")
                         continue
+
                     df = get_candles(pair)
                     signal, price, sl, tp, sl_pips, direction = check_signal(df, pair)
                     if signal:
