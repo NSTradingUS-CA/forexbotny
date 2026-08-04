@@ -7,7 +7,7 @@ on:
 jobs:
   run-bot:
     runs-on: ubuntu-latest
-    timeout-minutes: 210
+    timeout-minutes: 260
 
     env:
       OANDA_API_KEY: ${{ secrets.OANDA_API_KEY }}
