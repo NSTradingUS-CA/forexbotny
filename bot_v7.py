@@ -26,7 +26,7 @@ MAX_TRADES_PER_DAY = 2
 MIN_MINUTES_BETWEEN_TRADES = 20
 TRAILING_DISTANCE_PIPS = 15
 ATR_PERIOD = 14
-ADX_PERIOD = 14          # ← Rajouté (manquant dans la version précédente)
+ADX_PERIOD = 14
 NEWS_BLOCK_MINUTES = 30
 BREAKING_NEWS_BLOCK_MINUTES = 15
 HIGH_IMPACT_EVENTS = ["NFP", "CPI", "FOMC", "Interest Rate", "GDP", "Retail Sales"]
@@ -541,13 +541,32 @@ def main():
                         continue
 
                     spread = get_spread(pair)
+                    # Log immédiat du spread
+                    print(f"{now.strftime('%H:%M:%S')} {pair} spread: {spread:.5f}", end='')
+
                     if not is_spread_ok(pair, spread):
-                        print(f"{pair}: spread too high (avg above threshold). Current: {spread:.5f}. Skip.")
+                        print(" -> spread too high (avg threshold). Skip.")
                         continue
 
                     df = get_candles(pair)
+                    # Récupération rapide de la dernière bougie pour log
+                    last_candle = df.iloc[-2]
+                    adx_val = last_candle['adx']
+                    ema50_val = last_candle['ema50']
+                    ema200_val = last_candle['ema200']
+                    plus_di = last_candle['plus_di']
+                    minus_di = last_candle['minus_di']
+                    rsi_val = last_candle['rsi']
+                    macd_line = last_candle['macd_line']
+                    macd_signal = last_candle['macd_signal']
+
+                    print(f" | ADX:{adx_val:.1f} +DI:{plus_di:.1f} -DI:{minus_di:.1f} "
+                          f"EMA50:{ema50_val:.5f} EMA200:{ema200_val:.5f} "
+                          f"RSI:{rsi_val:.1f} MACD:{macd_line:.5f} Sig:{macd_signal:.5f}", end='')
+
                     signal, price, sl, tp, sl_pips, direction = check_signal(df, pair)
                     if signal:
+                        print(f" -> SIGNAL {direction}")
                         balance_response = retry_api_call(ctx.account.summary, ACCOUNT_ID)
                         balance = float(balance_response.body['account']['balance'])
                         sl_distance = price - sl if direction == 'buy' else sl - price
@@ -555,6 +574,8 @@ def main():
                         place_trade(pair, price, sl, tp, units, direction)
                         trades_today += 1
                         break
+                    else:
+                        print(" -> no signal")
             elif calendar_blocked:
                 print(f"{now.strftime('%H:%M:%S')} - Calendar news block active")
             elif not can_trade_time:
