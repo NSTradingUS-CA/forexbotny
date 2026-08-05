@@ -26,6 +26,7 @@ MAX_TRADES_PER_DAY = 2
 MIN_MINUTES_BETWEEN_TRADES = 20
 TRAILING_DISTANCE_PIPS = 15
 ATR_PERIOD = 14
+ADX_PERIOD = 14          # ← Rajouté (manquant dans la version précédente)
 NEWS_BLOCK_MINUTES = 30
 BREAKING_NEWS_BLOCK_MINUTES = 15
 HIGH_IMPACT_EVENTS = ["NFP", "CPI", "FOMC", "Interest Rate", "GDP", "Retail Sales"]
@@ -60,7 +61,7 @@ active_trade = None
 last_news_block_time = None
 news_sentiment_filter = {}
 
-# --- NOUVEAU : historique des spreads pour moyenne glissante ---
+# --- Historique des spreads pour moyenne glissante ---
 spread_history = {pair: [] for pair in PAIRS}
 SPREAD_WINDOW = 5  # nombre de relevés pour la moyenne
 
@@ -540,7 +541,6 @@ def main():
                         continue
 
                     spread = get_spread(pair)
-                    # --- Utilisation de la moyenne glissante ---
                     if not is_spread_ok(pair, spread):
                         print(f"{pair}: spread too high (avg above threshold). Current: {spread:.5f}. Skip.")
                         continue
