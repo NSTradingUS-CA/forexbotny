@@ -277,7 +277,6 @@ def has_open_position(instrument):
 
 def calculate_units(balance, sl_price_distance, instrument):
     risk_amount = balance * (RISK_PERCENT / 100)
-    # Correction : ne pas multiplier par pip_value
     units = int(risk_amount / sl_price_distance)
     return max(1000, units)
 
@@ -304,9 +303,17 @@ def place_trade(instrument, entry, sl, tp, units, direction):
             "trailingStopLossOnFill": {"distance": trailing_distance}
         }
     }
-    r = retry_api_call(ctx.order.create, ACCOUNT_ID, data=order_data)
+    # CORRECTION : utiliser order= au lieu de data=
+    r = retry_api_call(ctx.order.create, ACCOUNT_ID, order=order_data)
 
-    # Vérifier que l'ordre a bien été ouvert
+    # Vérifier si la réponse contient une erreur
+    if hasattr(r.body, 'errorMessage') and r.body.errorMessage:
+        error_msg = r.body.errorMessage
+        print(f"OANDA error: {error_msg}")
+        send_telegram_message(f"⚠️ Trade rejected: {error_msg}")
+        return False
+
+    # Extraire les informations du trade ouvert
     trade_opened_info = None
     try:
         trade_opened_info = r.body['orderFillTransaction']['tradeOpened']
@@ -324,15 +331,16 @@ def place_trade(instrument, entry, sl, tp, units, direction):
         }
     except (KeyError, TypeError) as e:
         print(f"Order rejected or failed to fill: {e}")
+        # Afficher tout le corps de la réponse pour diagnostic
+        print(f"Response body: {r.body}")
         active_trade = None
 
     if active_trade is None:
-        # L'ordre n'a pas été exécuté, on ne fait rien
         print("Trade not opened (rejected).")
         return False
 
     # Le trade est ouvert
-    trades_today += 1  # incrémentation ici, seulement si succès
+    trades_today += 1
 
     if direction == 'buy':
         risk = entry - sl
