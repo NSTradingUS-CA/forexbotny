@@ -293,18 +293,18 @@ def place_trade(instrument, entry, sl, tp, units, direction):
     if direction == 'sell':
         units = -units
     trailing_distance = str(round(TRAILING_DISTANCE_PIPS * 0.0001, 5))
-    order_data = {
-        "order": {
-            "type": "MARKET",
-            "instrument": instrument,
-            "units": str(units),
-            "stopLossOnFill": {"price": f"{sl:.5f}"},
-            "takeProfitOnFill": {"price": f"{tp:.5f}"},
-            "trailingStopLossOnFill": {"distance": trailing_distance}
-        }
+
+    # Construire le dictionnaire de l'ordre SANS la clé "order" externe
+    order_body = {
+        "type": "MARKET",
+        "instrument": instrument,
+        "units": str(units),
+        "stopLossOnFill": {"price": f"{sl:.5f}"},
+        "takeProfitOnFill": {"price": f"{tp:.5f}"},
+        "trailingStopLossOnFill": {"distance": trailing_distance}
     }
-    # CORRECTION : utiliser order= au lieu de data=
-    r = retry_api_call(ctx.order.create, ACCOUNT_ID, order=order_data)
+
+    r = retry_api_call(ctx.order.create, ACCOUNT_ID, order=order_body)
 
     # Vérifier si la réponse contient une erreur
     if hasattr(r.body, 'errorMessage') and r.body.errorMessage:
@@ -331,7 +331,6 @@ def place_trade(instrument, entry, sl, tp, units, direction):
         }
     except (KeyError, TypeError) as e:
         print(f"Order rejected or failed to fill: {e}")
-        # Afficher tout le corps de la réponse pour diagnostic
         print(f"Response body: {r.body}")
         active_trade = None
 
