@@ -63,14 +63,10 @@ news_sentiment_filter = {}
 
 # --- Historique des spreads pour moyenne glissante ---
 spread_history = {pair: [] for pair in PAIRS}
-SPREAD_WINDOW = 5  # nombre de relevés pour la moyenne
+SPREAD_WINDOW = 5
 
 
 def is_spread_ok(pair, current_spread):
-    """
-    Vérifie si le spread est acceptable en utilisant la moyenne des derniers relevés.
-    Retourne True si la moyenne ne dépasse pas le seuil, False sinon.
-    """
     max_spread = PAIR_CONFIG[pair]["MAX_SPREAD_PIPS"] * 0.0001
     history = spread_history[pair]
     history.append(current_spread)
@@ -227,7 +223,6 @@ def compute_macd(df, fast=12, slow=26, signal=9):
 
 
 def get_candles(instrument, count=300):
-    """Récupère les chandeliers H1 et calcule tous les indicateurs techniques."""
     params = {"count": count, "granularity": "H1", "price": "M"}
     response = retry_api_call(ctx.instrument.candles, instrument, **params)
     candles = response.body['candles']
@@ -541,7 +536,6 @@ def main():
                         continue
 
                     spread = get_spread(pair)
-                    # Log immédiat du spread
                     print(f"{now.strftime('%H:%M:%S')} {pair} spread: {spread:.5f}", end='')
 
                     if not is_spread_ok(pair, spread):
@@ -549,7 +543,6 @@ def main():
                         continue
 
                     df = get_candles(pair)
-                    # Récupération rapide de la dernière bougie pour log
                     last_candle = df.iloc[-2]
                     adx_val = last_candle['adx']
                     ema50_val = last_candle['ema50']
@@ -567,8 +560,9 @@ def main():
                     signal, price, sl, tp, sl_pips, direction = check_signal(df, pair)
                     if signal:
                         print(f" -> SIGNAL {direction}")
+                        # CORRECTION ICI : utilisation de l'attribut au lieu de ['account']
                         balance_response = retry_api_call(ctx.account.summary, ACCOUNT_ID)
-                        balance = float(balance_response.body['account']['balance'])
+                        balance = float(balance_response.body.account.balance)
                         sl_distance = price - sl if direction == 'buy' else sl - price
                         units = calculate_units(balance, sl_distance, pair)
                         place_trade(pair, price, sl, tp, units, direction)
