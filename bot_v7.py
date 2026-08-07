@@ -66,6 +66,24 @@ spread_history = {pair: [] for pair in PAIRS}
 SPREAD_WINDOW = 5
 
 
+def count_trades_today():
+    """Compte le nombre de trades fermés aujourd'hui sur le compte OANDA."""
+    today_str = datetime.now(tz).strftime("%Y-%m-%d")
+    try:
+        resp = retry_api_call(ctx.trade.list, ACCOUNT_ID, state='CLOSED', count=100)
+        trades = resp.body.get('trades', [])
+        count = 0
+        for t in trades:
+            # t.openTime est un string ou datetime selon la version
+            open_time = t.openTime if isinstance(t.openTime, str) else str(t.openTime)
+            if open_time.startswith(today_str):
+                count += 1
+        return count
+    except Exception as e:
+        print(f"Erreur comptage trades: {e}")
+        return 0
+
+
 def is_spread_ok(pair, current_spread):
     max_spread = PAIR_CONFIG[pair]["MAX_SPREAD_PIPS"] * 0.0001
     history = spread_history[pair]
@@ -264,9 +282,9 @@ def has_open_position(instrument):
     try:
         response = retry_api_call(ctx.position.list, ACCOUNT_ID)
         for pos in response.body['positions']:
-            if pos['instrument'] == instrument:
-                long_units = float(pos['long']['units'])
-                short_units = float(pos['short']['units'])
+            if pos.instrument == instrument:
+                long_units = int(pos.long.units)
+                short_units = int(pos.short.units)
                 if long_units != 0 or short_units != 0:
                     return True
         return False
@@ -294,7 +312,6 @@ def place_trade(instrument, entry, sl, tp, units, direction):
         units = -units
     trailing_distance = str(round(TRAILING_DISTANCE_PIPS * 0.0001, 5))
 
-    # Construire le dictionnaire de l'ordre SANS la clé "order" externe
     order_body = {
         "type": "MARKET",
         "instrument": instrument,
@@ -306,20 +323,18 @@ def place_trade(instrument, entry, sl, tp, units, direction):
 
     r = retry_api_call(ctx.order.create, ACCOUNT_ID, order=order_body)
 
-    # Vérifier si la réponse contient une erreur
     if hasattr(r.body, 'errorMessage') and r.body.errorMessage:
         error_msg = r.body.errorMessage
         print(f"OANDA error: {error_msg}")
         send_telegram_message(f"⚠️ Trade rejected: {error_msg}")
         return False
 
-    # Extraire les informations du trade ouvert
-    trade_opened_info = None
     try:
-        trade_opened_info = r.body['orderFillTransaction']['tradeOpened']
-        trade_id = trade_opened_info['tradeID']
-        entry_price = float(trade_opened_info['price'])
-        units_filled = trade_opened_info['units']
+        fill_trans = r.body['orderFillTransaction']
+        trade_opened = fill_trans.tradeOpened
+        trade_id = trade_opened.tradeID
+        entry_price = float(trade_opened.price)
+        units_filled = trade_opened.units
         active_trade = {
             'trade_id': trade_id,
             'pair': instrument,
@@ -329,8 +344,8 @@ def place_trade(instrument, entry, sl, tp, units, direction):
             'tp': tp,
             'direction': direction
         }
-    except (KeyError, TypeError) as e:
-        print(f"Order rejected or failed to fill: {e}")
+    except Exception as e:
+        print(f"Failed to extract trade details: {e}")
         print(f"Response body: {r.body}")
         active_trade = None
 
@@ -338,7 +353,6 @@ def place_trade(instrument, entry, sl, tp, units, direction):
         print("Trade not opened (rejected).")
         return False
 
-    # Le trade est ouvert
     trades_today += 1
 
     if direction == 'buy':
@@ -389,8 +403,8 @@ def check_closed_trade():
         closed_trades = resp.body.get('trades', [])
         if closed_trades:
             last_trade = closed_trades[0]
-            realized_pl = float(last_trade['realizedPL'])
-            close_price = float(last_trade['price'])
+            realized_pl = float(last_trade.realizedPL)
+            close_price = float(last_trade.price)
             entry_price = active_trade['entry_price']
             units = active_trade['units']
             direction = active_trade.get('direction', 'buy')
@@ -509,8 +523,14 @@ def check_signal(df, instrument):
 
 def main():
     global trades_today, last_trade_date, last_close_time
+
+    # ----- Initialisation réelle du nombre de trades déjà exécutés aujourd'hui -----
+    trades_today = count_trades_today()
+    print(f"Trades already taken today: {trades_today}")
+
     start_msg = (f"🟢 MyForexBotNY started – max {MAX_TRADES_PER_DAY} trades/day, "
-                 f"buffer {MIN_MINUTES_BETWEEN_TRADES}min, Buy & Sell.")
+                 f"buffer {MIN_MINUTES_BETWEEN_TRADES}min, Buy & Sell. "
+                 f"({trades_today} already taken)")
     print(start_msg)
     send_telegram_message(start_msg)
 
@@ -527,7 +547,7 @@ def main():
 
             today = now.date()
             if last_trade_date != today:
-                trades_today = 0
+                trades_today = count_trades_today()   # repart de la réalité du compte
                 last_trade_date = today
                 last_close_time = None
 
