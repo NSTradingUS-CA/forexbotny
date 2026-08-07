@@ -277,23 +277,20 @@ def has_open_position(instrument):
 
 def calculate_units(balance, sl_price_distance, instrument):
     risk_amount = balance * (RISK_PERCENT / 100)
-    pip_value = 0.0001
-    units = int(risk_amount / (sl_price_distance * pip_value))
+    # Correction : ne pas multiplier par pip_value
+    units = int(risk_amount / sl_price_distance)
     return max(1000, units)
 
 
 def get_account_balance(response):
-    """Extrait le solde du compte de la réponse, quel que soit le type de body."""
     try:
-        # Essayer la notation objet (AccountSummary)
         return float(response.body.account.balance)
     except AttributeError:
-        # Sinon, body est un dict, l'élément 'account' est un objet
         return float(response.body['account'].balance)
 
 
 def place_trade(instrument, entry, sl, tp, units, direction):
-    global active_trade
+    global active_trade, trades_today
     if direction == 'sell':
         units = -units
     trailing_distance = str(round(TRAILING_DISTANCE_PIPS * 0.0001, 5))
@@ -307,13 +304,15 @@ def place_trade(instrument, entry, sl, tp, units, direction):
             "trailingStopLossOnFill": {"distance": trailing_distance}
         }
     }
-    # Utilisation du paramètre nommé data= pour éviter l'erreur EntitySpec.create()
     r = retry_api_call(ctx.order.create, ACCOUNT_ID, data=order_data)
+
+    # Vérifier que l'ordre a bien été ouvert
+    trade_opened_info = None
     try:
-        trade_opened = r.body['orderFillTransaction']['tradeOpened']
-        trade_id = trade_opened['tradeID']
-        entry_price = float(trade_opened['price'])
-        units_filled = trade_opened['units']
+        trade_opened_info = r.body['orderFillTransaction']['tradeOpened']
+        trade_id = trade_opened_info['tradeID']
+        entry_price = float(trade_opened_info['price'])
+        units_filled = trade_opened_info['units']
         active_trade = {
             'trade_id': trade_id,
             'pair': instrument,
@@ -324,8 +323,16 @@ def place_trade(instrument, entry, sl, tp, units, direction):
             'direction': direction
         }
     except (KeyError, TypeError) as e:
-        print(f"Warning: Could not extract trade details: {e}")
+        print(f"Order rejected or failed to fill: {e}")
         active_trade = None
+
+    if active_trade is None:
+        # L'ordre n'a pas été exécuté, on ne fait rien
+        print("Trade not opened (rejected).")
+        return False
+
+    # Le trade est ouvert
+    trades_today += 1  # incrémentation ici, seulement si succès
 
     if direction == 'buy':
         risk = entry - sl
@@ -359,6 +366,7 @@ def place_trade(instrument, entry, sl, tp, units, direction):
         "rr": rr,
         "status": "OPEN"
     })
+    return True
 
 
 def check_closed_trade():
@@ -575,9 +583,9 @@ def main():
                         balance = get_account_balance(balance_response)
                         sl_distance = price - sl if direction == 'buy' else sl - price
                         units = calculate_units(balance, sl_distance, pair)
-                        place_trade(pair, price, sl, tp, units, direction)
-                        trades_today += 1
-                        break
+                        success = place_trade(pair, price, sl, tp, units, direction)
+                        if success:
+                            break
                     else:
                         print(" -> no signal")
             elif calendar_blocked:
