@@ -282,6 +282,16 @@ def calculate_units(balance, sl_price_distance, instrument):
     return max(1000, units)
 
 
+def get_account_balance(response):
+    """Extrait le solde du compte de la réponse, quel que soit le type de body."""
+    try:
+        # Essayer la notation objet (AccountSummary)
+        return float(response.body.account.balance)
+    except AttributeError:
+        # Fallback en dictionnaire
+        return float(response.body['account']['balance'])
+
+
 def place_trade(instrument, entry, sl, tp, units, direction):
     global active_trade
     if direction == 'sell':
@@ -560,9 +570,8 @@ def main():
                     signal, price, sl, tp, sl_pips, direction = check_signal(df, pair)
                     if signal:
                         print(f" -> SIGNAL {direction}")
-                        # CORRECTION ICI : utilisation de l'attribut au lieu de ['account']
                         balance_response = retry_api_call(ctx.account.summary, ACCOUNT_ID)
-                        balance = float(balance_response.body.account.balance)
+                        balance = get_account_balance(balance_response)
                         sl_distance = price - sl if direction == 'buy' else sl - price
                         units = calculate_units(balance, sl_distance, pair)
                         place_trade(pair, price, sl, tp, units, direction)
