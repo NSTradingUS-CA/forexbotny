@@ -288,8 +288,8 @@ def get_account_balance(response):
         # Essayer la notation objet (AccountSummary)
         return float(response.body.account.balance)
     except AttributeError:
-        # Fallback en dictionnaire
-        return float(response.body['account']['balance'])
+        # Sinon, body est un dict, l'élément 'account' est un objet
+        return float(response.body['account'].balance)
 
 
 def place_trade(instrument, entry, sl, tp, units, direction):
