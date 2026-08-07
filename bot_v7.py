@@ -61,27 +61,63 @@ active_trade = None
 last_news_block_time = None
 news_sentiment_filter = {}
 
-# --- Historique des spreads pour moyenne glissante ---
 spread_history = {pair: [] for pair in PAIRS}
 SPREAD_WINDOW = 5
 
 
-def count_trades_today():
-    """Compte le nombre de trades fermés aujourd'hui sur le compte OANDA."""
+def count_all_trades_today():
+    """Compte le nombre total de trades (ouverts et fermés) initiés aujourd'hui."""
     today_str = datetime.now(tz).strftime("%Y-%m-%d")
+    count = 0
     try:
-        resp = retry_api_call(ctx.trade.list, ACCOUNT_ID, state='CLOSED', count=100)
-        trades = resp.body.get('trades', [])
-        count = 0
-        for t in trades:
-            # t.openTime est un string ou datetime selon la version
+        # Récupérer les trades ouverts
+        resp_open = retry_api_call(ctx.trade.list, ACCOUNT_ID, state='OPEN', count=100)
+        for t in resp_open.body.get('trades', []):
             open_time = t.openTime if isinstance(t.openTime, str) else str(t.openTime)
             if open_time.startswith(today_str):
                 count += 1
-        return count
+        # Récupérer les trades fermés
+        resp_closed = retry_api_call(ctx.trade.list, ACCOUNT_ID, state='CLOSED', count=100)
+        for t in resp_closed.body.get('trades', []):
+            open_time = t.openTime if isinstance(t.openTime, str) else str(t.openTime)
+            if open_time.startswith(today_str):
+                count += 1
     except Exception as e:
-        print(f"Erreur comptage trades: {e}")
-        return 0
+        print(f"Erreur comptage global trades: {e}")
+    return count
+
+
+def load_existing_open_position():
+    """Si une position est déjà ouverte sur l'une des paires, la charge dans active_trade."""
+    global active_trade
+    try:
+        resp_pos = retry_api_call(ctx.position.list, ACCOUNT_ID)
+        for pos in resp_pos.body['positions']:
+            instrument = pos.instrument
+            if instrument not in PAIRS:
+                continue
+            long_units = int(pos.long.units)
+            short_units = int(pos.short.units)
+            if long_units != 0 or short_units != 0:
+                # Trouver le trade ouvert correspondant pour obtenir le prix d'entrée
+                resp_trades = retry_api_call(ctx.trade.list, ACCOUNT_ID,
+                                             instrument=instrument, state='OPEN', count=1)
+                open_trades = resp_trades.body.get('trades', [])
+                if open_trades:
+                    trade = open_trades[0]
+                    active_trade = {
+                        'trade_id': trade.id,
+                        'pair': instrument,
+                        'units': int(trade.currentUnits),
+                        'entry_price': float(trade.price),
+                        'sl': float(trade.stopLossOrder.price) if trade.stopLossOrder else None,
+                        'tp': float(trade.takeProfitOrder.price) if trade.takeProfitOrder else None,
+                        'direction': 'buy' if int(trade.currentUnits) > 0 else 'sell'
+                    }
+                    print(f"Existing open position loaded: {instrument} {active_trade['direction']}")
+                    return
+    except Exception as e:
+        print(f"Could not load existing position: {e}")
 
 
 def is_spread_ok(pair, current_spread):
@@ -279,6 +315,7 @@ def get_spread(instrument):
 
 
 def has_open_position(instrument):
+    """Vérifie si une position est ouverte sur l'instrument (utilisé uniquement pour la surveillance interne)."""
     try:
         response = retry_api_call(ctx.position.list, ACCOUNT_ID)
         for pos in response.body['positions']:
@@ -308,6 +345,9 @@ def get_account_balance(response):
 
 def place_trade(instrument, entry, sl, tp, units, direction):
     global active_trade, trades_today
+    if active_trade is not None:
+        print("A trade is already active, cannot open another.")
+        return False
     if direction == 'sell':
         units = -units
     trailing_distance = str(round(TRAILING_DISTANCE_PIPS * 0.0001, 5))
@@ -347,10 +387,6 @@ def place_trade(instrument, entry, sl, tp, units, direction):
     except Exception as e:
         print(f"Failed to extract trade details: {e}")
         print(f"Response body: {r.body}")
-        active_trade = None
-
-    if active_trade is None:
-        print("Trade not opened (rejected).")
         return False
 
     trades_today += 1
@@ -522,11 +558,14 @@ def check_signal(df, instrument):
 
 
 def main():
-    global trades_today, last_trade_date, last_close_time
+    global trades_today, last_trade_date, last_close_time, active_trade
 
-    # ----- Initialisation réelle du nombre de trades déjà exécutés aujourd'hui -----
-    trades_today = count_trades_today()
-    print(f"Trades already taken today: {trades_today}")
+    # Initialisation réelle : compte des trades déjà effectués aujourd'hui (ouverts + fermés)
+    trades_today = count_all_trades_today()
+    # S'il y a déjà une position ouverte, la charger dans active_trade
+    if active_trade is None:
+        load_existing_open_position()
+    print(f"Trades already taken today: {trades_today}, active trade: {active_trade is not None}")
 
     start_msg = (f"🟢 MyForexBotNY started – max {MAX_TRADES_PER_DAY} trades/day, "
                  f"buffer {MIN_MINUTES_BETWEEN_TRADES}min, Buy & Sell. "
@@ -547,10 +586,14 @@ def main():
 
             today = now.date()
             if last_trade_date != today:
-                trades_today = count_trades_today()   # repart de la réalité du compte
+                trades_today = count_all_trades_today()
                 last_trade_date = today
                 last_close_time = None
+                # Réinitialiser active_trade si nécessaire
+                if active_trade is None:
+                    load_existing_open_position()
 
+            # Surveiller la clôture du trade en cours
             check_closed_trade()
 
             if not hasattr(main, "next_news_check"):
@@ -562,6 +605,7 @@ def main():
             in_trading_hours = TRADING_HOURS_START <= now.hour < TRADING_HOURS_END
             calendar_blocked = is_news_time_blocked()
 
+            # Vérification du délai post-clôture
             can_trade_time = True
             if last_close_time is not None:
                 elapsed = now - last_close_time
@@ -570,13 +614,17 @@ def main():
                     remaining = MIN_MINUTES_BETWEEN_TRADES - int(elapsed.total_seconds()/60)
                     print(f"⏳ Post-close cooldown – {remaining} min remaining")
 
-            can_trade = (trades_today < MAX_TRADES_PER_DAY
+            # Condition pour ouvrir un nouveau trade : pas de trade actif, sous la limite quotidienne,
+            # dans les horaires, pas de blocage calendaire, délai post-clôture écoulé.
+            can_trade = (active_trade is None
+                         and trades_today < MAX_TRADES_PER_DAY
                          and in_trading_hours
                          and not calendar_blocked
                          and can_trade_time)
 
             if can_trade:
                 for pair in PAIRS:
+                    # Vérifier qu'aucune position n'est ouverte (sécurité)
                     if has_open_position(pair):
                         print(f"{pair}: position already open. Skip.")
                         continue
@@ -617,6 +665,8 @@ def main():
                         print(" -> no signal")
             elif calendar_blocked:
                 print(f"{now.strftime('%H:%M:%S')} - Calendar news block active")
+            elif active_trade is not None:
+                print(f"{now.strftime('%H:%M:%S')} - Trade in progress on {active_trade['pair']}, waiting for close")
             elif not can_trade_time:
                 pass
             else:
