@@ -307,7 +307,8 @@ def place_trade(instrument, entry, sl, tp, units, direction):
             "trailingStopLossOnFill": {"distance": trailing_distance}
         }
     }
-    r = retry_api_call(ctx.order.create, ACCOUNT_ID, order_data)
+    # Utilisation du paramètre nommé data= pour éviter l'erreur EntitySpec.create()
+    r = retry_api_call(ctx.order.create, ACCOUNT_ID, data=order_data)
     try:
         trade_opened = r.body['orderFillTransaction']['tradeOpened']
         trade_id = trade_opened['tradeID']
