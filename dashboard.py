@@ -20,7 +20,7 @@ st.markdown("""
         font-size: 0.5rem !important;
     }
     .session-metrics [data-testid="metric-container"] div[data-testid="stMetricValue"] {
-        font-size: 0.7rem !important;
+        font-size: 0.5rem !important;
     }
 
     /* Métriques des paires (EUR/USD, GBP/USD) */
@@ -28,7 +28,7 @@ st.markdown("""
         font-size: 0.5rem !important;
     }
     .pair-metrics [data-testid="metric-container"] div[data-testid="stMetricValue"] {
-        font-size: 0.7rem !important;
+        font-size: 0.5rem !important;
     }
 
     /* Métriques du trade actif (Pair, Type, Entry, etc.) */
@@ -36,7 +36,7 @@ st.markdown("""
         font-size: 0.5rem !important;
     }
     .active-trade-metrics [data-testid="metric-container"] div[data-testid="stMetricValue"] {
-        font-size: 0.7rem !important;
+        font-size: 0.5rem !important;
     }
 
     /* Espacement réduit */
