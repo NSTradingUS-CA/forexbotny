@@ -1,3 +1,4 @@
+```python
 import streamlit as st
 import requests
 import time
@@ -5,56 +6,18 @@ import time
 st.set_page_config(page_title="MyForexBotNY Cockpit", layout="wide")
 
 # ---------- CSS global (avec classes par section) ----------
+
 st.markdown("""
-<style>
-    /* Boutons orange */
-    div.stButton > button {
-        background-color: #FF9100 !important;
-        color: white !important;
-        font-weight: bold;
-        border: none;
-    }
 
-    /* ---------- FORCER LA RÉDUCTION GLOBALE DES MÉTRIQUES (base) ---------- */
-    [data-testid="stMetricValue"] {
-        font-size: 1.4rem !important;
-        line-height: 1.1 !important;
-    }
-    [data-testid="stMetricLabel"] {
-        font-size: 1.2rem !important;
-        line-height: 1.1 !important;
-    }
-
-    /* ---------- SECTION SESSION (plus petite) ---------- */
-    .session-metrics [data-testid="stMetricValue"] {
-        font-size: 0.7rem !important;
-    }
-    .session-metrics [data-testid="stMetricLabel"] {
-        font-size: 0.6rem !important;
-        font-weight: bold !important;   /* <-- labels Trades, Session, Status en gras */
-    }
-
-    /* ---------- SECTION ACTIVE TRADE (encore plus petite) ---------- */
-    .active-trade-metrics [data-testid="stMetricValue"] {
-        font-size: 0.55rem !important;
-    }
-    .active-trade-metrics [data-testid="stMetricLabel"] {
-        font-size: 0.35rem !important;
-    }
-
-    /* Réduction de l'espacement global */
-    .stMetric {
-        margin-bottom: 0.2rem !important;
-    }
-</style>
 """, unsafe_allow_html=True)
 
 # ---------- Authentification ----------
+
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 
 if not st.session_state.authenticated:
-    st.markdown("<h1 style='text-align: center; color: #00C853;'>🔐 MyForexBotNY</h1>",
+    st.markdown("🔐 MyForexBotNY",
                 unsafe_allow_html=True)
     pwd = st.text_input("Password", type="password")
     if st.button("Sign in"):
@@ -66,6 +29,7 @@ if not st.session_state.authenticated:
     st.stop()
 
 # ---------- Après authentification ----------
+
 @st.cache_data(ttl=30)
 def fetch_status():
     repo = st.secrets["GITHUB_REPOSITORY"]
@@ -85,10 +49,12 @@ def safe_float(value, default=0.0):
         return default
 
 # Titre centré en haut
-st.markdown("<h2 style='text-align: center; color: #00C853; margin-top: 0;'>🖥️ MyForexBotNY Cockpit</h2>",
+
+st.markdown("🖥️ MyForexBotNY Cockpit",
             unsafe_allow_html=True)
 
 # Bouton Sign out en haut à droite
+
 col_empty, col_signout = st.columns([6, 1])
 with col_signout:
     if st.button("Sign out"):
@@ -102,8 +68,8 @@ while True:
     if not data:
         with placeholder.container():
             st.error("Status unavailable – retrying in 30s")
-        time.sleep(30)
-        continue
+            time.sleep(30)
+            continue
 
     with placeholder.container():
         # ================= Session (classe session-metrics) =================
@@ -112,10 +78,21 @@ while True:
         col1, col2, col3 = st.columns(3)
         trades = sess.get('trades_today', 0)
         max_tr = sess.get('max_trades', 2)
-        col1.metric("Trades", f"{trades}/{max_tr}")
-        col2.metric("Session", f"{sess.get('start','08')}–{sess.get('end','12')}")
+
+        with col1:
+            st.markdown("#### Trade")
+            st.metric("", f"{trades}/{max_tr}")
+
+        with col2:
+            st.markdown("#### Session")
+            st.metric("", f"{sess.get('start','08')}–{sess.get('end','12')}")
+
         running = data.get("bot_status") == "running"
-        col3.metric("Status", "🟢" if running else "🔴")
+
+        with col3:
+            st.markdown("#### Status")
+            st.metric("", "🟢" if running else "🔴")
+
         st.markdown('</div>', unsafe_allow_html=True)
 
         st.caption(f"Updated: {data.get('time', '-')}")
@@ -192,3 +169,4 @@ while True:
                 st.write("No rejected setups.")
 
     time.sleep(30)
+```
