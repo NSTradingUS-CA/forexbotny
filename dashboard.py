@@ -1,4 +1,3 @@
-import streamlit as st
 import requests
 import time
 
@@ -15,35 +14,33 @@ st.markdown("""
         border: none;
     }
 
-    /* ---------- MÉTRIQUES DE BASE (taille réduite) ---------- */
+    /* ---------- FORCER LA RÉDUCTION GLOBALE DES MÉTRIQUES (base) ---------- */
     [data-testid="stMetricValue"] {
-        font-size: 0.7rem !important;
+        font-size: 1.4rem !important;
         line-height: 1.1 !important;
     }
     [data-testid="stMetricLabel"] {
-        font-size: 0.5rem !important;
+        font-size: 1.2rem !important;
         line-height: 1.1 !important;
     }
 
-    /* ---------- SECTION SESSION (très petite, labels en gras) ---------- */
+    /* ---------- SECTION SESSION (plus petite) ---------- */
     .session-metrics [data-testid="stMetricValue"] {
-        font-size: 0.55rem !important;
+        font-size: 0.7rem !important;
     }
     .session-metrics [data-testid="stMetricLabel"] {
-        font-size: 0.4rem !important;
-        font-weight: bold !important;
+        font-size: 0.6rem !important;
     }
 
-    /* ---------- SECTION ACTIVE TRADE (très petite, labels en gras) ---------- */
+    /* ---------- SECTION ACTIVE TRADE (encore plus petite) ---------- */
     .active-trade-metrics [data-testid="stMetricValue"] {
-        font-size: 0.5rem !important;
+        font-size: 0.55rem !important;
     }
     .active-trade-metrics [data-testid="stMetricLabel"] {
         font-size: 0.35rem !important;
-        font-weight: bold !important;
     }
 
-    /* Espacement réduit */
+    /* Réduction de l'espacement global */
     .stMetric {
         margin-bottom: 0.2rem !important;
     }
