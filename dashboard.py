@@ -1,3 +1,4 @@
+```python
 import streamlit as st
 import requests
 import time
@@ -77,21 +78,10 @@ while True:
         col1, col2, col3 = st.columns(3)
         trades = sess.get('trades_today', 0)
         max_tr = sess.get('max_trades', 2)
-        
-        with col1:
-            st.markdown("#### Trade")
-            st.metric("", f"{trades}/{max_tr}")
-        
-        with col2:
-            st.markdown("#### Session")
-            st.metric("", f"{sess.get('start','08')}–{sess.get('end','12')}")
-        
+        col1.metric("#### Trade", f"{trades}/{max_tr}")
+        col2.metric("#### Session", f"{sess.get('start','08')}–{sess.get('end','12')}")
         running = data.get("bot_status") == "running"
-        
-        with col3:
-            st.markdown("#### Status")
-            st.metric("", "🟢" if running else "🔴")
-        
+        col3.metric("#### Status", "🟢" if running else "🔴")
         st.markdown('</div>', unsafe_allow_html=True)
 
         st.caption(f"Updated: {data.get('time', '-')}")
@@ -168,3 +158,4 @@ while True:
                 st.write("No rejected setups.")
 
     time.sleep(30)
+```
