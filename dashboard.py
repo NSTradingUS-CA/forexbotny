@@ -1,43 +1,36 @@
 import streamlit as st
 import requests
 import time
+import pytz
+from datetime import datetime
 
 st.set_page_config(page_title="MyForexBotNY Cockpit", layout="wide")
 
 # ---------- CSS global ----------
 st.markdown("""
 <style>
-    /* Boutons orange */
     div.stButton > button {
         background-color: #FF9100 !important;
         color: white !important;
         font-weight: bold;
         border: none;
     }
-
-    /* Métriques : taille réduite pour les valeurs uniquement */
     [data-testid="stMetricValue"] {
         font-size: 1.4rem !important;
         line-height: 1.1 !important;
     }
-
-    /* Section Session : valeurs plus petites */
     .session-metrics [data-testid="stMetricValue"] {
         font-size: 0.7rem !important;
     }
-    /* Réduction de l'espace entre le titre (####) et la métrique */
     .session-metrics h4 {
         margin-bottom: 0.1rem !important;
     }
     .session-metrics .stMetric {
         margin-top: 0 !important;
     }
-
-    /* Section Active Trade : valeurs encore plus petites */
     .active-trade-metrics [data-testid="stMetricValue"] {
         font-size: 0.55rem !important;
     }
-
     .stMetric {
         margin-bottom: 0.2rem !important;
     }
@@ -60,7 +53,9 @@ if not st.session_state.authenticated:
             st.error("Wrong password")
     st.stop()
 
-# ---------- Après authentification ----------
+# ---------- Utilitaires ----------
+MONTREAL = pytz.timezone('America/Toronto')
+
 @st.cache_data(ttl=30)
 def fetch_status():
     repo = st.secrets["GITHUB_REPOSITORY"]
@@ -73,17 +68,42 @@ def fetch_status():
         pass
     return None
 
+def check_bot_running():
+    """Vérifie si un workflow GitHub Actions est actuellement en cours."""
+    token = st.secrets.get("GH_PAT")  # token GitHub (facultatif mais recommandé)
+    repo = st.secrets["GITHUB_REPOSITORY"]
+    headers = {"Accept": "application/vnd.github.v3+json"}
+    if token:
+        headers["Authorization"] = f"token {token}"
+    url = f"https://api.github.com/repos/{repo}/actions/runs"
+    params = {"status": "in_progress"}
+    try:
+        resp = requests.get(url, headers=headers, params=params, timeout=10)
+        if resp.status_code == 200:
+            runs = resp.json()
+            if runs["workflow_runs"]:
+                return True
+        # Vérifier aussi les runs "queued"
+        params["status"] = "queued"
+        resp = requests.get(url, headers=headers, params=params, timeout=10)
+        if resp.status_code == 200:
+            runs = resp.json()
+            if runs["workflow_runs"]:
+                return True
+    except Exception:
+        pass
+    return False
+
 def safe_float(value, default=0.0):
     try:
         return float(value)
     except (ValueError, TypeError):
         return default
 
-# Titre centré en haut
+# ---------- Interface ----------
 st.markdown("<h2 style='text-align: center; color: #00C853; margin-top: 0;'>🖥️ MyForexBotNY Cockpit</h2>",
             unsafe_allow_html=True)
 
-# Bouton Sign out en haut à droite
 col_empty, col_signout = st.columns([6, 1])
 with col_signout:
     if st.button("Sign out"):
@@ -94,6 +114,9 @@ placeholder = st.empty()
 
 while True:
     data = fetch_status()
+    now_mtl = datetime.now(MONTREAL).strftime('%H:%M:%S')
+    bot_is_running = check_bot_running()
+
     if not data:
         with placeholder.container():
             st.error("Status unavailable – retrying in 30s")
@@ -101,10 +124,10 @@ while True:
         continue
 
     with placeholder.container():
-        # ================= Session =================
+        # ---------- Session ----------
         st.markdown('<div class="session-metrics">', unsafe_allow_html=True)
         sess = data.get("session", {})
-        col1, col2, col3 = st.columns(3)
+        col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
         trades = sess.get('trades_today', 0)
         max_tr = sess.get('max_trades', 2)
 
@@ -114,22 +137,23 @@ while True:
         col2.markdown("#### Session")
         col2.metric("", f"{sess.get('start','08')}–{sess.get('end','12')}")
 
-        running = data.get("bot_status") == "running"
-
         col3.markdown("#### Status")
-        col3.metric("", "🟢" if running else "🔴")
+        col3.metric("", "🟢" if bot_is_running else "🔴")
+
+        col4.markdown("#### Time")
+        col4.metric("", now_mtl)
         st.markdown('</div>', unsafe_allow_html=True)
 
-        st.caption(f"Updated: {data.get('time', '-')}")
+        st.caption(f"Last update: {data.get('time', '-')}")
 
-        # News
+        # ---------- News ----------
         news = data.get("next_news_event")
         if news:
             st.markdown(
                 f"⏰ **{news['title']}** at {news['time']} – :orange[{news.get('impact','')}]"
             )
 
-        # ================= Paires =================
+        # ---------- Paires ----------
         st.markdown("---")
         cols = st.columns(2)
         for i, pair in enumerate(["EUR_USD", "GBP_USD"]):
@@ -149,7 +173,7 @@ while True:
                 if sig:
                     st.markdown(f"Signal: <span class='green'>{sig.upper()}</span>", unsafe_allow_html=True)
 
-        # ================= Active Trade =================
+        # ---------- Active Trade ----------
         active = data.get("active_trade")
         if active:
             st.markdown("---")
@@ -167,7 +191,7 @@ while True:
             c4.metric("Trail", f"{active.get('trailing_stop',0)}p")
             st.markdown('</div>', unsafe_allow_html=True)
 
-        # ================= Historique & Rejets =================
+        # ---------- Historique & Rejets ----------
         tab1, tab2 = st.tabs(["📜 Closed", "🚫 Rejected"])
         with tab1:
             closed = data.get("closed_trades_today", [])
