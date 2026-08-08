@@ -63,11 +63,12 @@ def safe_float(value, default=0.0):
     except (ValueError, TypeError):
         return default
 
-# En‑tête fixe avec le titre et le bouton Sign out
-col_title, col_signout = st.columns([6, 1])
-with col_title:
-    st.markdown("<h3 style='color: #00C853; margin: 0;'>🖥️ MyForexBotNY Cockpit</h3>",
-                unsafe_allow_html=True)
+# Titre centré en haut, ligne à part
+st.markdown("<h2 style='text-align: center; color: #00C853; margin-top: 0;'>🖥️ MyForexBotNY Cockpit</h2>",
+            unsafe_allow_html=True)
+
+# Bouton Sign out en haut à droite (dans une colonne invisible pour l'alignement)
+col_empty, col_signout = st.columns([6, 1])
 with col_signout:
     if st.button("Sign out"):
         st.session_state.authenticated = False
