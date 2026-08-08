@@ -18,7 +18,7 @@ st.markdown("""
     /* Métriques : taille réduite pour les valeurs uniquement */
     [data-testid="stMetricValue"] {
         font-size: 1.4rem !important;
-        line-height: 1 !important;
+        line-height: 1.1 !important;
     }
 
     /* Section Session : valeurs plus petites */
@@ -27,7 +27,7 @@ st.markdown("""
     }
     /* Réduction de l'espace entre le titre (####) et la métrique */
     .session-metrics h4 {
-        margin-bottom: 0.1rem !important;
+        margin-bottom: 0rem !important;
     }
     .session-metrics .stMetric {
         margin-top: 0 !important;
