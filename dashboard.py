@@ -17,12 +17,12 @@ st.markdown("""
 
     /* ---------- FORCER LA RÉDUCTION GLOBALE DES MÉTRIQUES (base) ---------- */
     [data-testid="stMetricValue"] {
-        font-size: 0.7rem !important;
-        line-height: 1 !important;
+        font-size: 2rem !important;
+        line-height: 3 !important;
     }
     [data-testid="stMetricLabel"] {
-        font-size: 0.5rem !important;
-        line-height: 1 !important;
+        font-size: 2rem !important;
+        line-height: 3 !important;
     }
 
     /* ---------- SECTION SESSION (plus petite) ---------- */
@@ -30,7 +30,7 @@ st.markdown("""
         font-size: 0.6rem !important;
     }
     .session-metrics [data-testid="stMetricLabel"] {
-        font-size: 0.4rem !important;
+        font-size: 0.55rem !important;
     }
 
     /* ---------- SECTION ACTIVE TRADE (encore plus petite) ---------- */
@@ -38,7 +38,7 @@ st.markdown("""
         font-size: 0.55rem !important;
     }
     .active-trade-metrics [data-testid="stMetricLabel"] {
-        font-size: 0.35rem !important;
+        font-size: 0.55rem !important;
     }
 
     /* Réduction de l'espacement global */
