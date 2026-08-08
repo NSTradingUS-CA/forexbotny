@@ -1,8 +1,8 @@
 import streamlit as st
 import requests
 import time
-import pytz
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 st.set_page_config(page_title="MyForexBotNY Cockpit", layout="wide")
 
@@ -54,7 +54,7 @@ if not st.session_state.authenticated:
     st.stop()
 
 # ---------- Utilitaires ----------
-MONTREAL = pytz.timezone('America/Toronto')
+MONTREAL_TZ = ZoneInfo("America/Toronto")
 
 @st.cache_data(ttl=30)
 def fetch_status():
@@ -70,7 +70,7 @@ def fetch_status():
 
 def check_bot_running():
     """Vérifie si un workflow GitHub Actions est actuellement en cours."""
-    token = st.secrets.get("GH_PAT")  # token GitHub (facultatif mais recommandé)
+    token = st.secrets.get("GH_PAT")
     repo = st.secrets["GITHUB_REPOSITORY"]
     headers = {"Accept": "application/vnd.github.v3+json"}
     if token:
@@ -83,7 +83,6 @@ def check_bot_running():
             runs = resp.json()
             if runs["workflow_runs"]:
                 return True
-        # Vérifier aussi les runs "queued"
         params["status"] = "queued"
         resp = requests.get(url, headers=headers, params=params, timeout=10)
         if resp.status_code == 200:
@@ -114,7 +113,7 @@ placeholder = st.empty()
 
 while True:
     data = fetch_status()
-    now_mtl = datetime.now(MONTREAL).strftime('%H:%M:%S')
+    now_mtl = datetime.now(MONTREAL_TZ).strftime('%H:%M:%S')
     bot_is_running = check_bot_running()
 
     if not data:
