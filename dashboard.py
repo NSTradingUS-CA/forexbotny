@@ -15,33 +15,35 @@ st.markdown("""
         border: none;
     }
 
-    /* ---------- SECTION SESSION (Trades, Session, Status) ---------- */
-    .session-metrics [data-testid="metric-container"] label {
-        font-size: 0.4rem !important;   /* <-- ajuste ici pour les libellés */
-    }
-    .session-metrics [data-testid="metric-container"] div[data-testid="stMetricValue"] {
-        font-size: 0.6rem !important;   /* <-- ajuste ici pour les valeurs */
-    }
-
-    /* Métriques des paires (inchangées pour l’instant) */
-    .pair-metrics [data-testid="metric-container"] label {
-        font-size: 0.5rem !important;
-    }
-    .pair-metrics [data-testid="metric-container"] div[data-testid="stMetricValue"] {
+    /* ---------- FORCER LA RÉDUCTION GLOBALE DES MÉTRIQUES (base) ---------- */
+    [data-testid="stMetricValue"] {
         font-size: 0.7rem !important;
+        line-height: 1 !important;
+    }
+    [data-testid="stMetricLabel"] {
+        font-size: 0.5rem !important;
+        line-height: 1 !important;
     }
 
-    /* ---------- SECTION ACTIVE TRADE ---------- */
-    .active-trade-metrics [data-testid="metric-container"] label {
-        font-size: 0.4rem !important;
-    }
-    .active-trade-metrics [data-testid="metric-container"] div[data-testid="stMetricValue"] {
+    /* ---------- SECTION SESSION (plus petite) ---------- */
+    .session-metrics [data-testid="stMetricValue"] {
         font-size: 0.6rem !important;
     }
+    .session-metrics [data-testid="stMetricLabel"] {
+        font-size: 0.4rem !important;
+    }
 
-    /* Espacement réduit */
-    [data-testid="column"] {
-        padding: 0 0.2rem !important;
+    /* ---------- SECTION ACTIVE TRADE (encore plus petite) ---------- */
+    .active-trade-metrics [data-testid="stMetricValue"] {
+        font-size: 0.55rem !important;
+    }
+    .active-trade-metrics [data-testid="stMetricLabel"] {
+        font-size: 0.35rem !important;
+    }
+
+    /* Réduction de l'espacement global */
+    .stMetric {
+        margin-bottom: 0.2rem !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -129,7 +131,6 @@ while True:
         cols = st.columns(2)
         for i, pair in enumerate(["EUR_USD", "GBP_USD"]):
             with cols[i]:
-                st.markdown('<div class="pair-metrics">', unsafe_allow_html=True)
                 p = data.get("pairs", {}).get(pair, {})
                 ema = p.get('ema_orientation','')
                 macd = p.get('macd_signal','')
@@ -144,7 +145,6 @@ while True:
                 sig = p.get('last_signal')
                 if sig:
                     st.markdown(f"Signal: <span class='green'>{sig.upper()}</span>", unsafe_allow_html=True)
-                st.markdown('</div>', unsafe_allow_html=True)
 
         # ================= Active Trade (classe active-trade-metrics) =================
         active = data.get("active_trade")
