@@ -34,6 +34,11 @@ st.markdown("""
     .stMetric {
         margin-bottom: 0.2rem !important;
     }
+    .indicators-line {
+        font-size: 0.85rem !important;
+        line-height: 1.3 !important;
+        color: #EAEAEA;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -98,6 +103,13 @@ def safe_float(value, default=0.0):
     except (ValueError, TypeError):
         return default
 
+def fmt_num(value, decimals=5):
+    """Formate un nombre avec un nombre fixe de décimales, ou retourne '--' si invalide."""
+    try:
+        return f"{float(value):.{decimals}f}"
+    except (ValueError, TypeError):
+        return "--"
+
 # ---------- Interface ----------
 st.markdown("<h2 style='text-align: center; color: #00C853; margin-top: 0;'>🖥️ MyForexBotNY Cockpit</h2>",
             unsafe_allow_html=True)
@@ -161,21 +173,23 @@ while True:
                             unsafe_allow_html=True)
                 price = p.get('price')
                 st.metric("Price", f"{price:.5f}" if price is not None else "--")
-                spread = p.get('spread', '--')
-                spread_str = f"{safe_float(spread):.5f}" if spread != '--' else '--'
-                adx = p.get('adx', '--')
-                plus_di = p.get('plus_di', '--')
-                minus_di = p.get('minus_di', '--')
-                ema50 = p.get('ema50', None)
-                ema200 = p.get('ema200', None)
-                rsi_val = p.get('rsi', None)
-                ema_str = ""
-                if ema50 is not None and ema200 is not None:
-                    ema_str = f"EMA50: {ema50:.5f} | EMA200: {ema200:.5f}"
-                else:
-                    ema_str = "EMA: --"
+
+                # Formatage des indicateurs
+                spread_val = p.get('spread', '--')
+                spread_str = f"{safe_float(spread_val):.5f}" if spread_val != '--' else '--'
+                adx_str = fmt_num(p.get('adx'))
+                plus_di_str = fmt_num(p.get('plus_di'))
+                minus_di_str = fmt_num(p.get('minus_di'))
+                ema50 = p.get('ema50')
+                ema200 = p.get('ema200')
+                rsi_val = p.get('rsi')
+
+                ema_str = f"EMA50: {ema50:.5f} | EMA200: {ema200:.5f}" if (ema50 is not None and ema200 is not None) else "EMA: --"
                 rsi_str = f"RSI: {rsi_val:.1f}" if rsi_val is not None else "RSI: --"
-                st.caption(f"Spread: {spread_str} | ADX: {adx}  +DI: {plus_di} / -DI: {minus_di}  |  {ema_str}  |  {rsi_str}")
+
+                indicators_line = (f"Spread: {spread_str} | ADX: {adx_str}  +DI: {plus_di_str} / -DI: {minus_di_str}  |  {ema_str}  |  {rsi_str}")
+                st.markdown(f"<div class='indicators-line'>{indicators_line}</div>", unsafe_allow_html=True)
+
                 sig = p.get('last_signal')
                 if sig:
                     st.markdown(f"Signal: <span class='green'>{sig.upper()}</span>", unsafe_allow_html=True)
