@@ -25,13 +25,13 @@ st.markdown("""
         line-height: 1.1 !important;
     }
 
-    /* ---------- SECTION SESSION (plus petite, labels en gras) ---------- */
+    /* ---------- SECTION SESSION (plus petite) ---------- */
     .session-metrics [data-testid="stMetricValue"] {
         font-size: 0.7rem !important;
     }
     .session-metrics [data-testid="stMetricLabel"] {
         font-size: 0.6rem !important;
-        font-weight: bold !important;
+        font-weight: bold !important;   /* <-- labels Trades, Session, Status en gras */
     }
 
     /* ---------- SECTION ACTIVE TRADE (encore plus petite) ---------- */
