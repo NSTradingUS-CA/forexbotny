@@ -27,7 +27,7 @@ st.markdown("""
     }
     /* Réduction de l'espace entre le titre (####) et la métrique */
     .session-metrics h4 {
-        margin-bottom: 0rem !important;
+        margin-bottom: 0.1rem !important;
     }
     .session-metrics .stMetric {
         margin-top: 0 !important;
