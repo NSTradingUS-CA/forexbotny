@@ -35,7 +35,7 @@ st.markdown("""
         margin-bottom: 0.2rem !important;
     }
     .indicators-line {
-        font-size: 0.85rem !important;
+        font-size: 1.1rem !important;
         line-height: 1.3 !important;
         color: #EAEAEA;
     }
