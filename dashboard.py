@@ -15,15 +15,15 @@ st.markdown("""
         border: none;
     }
 
-    /* Métriques de la session (Trades, Session, Status) */
+    /* ---------- SECTION SESSION (Trades, Session, Status) ---------- */
     .session-metrics [data-testid="metric-container"] label {
-        font-size: 0.5rem !important;
+        font-size: 0.4rem !important;   /* <-- ajuste ici pour les libellés */
     }
     .session-metrics [data-testid="metric-container"] div[data-testid="stMetricValue"] {
-        font-size: 0.5rem !important;
+        font-size: 0.4rem !important;   /* <-- ajuste ici pour les valeurs */
     }
 
-    /* Métriques des paires (EUR/USD, GBP/USD) */
+    /* Métriques des paires (inchangées pour l’instant) */
     .pair-metrics [data-testid="metric-container"] label {
         font-size: 0.5rem !important;
     }
@@ -31,12 +31,12 @@ st.markdown("""
         font-size: 0.5rem !important;
     }
 
-    /* Métriques du trade actif (Pair, Type, Entry, etc.) */
+    /* ---------- SECTION ACTIVE TRADE ---------- */
     .active-trade-metrics [data-testid="metric-container"] label {
-        font-size: 0.5rem !important;
+        font-size: 0.4rem !important;
     }
     .active-trade-metrics [data-testid="metric-container"] div[data-testid="stMetricValue"] {
-        font-size: 0.5rem !important;
+        font-size: 0.4rem !important;
     }
 
     /* Espacement réduit */
@@ -103,7 +103,7 @@ while True:
         continue
 
     with placeholder.container():
-        # ================= Session =================
+        # ================= Session (classe session-metrics) =================
         st.markdown('<div class="session-metrics">', unsafe_allow_html=True)
         sess = data.get("session", {})
         col1, col2, col3 = st.columns(3)
@@ -146,7 +146,7 @@ while True:
                     st.markdown(f"Signal: <span class='green'>{sig.upper()}</span>", unsafe_allow_html=True)
                 st.markdown('</div>', unsafe_allow_html=True)
 
-        # ================= Active Trade =================
+        # ================= Active Trade (classe active-trade-metrics) =================
         active = data.get("active_trade")
         if active:
             st.markdown("---")
