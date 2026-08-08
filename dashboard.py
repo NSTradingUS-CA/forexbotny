@@ -18,7 +18,7 @@ st.markdown("""
     /* Métriques : taille réduite pour les valeurs uniquement */
     [data-testid="stMetricValue"] {
         font-size: 1.4rem !important;
-        line-height: 0.8 !important;
+        line-height: 1 !important;
     }
 
     /* Section Session : valeurs plus petites */
