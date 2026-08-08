@@ -31,7 +31,7 @@ st.markdown("""
     }
     .session-metrics [data-testid="stMetricLabel"] {
         font-size: 0.6rem !important;
-        font-weight: bold !important;          /* <-- ajout pour le gras */
+        font-weight: bold !important;
     }
 
     /* ---------- SECTION ACTIVE TRADE (encore plus petite) ---------- */
