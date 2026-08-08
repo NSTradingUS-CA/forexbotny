@@ -69,7 +69,6 @@ def fetch_status():
     return None
 
 def check_bot_running():
-    """Vérifie si un workflow GitHub Actions est actuellement en cours."""
     token = st.secrets.get("GH_PAT")
     repo = st.secrets["GITHUB_REPOSITORY"]
     headers = {"Accept": "application/vnd.github.v3+json"}
@@ -164,8 +163,19 @@ while True:
                 st.metric("Price", f"{price:.5f}" if price is not None else "--")
                 spread = p.get('spread', '--')
                 spread_str = f"{safe_float(spread):.5f}" if spread != '--' else '--'
-                st.caption(f"Spread: {spread_str} | ADX: {p.get('adx','--')}  "
-                           f"+DI: {p.get('plus_di','--')} / -DI: {p.get('minus_di','--')}")
+                adx = p.get('adx', '--')
+                plus_di = p.get('plus_di', '--')
+                minus_di = p.get('minus_di', '--')
+                ema50 = p.get('ema50', None)
+                ema200 = p.get('ema200', None)
+                rsi_val = p.get('rsi', None)                 # ← RSI ajouté ici
+                ema_str = ""
+                if ema50 is not None and ema200 is not None:
+                    ema_str = f"EMA50: {ema50:.5f} | EMA200: {ema200:.5f}"
+                else:
+                    ema_str = "EMA: --"
+                rsi_str = f"RSI: {rsi_val:.1f}" if rsi_val is not None else "RSI: --"
+                st.caption(f"Spread: {spread_str} | ADX: {adx}  +DI: {plus_di} / -DI: {minus_di}  |  {ema_str}  |  {rsi_str}")
                 sig = p.get('last_signal')
                 if sig:
                     st.markdown(f"Signal: <span class='green'>{sig.upper()}</span>", unsafe_allow_html=True)
