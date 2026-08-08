@@ -8,16 +8,22 @@ jobs:
   run-bot:
     runs-on: ubuntu-latest
     timeout-minutes: 260
+    permissions:
+      contents: write         # ✅ permet de pusher status.json dans le dépôt
 
     env:
       OANDA_API_KEY: ${{ secrets.OANDA_API_KEY }}
       OANDA_ACCOUNT_ID: ${{ secrets.OANDA_ACCOUNT_ID }}
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
       TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
+      GH_PAT: ${{ secrets.GH_PAT }}   # ✅ token pour l'écriture du fichier
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GH_PAT }}   # ✅ utilise le token pour le checkout (optionnel mais sécurisé)
 
       - name: Set up Python
         uses: actions/setup-python@v5
