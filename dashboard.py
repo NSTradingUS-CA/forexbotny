@@ -16,7 +16,8 @@ if not st.session_state.authenticated:
     )
     pwd = st.text_input("Password", type="password")
     if st.button("Sign in"):
-        if pwd == os.getenv("DASHBOARD_PASSWORD", "forex2026"):
+        # Récupérer le mot de passe depuis les secrets Streamlit (obligatoire)
+        if pwd == st.secrets["DASHBOARD_PASSWORD"]:
             st.session_state.authenticated = True
             st.rerun()
         else:
@@ -26,17 +27,11 @@ if not st.session_state.authenticated:
 # ---------- Fonctions utilitaires ----------
 @st.cache_data(ttl=30)
 def fetch_status():
-    repo = os.getenv("GITHUB_REPOSITORY")
-    if not repo:
-        # Valeur par défaut si le secret n'est pas défini (à adapter)
-        repo = "votre-utilisateur/forexbotny"
+    repo = st.secrets["GITHUB_REPOSITORY"]   # ex: "LuckensonL/forexbotny"
     url = f"https://raw.githubusercontent.com/{repo}/main/status.json"
-    headers = {}
-    token = os.getenv("GH_PAT")
-    if token:
-        headers["Authorization"] = f"token {token}"
+    # Aucun token nécessaire pour un dépôt public
     try:
-        resp = requests.get(url, headers=headers, timeout=10)
+        resp = requests.get(url, timeout=10)
         if resp.status_code == 200:
             return resp.json()
     except Exception:
