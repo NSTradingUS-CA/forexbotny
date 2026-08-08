@@ -26,9 +26,11 @@ if not st.session_state.authenticated:
 # ---------- Fonctions utilitaires ----------
 @st.cache_data(ttl=30)
 def fetch_status():
-    url = "https://raw.githubusercontent.com/{}/{}/main/status.json".format(
-        os.getenv("GITHUB_REPOSITORY", "votre-utilisateur/forexbotny")
-    )
+    repo = os.getenv("GITHUB_REPOSITORY")
+    if not repo:
+        # Valeur par défaut si le secret n'est pas défini (à adapter)
+        repo = "votre-utilisateur/forexbotny"
+    url = f"https://raw.githubusercontent.com/{repo}/main/status.json"
     headers = {}
     token = os.getenv("GH_PAT")
     if token:
@@ -37,7 +39,7 @@ def fetch_status():
         resp = requests.get(url, headers=headers, timeout=10)
         if resp.status_code == 200:
             return resp.json()
-    except:
+    except Exception:
         pass
     return None
 
@@ -82,16 +84,18 @@ while True:
     with placeholder.container():
         # Résumé de la séance
         st.markdown("### 📊 Session")
-        sess = data["session"]
+        sess = data.get("session", {})
         col1, col2, col3 = st.columns(3)
-        col1.metric("Trades today", f"{sess['trades_today']}/{sess['max_trades']}")
-        col2.metric("Session", f"{sess['start']} – {sess['end']} (NY)")
-        col3.metric("Status", "🟢 Running" if data["bot_status"] == "running" else "🔴 Stopped")
+        col1.metric("Trades today", f"{sess.get('trades_today', 0)}/{sess.get('max_trades', 2)}")
+        col2.metric("Session", f"{sess.get('start', '08:00')} – {sess.get('end', '12:00')} (NY)")
+        col3.metric("Status", "🟢 Running" if data.get("bot_status") == "running" else "🔴 Stopped")
 
         # Prochaine news
         news = data.get("next_news_event")
         if news:
-            st.markdown(f"⏰ Next high‑impact event : **{news['title']}** at {news['time']} (NY) – :orange[{news['impact']}]")
+            st.markdown(
+                f"⏰ Next high‑impact event : **{news['title']}** at {news['time']} (NY) – :orange[{news.get('impact', 'High')}]"
+            )
 
         # Paires
         st.markdown("### 💱 Pairs")
@@ -100,13 +104,21 @@ while True:
         for i, pair in enumerate(["EUR_USD", "GBP_USD"]):
             with cols[i]:
                 p = pairs_data.get(pair, {})
-                st.markdown(f"**{pair}**  "
-                            f"<span class='green'>{p.get('ema_orientation','')}</span> / "
-                            f"<span class='orange'>{p.get('macd_signal','')}</span>",
-                            unsafe_allow_html=True)
-                st.metric("Price", f"{p.get('price','--'):.5f}")
-                st.caption(f"Spread: {p.get('spread','--'):.5f} | ADX: {p.get('adx','--')}  "
-                           f"+DI: {p.get('plus_di','--')} / -DI: {p.get('minus_di','--')}")
+                ema = p.get('ema_orientation', '')
+                macd = p.get('macd_signal', '')
+                st.markdown(
+                    f"**{pair}**  <span class='green'>{ema}</span> / <span class='orange'>{macd}</span>",
+                    unsafe_allow_html=True,
+                )
+                price = p.get('price')
+                if price is not None:
+                    st.metric("Price", f"{price:.5f}")
+                else:
+                    st.metric("Price", "--")
+                st.caption(
+                    f"Spread: {p.get('spread', '--'):.5f} | ADX: {p.get('adx', '--')}  "
+                    f"+DI: {p.get('plus_di', '--')} / -DI: {p.get('minus_di', '--')}"
+                )
                 last_sig = p.get("last_signal")
                 if last_sig:
                     st.markdown(f"Last signal: <span class='green'>{last_sig.upper()}</span>", unsafe_allow_html=True)
@@ -116,15 +128,15 @@ while True:
         if active:
             st.markdown("### 🔥 Active Trade")
             col1, col2, col3, col4 = st.columns(4)
-            col1.metric("Pair", active["pair"])
-            col2.metric("Type", active["type"], delta_color="off")
-            col3.metric("Entry", f"{active['entry']:.5f}")
-            col4.metric("Current", f"{active['current_price']:.5f}")
-            col1.metric("Unrealized P&L", f"{active['unrealized_pnl']:.2f} USD",
-                        delta_color="normal" if active["unrealized_pnl"] >= 0 else "inverse")
-            col2.metric("SL", f"{active['sl']:.5f} ({active['distance_to_sl_pips']} pips)")
-            col3.metric("TP", f"{active['tp']:.5f} ({active['distance_to_tp_pips']} pips)")
-            col4.metric("Trailing Stop", f"{active['trailing_stop']} pips")
+            col1.metric("Pair", active.get("pair", ""))
+            col2.metric("Type", active.get("type", ""), delta_color="off")
+            col3.metric("Entry", f"{active.get('entry', 0):.5f}")
+            col4.metric("Current", f"{active.get('current_price', 0):.5f}")
+            col1.metric("Unrealized P&L", f"{active.get('unrealized_pnl', 0):.2f} USD",
+                        delta_color="normal" if active.get('unrealized_pnl', 0) >= 0 else "inverse")
+            col2.metric("SL", f"{active.get('sl', 0):.5f} ({active.get('distance_to_sl_pips', 0)} pips)")
+            col3.metric("TP", f"{active.get('tp', 0):.5f} ({active.get('distance_to_tp_pips', 0)} pips)")
+            col4.metric("Trailing Stop", f"{active.get('trailing_stop', 0)} pips")
 
         # Historique + Rejets
         tab1, tab2 = st.tabs(["📜 Closed Trades", "🚫 Rejected Setups"])
@@ -132,9 +144,10 @@ while True:
             closed = data.get("closed_trades_today", [])
             if closed:
                 for t in closed[::-1]:
-                    color = "green" if t["pnl"] >= 0 else "red"
+                    pnl = t.get("pnl", 0)
+                    color = "green" if pnl >= 0 else "red"
                     st.markdown(
-                        f"<span class='{color}'>{t['pair']} {t['type']} – {t['pnl']:.2f} USD at {t['time']}</span>",
+                        f"<span class='{color}'>{t.get('pair','')} {t.get('type','')} – {pnl:.2f} USD at {t.get('time','')}</span>",
                         unsafe_allow_html=True,
                     )
             else:
@@ -143,8 +156,10 @@ while True:
             rejected = data.get("rejected_signals", [])
             if rejected:
                 for r in rejected[::-1]:
-                    st.markdown(f"<span class='orange'>{r['time']} {r['pair']} – {r['reason']}</span>",
-                                unsafe_allow_html=True)
+                    st.markdown(
+                        f"<span class='orange'>{r.get('time','')} {r.get('pair','')} – {r.get('reason','')}</span>",
+                        unsafe_allow_html=True,
+                    )
                     if "indicators" in r:
                         with st.expander("Details"):
                             st.json(r["indicators"])
