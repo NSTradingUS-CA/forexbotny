@@ -194,4 +194,3 @@ while True:
                 st.write("No rejected setups.")
 
     time.sleep(30)
-
