@@ -4,7 +4,7 @@ import time
 
 st.set_page_config(page_title="MyForexBotNY Cockpit", layout="wide")
 
-# ---------- CSS global ----------
+# ---------- CSS global (avec classes par section) ----------
 st.markdown("""
 <style>
     /* Boutons orange */
@@ -14,13 +14,31 @@ st.markdown("""
         font-weight: bold;
         border: none;
     }
-    /* Réduction extrême des métriques */
-    [data-testid="metric-container"] label {
-        font-size: 0.4rem !important;
+
+    /* Métriques de la session (Trades, Session, Status) */
+    .session-metrics [data-testid="metric-container"] label {
+        font-size: 0.5rem !important;
     }
-    [data-testid="metric-container"] div[data-testid="stMetricValue"] {
-        font-size: 0.55rem !important;
+    .session-metrics [data-testid="metric-container"] div[data-testid="stMetricValue"] {
+        font-size: 0.7rem !important;
     }
+
+    /* Métriques des paires (EUR/USD, GBP/USD) */
+    .pair-metrics [data-testid="metric-container"] label {
+        font-size: 0.5rem !important;
+    }
+    .pair-metrics [data-testid="metric-container"] div[data-testid="stMetricValue"] {
+        font-size: 0.7rem !important;
+    }
+
+    /* Métriques du trade actif (Pair, Type, Entry, etc.) */
+    .active-trade-metrics [data-testid="metric-container"] label {
+        font-size: 0.5rem !important;
+    }
+    .active-trade-metrics [data-testid="metric-container"] div[data-testid="stMetricValue"] {
+        font-size: 0.7rem !important;
+    }
+
     /* Espacement réduit */
     [data-testid="column"] {
         padding: 0 0.2rem !important;
@@ -63,19 +81,19 @@ def safe_float(value, default=0.0):
     except (ValueError, TypeError):
         return default
 
-# Titre centré en haut, ligne à part
+# Titre centré en haut
 st.markdown("<h2 style='text-align: center; color: #00C853; margin-top: 0;'>🖥️ MyForexBotNY Cockpit</h2>",
             unsafe_allow_html=True)
 
-# Bouton Sign out en haut à droite (dans une colonne invisible pour l'alignement)
+# Bouton Sign out en haut à droite
 col_empty, col_signout = st.columns([6, 1])
 with col_signout:
     if st.button("Sign out"):
         st.session_state.authenticated = False
         st.rerun()
 
-# Boucle d'affichage des données
 placeholder = st.empty()
+
 while True:
     data = fetch_status()
     if not data:
@@ -85,7 +103,8 @@ while True:
         continue
 
     with placeholder.container():
-        # Session
+        # ================= Session =================
+        st.markdown('<div class="session-metrics">', unsafe_allow_html=True)
         sess = data.get("session", {})
         col1, col2, col3 = st.columns(3)
         trades = sess.get('trades_today', 0)
@@ -94,8 +113,8 @@ while True:
         col2.metric("Session", f"{sess.get('start','08')}–{sess.get('end','12')}")
         running = data.get("bot_status") == "running"
         col3.metric("Status", "🟢" if running else "🔴")
+        st.markdown('</div>', unsafe_allow_html=True)
 
-        # Heure dernière màj
         st.caption(f"Updated: {data.get('time', '-')}")
 
         # News
@@ -105,11 +124,12 @@ while True:
                 f"⏰ **{news['title']}** at {news['time']} – :orange[{news.get('impact','')}]"
             )
 
-        # Paires
+        # ================= Paires =================
         st.markdown("---")
         cols = st.columns(2)
         for i, pair in enumerate(["EUR_USD", "GBP_USD"]):
             with cols[i]:
+                st.markdown('<div class="pair-metrics">', unsafe_allow_html=True)
                 p = data.get("pairs", {}).get(pair, {})
                 ema = p.get('ema_orientation','')
                 macd = p.get('macd_signal','')
@@ -124,12 +144,14 @@ while True:
                 sig = p.get('last_signal')
                 if sig:
                     st.markdown(f"Signal: <span class='green'>{sig.upper()}</span>", unsafe_allow_html=True)
+                st.markdown('</div>', unsafe_allow_html=True)
 
-        # Trade actif
+        # ================= Active Trade =================
         active = data.get("active_trade")
         if active:
             st.markdown("---")
             st.markdown("#### 🔥 Active Trade")
+            st.markdown('<div class="active-trade-metrics">', unsafe_allow_html=True)
             c1, c2, c3, c4 = st.columns(4)
             c1.metric("Pair", active.get("pair",""))
             c2.metric("Type", active.get("type",""))
@@ -140,8 +162,9 @@ while True:
             c2.metric("SL", f"{active.get('sl',0):.5f} ({active.get('distance_to_sl_pips',0)}p)")
             c3.metric("TP", f"{active.get('tp',0):.5f} ({active.get('distance_to_tp_pips',0)}p)")
             c4.metric("Trail", f"{active.get('trailing_stop',0)}p")
+            st.markdown('</div>', unsafe_allow_html=True)
 
-        # Historique & Rejets
+        # ================= Historique & Rejets =================
         tab1, tab2 = st.tabs(["📜 Closed", "🚫 Rejected"])
         with tab1:
             closed = data.get("closed_trades_today", [])
