@@ -17,28 +17,28 @@ st.markdown("""
 
     /* ---------- FORCER LA RÉDUCTION GLOBALE DES MÉTRIQUES (base) ---------- */
     [data-testid="stMetricValue"] {
-        font-size: 1rem !important;
+        font-size: 1.2rem !important;
         line-height: 1 !important;
     }
     [data-testid="stMetricLabel"] {
-        font-size: 1.5rem !important;
+        font-size: 0.5rem !important;
         line-height: 1 !important;
     }
 
     /* ---------- SECTION SESSION (plus petite) ---------- */
     .session-metrics [data-testid="stMetricValue"] {
-        font-size: 1.5rem !important;
+        font-size: 0.6rem !important;
     }
     .session-metrics [data-testid="stMetricLabel"] {
-        font-size: 1.222222rem !important;
+        font-size: 0.4rem !important;
     }
 
     /* ---------- SECTION ACTIVE TRADE (encore plus petite) ---------- */
     .active-trade-metrics [data-testid="stMetricValue"] {
-        font-size: 1rem !important;
+        font-size: 0.55rem !important;
     }
     .active-trade-metrics [data-testid="stMetricLabel"] {
-        font-size: 0.7rem !important;
+        font-size: 0.35rem !important;
     }
 
     /* Réduction de l'espacement global */
