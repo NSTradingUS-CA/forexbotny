@@ -4,7 +4,7 @@ import time
 
 st.set_page_config(page_title="MyForexBotNY Cockpit", layout="wide")
 
-# ---------- CSS global (appliqué partout) ----------
+# ---------- CSS global ----------
 st.markdown("""
 <style>
     /* Boutons orange */
@@ -14,14 +14,14 @@ st.markdown("""
         font-weight: bold;
         border: none;
     }
-    /* Réduction très forte des métriques */
+    /* Réduction extrême des métriques */
     [data-testid="metric-container"] label {
-        font-size: 0.6rem !important;
+        font-size: 0.5rem !important;
     }
     [data-testid="metric-container"] div[data-testid="stMetricValue"] {
-        font-size: 0.8rem !important;
+        font-size: 0.7rem !important;
     }
-    /* Optionnel : réduire les colonnes pour plus de compacité */
+    /* Espacement réduit */
     [data-testid="column"] {
         padding: 0 0.2rem !important;
     }
@@ -33,10 +33,8 @@ if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 
 if not st.session_state.authenticated:
-    st.markdown(
-        "<h1 style='text-align: center; color: #00C853;'>🔐 MyForexBotNY</h1>",
-        unsafe_allow_html=True,
-    )
+    st.markdown("<h1 style='text-align: center; color: #00C853;'>🔐 MyForexBotNY</h1>",
+                unsafe_allow_html=True)
     pwd = st.text_input("Password", type="password")
     if st.button("Sign in"):
         if pwd == st.secrets["DASHBOARD_PASSWORD"]:
@@ -65,19 +63,17 @@ def safe_float(value, default=0.0):
     except (ValueError, TypeError):
         return default
 
-# En-tête et bouton Sign out (fixe en haut)
+# En‑tête fixe avec le titre et le bouton Sign out
 col_title, col_signout = st.columns([6, 1])
 with col_title:
-    st.markdown(
-        "<h3 style='color: #00C853; margin: 0;'>🖥️ MyForexBotNY Cockpit</h3>",
-        unsafe_allow_html=True,
-    )
+    st.markdown("<h3 style='color: #00C853; margin: 0;'>🖥️ MyForexBotNY Cockpit</h3>",
+                unsafe_allow_html=True)
 with col_signout:
     if st.button("Sign out"):
         st.session_state.authenticated = False
         st.rerun()
 
-# Boucle d'affichage
+# Boucle d'affichage des données
 placeholder = st.empty()
 while True:
     data = fetch_status()
@@ -144,7 +140,7 @@ while True:
             c3.metric("TP", f"{active.get('tp',0):.5f} ({active.get('distance_to_tp_pips',0)}p)")
             c4.metric("Trail", f"{active.get('trailing_stop',0)}p")
 
-        # Onglets Historique / Rejets
+        # Historique & Rejets
         tab1, tab2 = st.tabs(["📜 Closed", "🚫 Rejected"])
         with tab1:
             closed = data.get("closed_trades_today", [])
