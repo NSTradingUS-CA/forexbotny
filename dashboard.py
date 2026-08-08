@@ -78,19 +78,16 @@ while True:
         trades = sess.get('trades_today', 0)
         max_tr = sess.get('max_trades', 2)
 
-        with col1:
-            st.markdown("#### Trade")
-            st.metric("", f"{trades}/{max_tr}")
+        col1.markdown("#### Trade")
+        col1.metric("", f"{trades}/{max_tr}")
 
-        with col2:
-            st.markdown("#### Session")
-            st.metric("", f"{sess.get('start','08')}–{sess.get('end','12')}")
+        col2.markdown("#### Session")
+        col2.metric("", f"{sess.get('start','08')}–{sess.get('end','12')}")
 
         running = data.get("bot_status") == "running"
 
-        with col3:
-            st.markdown("#### Status")
-            st.metric("", "🟢" if running else "🔴")
+        col3.markdown("#### Status")
+        col3.metric("", "🟢" if running else "🔴")
 
         st.markdown('</div>', unsafe_allow_html=True)
 
