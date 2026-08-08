@@ -36,7 +36,7 @@ st.markdown("""
         gap: 0 !important;
     }
     .session-metrics div[data-testid="stHorizontalBlock"] > div {
-        gap: 0 !important;
+        gap: -0.2rem !important;
     }
     .active-trade-metrics [data-testid="stMetricValue"] {
         font-size: 0.55rem !important;
