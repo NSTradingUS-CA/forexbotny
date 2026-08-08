@@ -1,3 +1,4 @@
+```python
 import streamlit as st
 import requests
 import time
@@ -24,6 +25,13 @@ st.markdown("""
     /* Section Session : valeurs plus petites */
     .session-metrics [data-testid="stMetricValue"] {
         font-size: 0.7rem !important;
+    }
+    /* Réduction de l'espace entre le titre (####) et la métrique */
+    .session-metrics h4 {
+        margin-bottom: 0.1rem !important;
+    }
+    .session-metrics .stMetric {
+        margin-top: 0 !important;
     }
 
     /* Section Active Trade : valeurs encore plus petites */
@@ -187,3 +195,4 @@ while True:
                 st.write("No rejected setups.")
 
     time.sleep(30)
+```
