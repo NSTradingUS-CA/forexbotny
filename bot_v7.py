@@ -700,11 +700,10 @@ def main():
                          and not calendar_blocked
                          and can_trade_time)
 
-            # ★ Collecte des indicateurs pour le cockpit (même hors séance)
+            # ★ Collecte des indicateurs pour le cockpit (même hors séance et avec position ouverte)
             pair_indicators = {}
             for pair in PAIRS:
-                if has_open_position(pair):
-                    continue
+                # Ne pas bloquer la collecte si une position est ouverte
                 try:
                     spread = get_spread(pair)
                 except:
@@ -743,7 +742,8 @@ def main():
                           f"EMA50:{ema50_val:.5f} EMA200:{ema200_val:.5f} "
                           f"RSI:{rsi_val:.1f} MACD:{macd_line:.5f} Sig:{macd_signal:.5f}")
 
-                    if can_trade and spread_ok:
+                    # Si on peut trader ET qu'il n'y a pas de position ouverte sur cette paire
+                    if can_trade and not has_open_position(pair) and spread_ok:
                         signal, price, sl, tp, sl_pips, direction = check_signal(df, pair)
                         if signal:
                             print(f" -> SIGNAL {direction}")
