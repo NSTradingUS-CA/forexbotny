@@ -42,7 +42,7 @@ st.markdown("""
         font-size: 0.55rem !important;
     }
     .stMetric {
-        margin-bottom: 0.2rem !important;
+        margin-bottom: 0 !important;
     }
 </style>
 """, unsafe_allow_html=True)
