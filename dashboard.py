@@ -21,21 +21,21 @@ st.markdown("""
         line-height: 1 !important;
     }
     [data-testid="stMetricLabel"] {
-        font-size: 1rem !important;
+        font-size: 1.5rem !important;
         line-height: 1 !important;
     }
 
     /* ---------- SECTION SESSION (plus petite) ---------- */
     .session-metrics [data-testid="stMetricValue"] {
-        font-size: 1rem !important;
+        font-size: 1.5rem !important;
     }
     .session-metrics [data-testid="stMetricLabel"] {
-        font-size: 0.8rem !important;
+        font-size: 1.222222rem !important;
     }
 
     /* ---------- SECTION ACTIVE TRADE (encore plus petite) ---------- */
     .active-trade-metrics [data-testid="stMetricValue"] {
-        font-size: 0.8rem !important;
+        font-size: 1rem !important;
     }
     .active-trade-metrics [data-testid="stMetricLabel"] {
         font-size: 0.7rem !important;
