@@ -16,7 +16,7 @@ st.markdown("""
     }
     /* Réduction extrême des métriques */
     [data-testid="metric-container"] label {
-        font-size: 0.5rem !important;
+        font-size: 0.2rem !important;
     }
     [data-testid="metric-container"] div[data-testid="stMetricValue"] {
         font-size: 0.5rem !important;
