@@ -1,0 +1,26 @@
+{
+  "time": "2026-08-08 15:54:06",
+  "bot_status": "running",
+  "session": {
+    "trades_today": 0,
+    "max_trades": 2,
+    "start": "08:00",
+    "end": "12:00"
+  },
+  "pairs": {},
+  "active_trade": {
+    "pair": "EUR_USD",
+    "type": "Buy",
+    "entry": 1.15582,
+    "sl": 1.14893,
+    "tp": 1.16207,
+    "trailing_stop": 15,
+    "current_price": 1.15588,
+    "unrealized_pnl": 13.7,
+    "distance_to_sl_pips": 69.5,
+    "distance_to_tp_pips": 61.9
+  },
+  "closed_trades_today": [],
+  "rejected_signals": [],
+  "next_news_event": null
+}
