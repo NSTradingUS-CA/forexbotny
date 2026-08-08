@@ -1,4 +1,3 @@
-python
 import streamlit as st
 import requests
 import time
@@ -194,4 +193,3 @@ while True:
                 st.write("No rejected setups.")
 
     time.sleep(30)
-```
