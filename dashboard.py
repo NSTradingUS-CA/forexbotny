@@ -18,11 +18,11 @@ st.markdown("""
     /* ---------- FORCER LA RÉDUCTION GLOBALE DES MÉTRIQUES (base) ---------- */
     [data-testid="stMetricValue"] {
         font-size: 1.4rem !important;
-        line-height: 1 !important;
+        line-height: 1.1 !important;
     }
     [data-testid="stMetricLabel"] {
-        font-size: 1.1rem !important;
-        line-height: 1 !important;
+        font-size: 1.2rem !important;
+        line-height: 1.1 !important;
     }
 
     /* ---------- SECTION SESSION (plus petite) ---------- */
