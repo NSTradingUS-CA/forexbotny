@@ -1,6 +1,7 @@
 import streamlit as st
 import requests
 import time
+from datetime import datetime
 
 st.set_page_config(page_title="MyForexBotNY Cockpit", layout="wide")
 
@@ -22,7 +23,6 @@ if not st.session_state.authenticated:
                 st.rerun()
             else:
                 st.error("Wrong password")
-    # Style pour le bouton Sign in en orange
     st.markdown("""
     <style>
     div.stButton > button:first-child {
@@ -57,32 +57,22 @@ st.markdown("""
 <style>
     /* Boutons orange */
     div.stButton > button:first-child {
-        background-color: #FF9100;
-        color: white;
+        background-color: #FF9100 !important;
+        color: white !important;
         font-weight: bold;
         border: none;
     }
-    /* Réduire la taille des métriques */
-    [data-testid="metric-container"] {
-        font-size: 0.9rem !important;
-    }
+    /* Réduction de la taille des métriques */
     [data-testid="metric-container"] label {
-        font-size: 0.8rem !important;
+        font-size: 0.7rem !important;
     }
     [data-testid="metric-container"] div[data-testid="stMetricValue"] {
-        font-size: 1.2rem !important;
+        font-size: 0.9rem !important;
     }
     /* Fond et couleurs générales */
     body {
         background-color: #0D0D0D;
         color: #EAEAEA;
-    }
-    .card {
-        background: #1A1A1A;
-        border: 1px solid #333;
-        border-radius: 10px;
-        padding: 20px;
-        margin: 10px;
     }
     .green { color: #00C853; }
     .red { color: #FF1744; }
@@ -127,6 +117,10 @@ while True:
         bot_running = data.get("bot_status") == "running"
         status_text = "🟢 Running" if bot_running else "🔴 Stopped"
         col3.metric("Status", status_text)
+
+        # Dernière mise à jour
+        last_time = data.get("time", "unknown")
+        st.caption(f"Last update: {last_time}")
 
         # Prochaine news
         news = data.get("next_news_event")
