@@ -640,6 +640,48 @@ def check_signal(df, instrument):
     return False, 0, 0, 0, 0, None
 
 
+def collect_indicators(pair):
+    """Récupère les indicateurs pour le cockpit, avec fallback minimal."""
+    try:
+        spread = get_spread(pair)
+    except:
+        return None  # on ne peut rien faire
+
+    # Si on ne peut pas avoir les bougies, on renvoie juste le spread
+    try:
+        df = get_candles(pair)
+        last_candle = df.iloc[-2]
+        return {
+            "price": last_candle['c'],
+            "spread": spread,
+            "adx": last_candle['adx'],
+            "plus_di": last_candle['plus_di'],
+            "minus_di": last_candle['minus_di'],
+            "ema50": last_candle['ema50'],
+            "ema200": last_candle['ema200'],
+            "rsi": last_candle['rsi'],
+            "ema_orientation": "bullish" if last_candle['ema50'] > last_candle['ema200'] else "bearish",
+            "macd_signal": "bullish" if last_candle['macd_line'] > last_candle['macd_signal'] else "bearish",
+            "last_signal": None
+        }
+    except Exception as e:
+        print(f"Erreur get_candles {pair} : {e}")
+        # Fallback : on retourne un minimum
+        return {
+            "price": None,
+            "spread": spread,
+            "adx": None,
+            "plus_di": None,
+            "minus_di": None,
+            "ema50": None,
+            "ema200": None,
+            "rsi": None,
+            "ema_orientation": "--",
+            "macd_signal": "--",
+            "last_signal": None
+        }
+
+
 def main():
     global trades_today, last_trade_date, last_close_time, active_trade
 
@@ -663,7 +705,13 @@ def main():
                             f"{trades_today} trade(s) taken today.")
                 print(stop_msg)
                 send_telegram_message(stop_msg)
-                save_status_json({})
+                # Dernière collecte pour figer l'état
+                pair_indicators = {}
+                for pair in PAIRS:
+                    indicators = collect_indicators(pair)
+                    if indicators:
+                        pair_indicators[pair] = indicators
+                save_status_json(pair_indicators)
                 break
 
             today = now.date()
@@ -700,69 +748,33 @@ def main():
                          and not calendar_blocked
                          and can_trade_time)
 
-            # ★ Collecte des indicateurs pour le cockpit (même hors séance et avec position ouverte)
+            # ★ Collecte des indicateurs pour le cockpit TOUJOURS
             pair_indicators = {}
             for pair in PAIRS:
-                # Ne pas bloquer la collecte si une position est ouverte
-                try:
-                    spread = get_spread(pair)
-                except:
-                    continue
+                indicators = collect_indicators(pair)
+                if indicators:
+                    pair_indicators[pair] = indicators
+                    print(f"{now.strftime('%H:%M:%S')} {pair} spread: {indicators['spread']:.5f} | "
+                          f"ADX:{indicators.get('adx','--')} +DI:{indicators.get('plus_di','--')} -DI:{indicators.get('minus_di','--')} "
+                          f"EMA50:{indicators.get('ema50','--')} EMA200:{indicators.get('ema200','--')} "
+                          f"RSI:{indicators.get('rsi','--')}")
 
-                spread_ok = is_spread_ok(pair, spread)
+                # Si on peut trader, vérifier les signaux
+                if can_trade and not has_open_position(pair) and is_spread_ok(pair, indicators.get('spread', 0)):
+                    df = get_candles(pair)  # on recharge pour le signal (déjà fait dans collect mais okay)
+                    signal, price, sl, tp, sl_pips, direction = check_signal(df, pair)
+                    if signal:
+                        print(f" -> SIGNAL {direction}")
+                        pair_indicators[pair]["last_signal"] = direction
+                        balance_response = retry_api_call(ctx.account.summary, ACCOUNT_ID)
+                        balance = get_account_balance(balance_response)
+                        sl_distance = price - sl if direction == 'buy' else sl - price
+                        units = calculate_units(balance, sl_distance, pair)
+                        success = place_trade(pair, price, sl, tp, units, direction)
+                        if success:
+                            break
 
-                try:
-                    df = get_candles(pair)
-                    last_candle = df.iloc[-2]
-                    adx_val = last_candle['adx']
-                    ema50_val = last_candle['ema50']
-                    ema200_val = last_candle['ema200']
-                    plus_di = last_candle['plus_di']
-                    minus_di = last_candle['minus_di']
-                    rsi_val = last_candle['rsi']
-                    macd_line = last_candle['macd_line']
-                    macd_signal = last_candle['macd_signal']
-
-                    pair_indicators[pair] = {
-                        "price": last_candle['c'],
-                        "spread": spread,
-                        "adx": adx_val,
-                        "plus_di": plus_di,
-                        "minus_di": minus_di,
-                        "ema50": ema50_val,
-                        "ema200": ema200_val,
-                        "rsi": rsi_val,
-                        "ema_orientation": "bullish" if ema50_val > ema200_val else "bearish",
-                        "macd_signal": "bullish" if macd_line > macd_signal else "bearish",
-                        "last_signal": None
-                    }
-
-                    print(f"{now.strftime('%H:%M:%S')} {pair} spread: {spread:.5f} | "
-                          f"ADX:{adx_val:.1f} +DI:{plus_di:.1f} -DI:{minus_di:.1f} "
-                          f"EMA50:{ema50_val:.5f} EMA200:{ema200_val:.5f} "
-                          f"RSI:{rsi_val:.1f} MACD:{macd_line:.5f} Sig:{macd_signal:.5f}")
-
-                    # Si on peut trader ET qu'il n'y a pas de position ouverte sur cette paire
-                    if can_trade and not has_open_position(pair) and spread_ok:
-                        signal, price, sl, tp, sl_pips, direction = check_signal(df, pair)
-                        if signal:
-                            print(f" -> SIGNAL {direction}")
-                            pair_indicators[pair]["last_signal"] = direction
-                            balance_response = retry_api_call(ctx.account.summary, ACCOUNT_ID)
-                            balance = get_account_balance(balance_response)
-                            sl_distance = price - sl if direction == 'buy' else sl - price
-                            units = calculate_units(balance, sl_distance, pair)
-                            success = place_trade(pair, price, sl, tp, units, direction)
-                            if success:
-                                break
-                        else:
-                            print(" -> no signal")
-                except Exception as e:
-                    print(f"Error analyzing {pair}: {e}")
-
-            # Mise à jour du cockpit à chaque cycle
             save_status_json(pair_indicators)
-
             time.sleep(30)
 
     except KeyboardInterrupt:
