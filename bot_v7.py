@@ -744,12 +744,16 @@ def main():
                     macd_line = last_candle['macd_line']
                     macd_signal = last_candle['macd_signal']
 
+                    # ★ Ajout des EMA et RSI dans les indicateurs du cockpit
                     pair_indicators[pair] = {
                         "price": last_candle['c'],
                         "spread": spread,
                         "adx": adx_val,
                         "plus_di": plus_di,
                         "minus_di": minus_di,
+                        "ema50": ema50_val,
+                        "ema200": ema200_val,
+                        "rsi": rsi_val,
                         "ema_orientation": "bullish" if ema50_val > ema200_val else "bearish",
                         "macd_signal": "bullish" if macd_line > macd_signal else "bearish",
                         "last_signal": None
