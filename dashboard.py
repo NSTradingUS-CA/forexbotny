@@ -4,7 +4,7 @@ import time
 
 st.set_page_config(page_title="MyForexBotNY Cockpit", layout="wide")
 
-# ---------- CSS global (avec classes par section) ----------
+# ---------- CSS global ----------
 st.markdown("""
 <style>
     /* Boutons orange */
@@ -15,45 +15,22 @@ st.markdown("""
         border: none;
     }
 
-    /* ---------- FORCER LA RÉDUCTION GLOBALE DES MÉTRIQUES (base) ---------- */
+    /* Métriques : taille réduite pour les valeurs uniquement */
     [data-testid="stMetricValue"] {
         font-size: 1.4rem !important;
         line-height: 1.1 !important;
     }
-    [data-testid="stMetricLabel"] {
-        font-size: 1.2rem !important;
-        line-height: 1.1 !important;
+
+    /* Section Session : valeurs plus petites */
+    .session-metrics [data-testid="stMetricValue"] {
+        font-size: 0.7rem !important;
     }
 
-# ================= Session (classe session-metrics) =================
-st.markdown('<div class="session-metrics">', unsafe_allow_html=True)
-sess = data.get("session", {})
-col1, col2, col3 = st.columns(3)
-trades = sess.get('trades_today', 0)
-max_tr = sess.get('max_trades', 2)
-
-col1.markdown("#### Trade")
-col1.metric("", f"{trades}/{max_tr}")
-
-col2.markdown("#### Session")
-col2.metric("", f"{sess.get('start','08')}–{sess.get('end','12')}")
-
-running = data.get("bot_status") == "running"
-
-col3.markdown("#### Status")
-col3.metric("", "🟢" if running else "🔴")
-
-st.markdown('</div>', unsafe_allow_html=True)
-
-    /* ---------- SECTION ACTIVE TRADE (encore plus petite) ---------- */
+    /* Section Active Trade : valeurs encore plus petites */
     .active-trade-metrics [data-testid="stMetricValue"] {
         font-size: 0.55rem !important;
     }
-    .active-trade-metrics [data-testid="stMetricLabel"] {
-        font-size: 0.35rem !important;
-    }
 
-    /* Réduction de l'espacement global */
     .stMetric {
         margin-bottom: 0.2rem !important;
     }
@@ -117,16 +94,23 @@ while True:
         continue
 
     with placeholder.container():
-        # ================= Session (classe session-metrics) =================
+        # ================= Session =================
         st.markdown('<div class="session-metrics">', unsafe_allow_html=True)
         sess = data.get("session", {})
         col1, col2, col3 = st.columns(3)
         trades = sess.get('trades_today', 0)
         max_tr = sess.get('max_trades', 2)
-        col1.metric("Trades", f"{trades}/{max_tr}")
-        col2.metric("Session", f"{sess.get('start','08')}–{sess.get('end','12')}")
+
+        col1.markdown("#### Trades")
+        col1.metric("", f"{trades}/{max_tr}")
+
+        col2.markdown("#### Session")
+        col2.metric("", f"{sess.get('start','08')}–{sess.get('end','12')}")
+
         running = data.get("bot_status") == "running"
-        col3.metric("Status", "🟢" if running else "🔴")
+
+        col3.markdown("#### Status")
+        col3.metric("", "🟢" if running else "🔴")
         st.markdown('</div>', unsafe_allow_html=True)
 
         st.caption(f"Updated: {data.get('time', '-')}")
@@ -158,7 +142,7 @@ while True:
                 if sig:
                     st.markdown(f"Signal: <span class='green'>{sig.upper()}</span>", unsafe_allow_html=True)
 
-        # ================= Active Trade (classe active-trade-metrics) =================
+        # ================= Active Trade =================
         active = data.get("active_trade")
         if active:
             st.markdown("---")
