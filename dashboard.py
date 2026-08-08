@@ -22,11 +22,21 @@ st.markdown("""
     .session-metrics [data-testid="stMetricValue"] {
         font-size: 0.7rem !important;
     }
+    /* Réduction drastique de l'espace entre le titre (####) et la métrique */
     .session-metrics h4 {
-        margin-bottom: 0.1rem !important;
+        margin-bottom: 0 !important;
+        padding-bottom: 0 !important;
+        line-height: 1 !important;
     }
     .session-metrics .stMetric {
         margin-top: 0 !important;
+        padding-top: 0 !important;
+    }
+    .session-metrics [data-testid="metric-container"] {
+        gap: 0 !important;
+    }
+    .session-metrics div[data-testid="stHorizontalBlock"] > div {
+        gap: 0 !important;
     }
     .active-trade-metrics [data-testid="stMetricValue"] {
         font-size: 0.55rem !important;
@@ -168,7 +178,7 @@ while True:
                 minus_di = p.get('minus_di', '--')
                 ema50 = p.get('ema50', None)
                 ema200 = p.get('ema200', None)
-                rsi_val = p.get('rsi', None)                 # ← RSI ajouté ici
+                rsi_val = p.get('rsi', None)
                 ema_str = ""
                 if ema50 is not None and ema200 is not None:
                     ema_str = f"EMA50: {ema50:.5f} | EMA200: {ema200:.5f}"
