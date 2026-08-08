@@ -1,3 +1,4 @@
+```python
 import streamlit as st
 import requests
 import time
@@ -143,8 +144,6 @@ while True:
         col4.metric("", now_mtl)
         st.markdown('</div>', unsafe_allow_html=True)
 
-        st.caption(f"Last update: {data.get('time', '-')}")
-
         # ---------- News ----------
         news = data.get("next_news_event")
         if news:
@@ -217,3 +216,4 @@ while True:
                 st.write("No rejected setups.")
 
     time.sleep(30)
+```
