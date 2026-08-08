@@ -27,10 +27,10 @@ st.markdown("""
 
     /* ---------- SECTION SESSION (plus petite) ---------- */
     .session-metrics [data-testid="stMetricValue"] {
-        font-size: 0.6rem !important;
+        font-size: 0.7rem !important;
     }
     .session-metrics [data-testid="stMetricLabel"] {
-        font-size: 0.4rem !important;
+        font-size: 0.6rem !important;
     }
 
     /* ---------- SECTION ACTIVE TRADE (encore plus petite) ---------- */
