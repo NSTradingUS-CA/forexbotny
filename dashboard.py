@@ -22,27 +22,17 @@ st.markdown("""
     .session-metrics [data-testid="stMetricValue"] {
         font-size: 0.7rem !important;
     }
-    /* Réduction drastique de l'espace entre le titre (####) et la métrique */
     .session-metrics h4 {
-        margin-bottom: 0 !important;
-        padding-bottom: 0 !important;
-        line-height: 1 !important;
+        margin-bottom: 0.1rem !important;
     }
     .session-metrics .stMetric {
         margin-top: 0 !important;
-        padding-top: 0 !important;
-    }
-    .session-metrics [data-testid="metric-container"] {
-        gap: 0 !important;
-    }
-    .session-metrics div[data-testid="stHorizontalBlock"] > div {
-        gap: -1 !important;
     }
     .active-trade-metrics [data-testid="stMetricValue"] {
         font-size: 0.55rem !important;
     }
     .stMetric {
-        margin-bottom: 0 !important;
+        margin-bottom: 0.2rem !important;
     }
 </style>
 """, unsafe_allow_html=True)
