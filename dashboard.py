@@ -20,7 +20,7 @@ st.markdown("""
         font-size: 0.4rem !important;   /* <-- ajuste ici pour les libellés */
     }
     .session-metrics [data-testid="metric-container"] div[data-testid="stMetricValue"] {
-        font-size: 0.4rem !important;   /* <-- ajuste ici pour les valeurs */
+        font-size: 0.3rem !important;   /* <-- ajuste ici pour les valeurs */
     }
 
     /* Métriques des paires (inchangées pour l’instant) */
@@ -28,15 +28,15 @@ st.markdown("""
         font-size: 0.5rem !important;
     }
     .pair-metrics [data-testid="metric-container"] div[data-testid="stMetricValue"] {
-        font-size: 0.5rem !important;
+        font-size: 0.3rem !important;
     }
 
     /* ---------- SECTION ACTIVE TRADE ---------- */
     .active-trade-metrics [data-testid="metric-container"] label {
-        font-size: 0.4rem !important;
+        font-size: 0.3rem !important;
     }
     .active-trade-metrics [data-testid="metric-container"] div[data-testid="stMetricValue"] {
-        font-size: 0.4rem !important;
+        font-size: 0.3rem !important;
     }
 
     /* Espacement réduit */
