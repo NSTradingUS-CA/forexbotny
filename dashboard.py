@@ -198,7 +198,7 @@ while True:
                 rsi_str = f"{rsi_val:.1f}" if rsi_val is not None else "RSI: --"
 
                 # Première ligne : Spread, ADX, +DI, -DI
-                line1 = f"Spread: {spread_str} |   ADX: {adx_str}   +DI: {plus_di_str} / -DI: {minus_di_str}"
+                line1 = f"Spread: {spread_str} |   ADX: {adx_str}   | +DI: {plus_di_str}   | -DI: {minus_di_str}"
                 # Deuxième ligne : EMA50, EMA200, RSI
                 line2 = f"EMA50: {ema50_str} |    EMA200: {ema200_str} |   RSI: {rsi_str}"
 
