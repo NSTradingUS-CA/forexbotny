@@ -8,7 +8,7 @@
     "end": "12:00"
   },
   "pairs": {
-    "EUR_USD": {
+    "EURUSD": {
       "price": 1.15616,
       "spread": 0.00017000000000000348,
       "adx": 51.871219145179744,
@@ -21,7 +21,7 @@
       "macd_signal": "bullish",
       "last_signal": null
     },
-    "GBP_USD": {
+    "GBPUSD": {
       "price": 1.34978,
       "spread": 0.0009399999999999409,
       "adx": 41.675727707778435,
