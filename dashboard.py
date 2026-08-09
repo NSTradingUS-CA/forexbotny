@@ -54,7 +54,7 @@ st.markdown("""
     .logo-rounded {
         border-radius: 20px;
     }
-    /* Footer */
+    /* Footer normal */
     .footer {
         width: 100%;
         box-sizing: border-box;
@@ -62,17 +62,8 @@ st.markdown("""
         color: #666;
         font-size: 0.8rem;
         padding: 0.75rem 0;
-        margin-top: 0;
+        margin-top: 1.5rem;
         background-color: #0D0D0D;
-    }
-    /* Supprime les marges inutiles en bas du corps */
-    body {
-        margin-bottom: 0 !important;
-        padding-bottom: 0 !important;
-    }
-    .main > div:last-child {
-        margin-bottom: 0 !important;
-        padding-bottom: 0 !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -297,4 +288,3 @@ st.markdown(
 # Le footer reste hors de la zone dynamique (placeholder) et ne se duplique pas.
 time.sleep(30)
 st.rerun()
-
