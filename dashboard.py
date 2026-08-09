@@ -24,13 +24,10 @@ st.markdown("""
     }
     .session-metrics h4 {
         margin-bottom: 0.1rem !important;
-        color: #1E90FF !important;   /* titres de session en bleu */
+        color: #1E90FF !important;
     }
     .session-metrics .stMetric {
         margin-top: 0 !important;
-    }
-    .active-trade-metrics [data-testid="stMetricValue"] {
-        font-size: 0.55rem !important;
     }
     .stMetric {
         margin-bottom: 0.2rem !important;
@@ -44,14 +41,26 @@ st.markdown("""
     [data-testid="stMetricLabel"] {
         color: #1E90FF !important;
     }
-    /* Ajustement optionnel pour les autres labels markdown si nécessaire */
     .stMarkdown h4, .stMarkdown label {
         color: #1E90FF !important;
     }
-    /* Nouvelle classe pour les mots clés orange */
+    /* Mots‑clés orange */
     .orange-label {
         color: #FF9100;
         font-weight: normal;
+    }
+
+    /* Taille des labels pour la section Paires (Price) */
+    .pair-metrics [data-testid="stMetricLabel"] {
+        font-size: 1.0rem !important;
+    }
+    /* Taille des labels pour la section Active Trade (Pair, Type, Entry, etc.) */
+    .active-trade-metrics [data-testid="stMetricLabel"] {
+        font-size: 1.0rem !important;
+    }
+    /* Taille des valeurs du trade actif (légèrement plus grandes pour rester lisibles) */
+    .active-trade-metrics [data-testid="stMetricValue"] {
+        font-size: 0.8rem !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -118,7 +127,6 @@ def safe_float(value, default=0.0):
         return default
 
 def fmt_num(value, decimals=5):
-    """Formate un nombre avec un nombre fixe de décimales, ou retourne '--' si invalide."""
     try:
         return f"{float(value):.{decimals}f}"
     except (ValueError, TypeError):
@@ -181,14 +189,15 @@ while True:
         for i, pair in enumerate(["EUR_USD", "GBP_USD"]):
             with cols[i]:
                 p = data.get("pairs", {}).get(pair, {})
-
-                # Affichage simple du nom de la paire (sans bullish/bearish)
                 st.markdown(f"**{pair}**")
 
+                # Price dans un bloc avec la classe pair-metrics
+                st.markdown('<div class="pair-metrics">', unsafe_allow_html=True)
                 price = p.get('price')
                 st.metric("Price", f"{price:.5f}" if price is not None else "--")
+                st.markdown('</div>', unsafe_allow_html=True)
 
-                # Formatage des indicateurs
+                # Indicateurs
                 spread_val = p.get('spread', '--')
                 spread_str = f"{safe_float(spread_val):.5f}" if spread_val != '--' else '--'
                 adx_str = fmt_num(p.get('adx'))
@@ -202,14 +211,12 @@ while True:
                 ema200_str = f"{ema200:.5f}" if ema200 is not None else "--"
                 rsi_str = f"{rsi_val:.1f}" if rsi_val is not None else "--"
 
-                # Ligne 1 avec labels en orange
                 line1 = (
                     f"<span class='orange-label'>Spread:</span> {spread_str} | "
                     f"<span class='orange-label'>ADX:</span> {adx_str} | "
                     f"<span class='orange-label'>+DI:</span> {plus_di_str} | "
                     f"<span class='orange-label'>-DI:</span> {minus_di_str}"
                 )
-                # Ligne 2 avec labels en orange
                 line2 = (
                     f"<span class='orange-label'>EMA50:</span> {ema50_str} | "
                     f"<span class='orange-label'>EMA200:</span> {ema200_str} | "
