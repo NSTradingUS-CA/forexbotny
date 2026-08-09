@@ -278,4 +278,4 @@ while True:
     time.sleep(30)
 
 # ---------- Footer (affiché une seule fois après la boucle) ----------
-st.markdown('<div class="footer">NorthSentinel Trading – FX Sniper 8‑12 – August, 2026 ©</div>', unsafe_allow_html=True)
+st.markdown('<div class="footer">NorthSentinel Trading • Forex Sniper 8‑12 • August, 2026 ©</div>', unsafe_allow_html=True)
