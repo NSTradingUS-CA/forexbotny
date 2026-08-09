@@ -9,15 +9,17 @@ st.set_page_config(page_title="MyForexBotNY Cockpit", layout="wide")
 # ---------- CSS global ----------
 st.markdown("""
 <style>
+    /* Boutons */
     div.stButton > button {
         background-color: #FF9100 !important;
         color: white !important;
         font-weight: bold;
         border: none;
     }
+
+    /* Réduction de base des métriques */
     [data-testid="stMetricValue"] {
         font-size: 1.4rem !important;
-        line-height: 1.1 !important;
     }
     .session-metrics [data-testid="stMetricValue"] {
         font-size: 0.7rem !important;
@@ -26,39 +28,33 @@ st.markdown("""
         margin-bottom: 0.1rem !important;
         color: #1E90FF !important;
     }
-    .session-metrics .stMetric {
-        margin-top: 0 !important;
+
+    /* ---- AUGMENTATION FORTE DES LABELS CIBLÉS ---- */
+    /* On cible TOUS les labels dans les conteneurs pair-metrics et active-trade-metrics */
+    .pair-metrics [data-testid="stMetricLabel"],
+    .active-trade-metrics [data-testid="stMetricLabel"] {
+        font-size: 1.4rem !important;   /* Taille nettement plus grande */
+        font-weight: bold !important;
+        color: #1E90FF !important;      /* reste bleu */
     }
-    .stMetric {
-        margin-bottom: 0.2rem !important;
+    /* Valeurs correspondantes un peu plus grandes aussi */
+    .pair-metrics [data-testid="stMetricValue"],
+    .active-trade-metrics [data-testid="stMetricValue"] {
+        font-size: 1.1rem !important;
     }
+
+    /* Ligne d'indicateurs */
     .indicators-line {
         font-size: 1.1rem !important;
         line-height: 1.3 !important;
         color: #EAEAEA;
     }
-    /* Labels en bleu pour toutes les métriques */
-    [data-testid="stMetricLabel"] {
-        color: #1E90FF !important;
-    }
-    .stMarkdown h4, .stMarkdown label {
-        color: #1E90FF !important;
-    }
     .orange-label {
         color: #FF9100;
         font-weight: normal;
     }
-
-    /* ---- AUGMENTATION DE LA TAILLE DES LABELS CIBLÉS ---- */
-    /* Price, Pair, Type, Entry, Current, P&L, SL, TP, Trail */
-    .pair-metrics [data-testid="stMetricLabel"],
-    .active-trade-metrics [data-testid="stMetricLabel"] {
-        font-size: 1.2rem !important;   /* ajustez ici */
-    }
-    /* Les valeurs correspondantes un peu plus petites pour l'équilibre */
-    .pair-metrics [data-testid="stMetricValue"],
-    .active-trade-metrics [data-testid="stMetricValue"] {
-        font-size: 1.0rem !important;
+    .stMetric {
+        margin-bottom: 0.2rem !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -189,7 +185,7 @@ while True:
                 p = data.get("pairs", {}).get(pair, {})
                 st.markdown(f"**{pair}**")
 
-                # Price avec sa classe
+                # Métrique Price avec sa classe
                 st.markdown('<div class="pair-metrics">', unsafe_allow_html=True)
                 price = p.get('price')
                 st.metric("Price", f"{price:.5f}" if price is not None else "--")
