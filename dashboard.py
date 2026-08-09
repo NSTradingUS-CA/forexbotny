@@ -50,10 +50,11 @@ st.markdown("""
         color: #FF9100;
         font-weight: normal;
     }
+    /* Coins arrondis pour le logo */
     .logo-rounded {
         border-radius: 20px;
     }
-    /* Footer fixe en bas de page */
+    /* Footer */
     .footer {
         position: fixed;
         bottom: 0;
@@ -64,13 +65,10 @@ st.markdown("""
         font-size: 0.8rem;
         padding: 0.5rem 0;
         background-color: #0D0D0D;
-        z-index: 9999;
+        z-index: 1000;
     }
 </style>
 """, unsafe_allow_html=True)
-
-# ---------- Footer (affiché immédiatement, en dehors de la boucle) ----------
-st.markdown('<div class="footer">NorthSentinel Trading • Forex Sniper 8‑12 • August, 2026 ©</div>', unsafe_allow_html=True)
 
 # ---------- Authentification ----------
 if "authenticated" not in st.session_state:
@@ -139,7 +137,7 @@ def fmt_num(value, decimals=5):
     except (ValueError, TypeError):
         return "--"
 
-# ---------- Logo + nom du bot ----------
+# ---------- Logo + nom du bot (même ligne, logo arrondi) ----------
 LOGO_URL = "https://raw.githubusercontent.com/NSTradingUS-CA/forexbotny/main/assets/logo.png"
 st.markdown(f"""
 <div style="display: flex; align-items: center; justify-content: center;">
@@ -284,3 +282,6 @@ while True:
                 st.write("No rejected setups.")
 
     time.sleep(30)
+
+# ---------- Footer ----------
+st.markdown('<div class="footer">NorthSentinel Trading • Forex Sniper 8‑12 • August, 2026 ©</div>', unsafe_allow_html=True)
