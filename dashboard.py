@@ -9,52 +9,44 @@ st.set_page_config(page_title="MyForexBotNY Cockpit", layout="wide")
 # ---------- CSS global ----------
 st.markdown("""
 <style>
-    /* Boutons */
     div.stButton > button {
         background-color: #FF9100 !important;
         color: white !important;
         font-weight: bold;
         border: none;
     }
-
-    /* Réduction de base des métriques */
     [data-testid="stMetricValue"] {
         font-size: 1.4rem !important;
+        line-height: 1.1 !important;
     }
     .session-metrics [data-testid="stMetricValue"] {
         font-size: 0.7rem !important;
     }
     .session-metrics h4 {
         margin-bottom: 0.1rem !important;
-        color: #1E90FF !important;
+        color: #1E90FF !important;   /* titres de session en bleu */
     }
-
-    /* ---- AUGMENTATION FORTE DES LABELS CIBLÉS ---- */
-    /* On cible TOUS les labels dans les conteneurs pair-metrics et active-trade-metrics */
-    .pair-metrics [data-testid="stMetricLabel"],
-    .active-trade-metrics [data-testid="stMetricLabel"] {
-        font-size: 1.4rem !important;   /* Taille nettement plus grande */
-        font-weight: bold !important;
-        color: #1E90FF !important;      /* reste bleu */
+    .session-metrics .stMetric {
+        margin-top: 0 !important;
     }
-    /* Valeurs correspondantes un peu plus grandes aussi */
-    .pair-metrics [data-testid="stMetricValue"],
     .active-trade-metrics [data-testid="stMetricValue"] {
-        font-size: 1.1rem !important;
+        font-size: 0.55rem !important;
     }
-
-    /* Ligne d'indicateurs */
+    .stMetric {
+        margin-bottom: 0.2rem !important;
+    }
     .indicators-line {
         font-size: 1.1rem !important;
         line-height: 1.3 !important;
         color: #EAEAEA;
     }
-    .orange-label {
-        color: #FF9100;
-        font-weight: normal;
+    /* Labels de toutes les métriques en bleu */
+    [data-testid="stMetricLabel"] {
+        color: #1E90FF !important;
     }
-    .stMetric {
-        margin-bottom: 0.2rem !important;
+    /* Ajustement optionnel pour les autres labels markdown si nécessaire */
+    .stMarkdown h4, .stMarkdown label {
+        color: #1E90FF !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -121,6 +113,7 @@ def safe_float(value, default=0.0):
         return default
 
 def fmt_num(value, decimals=5):
+    """Formate un nombre avec un nombre fixe de décimales, ou retourne '--' si invalide."""
     try:
         return f"{float(value):.{decimals}f}"
     except (ValueError, TypeError):
@@ -183,15 +176,14 @@ while True:
         for i, pair in enumerate(["EUR_USD", "GBP_USD"]):
             with cols[i]:
                 p = data.get("pairs", {}).get(pair, {})
+
+                # Affichage simple du nom de la paire (sans bullish/bearish)
                 st.markdown(f"**{pair}**")
 
-                # Métrique Price avec sa classe
-                st.markdown('<div class="pair-metrics">', unsafe_allow_html=True)
                 price = p.get('price')
                 st.metric("Price", f"{price:.5f}" if price is not None else "--")
-                st.markdown('</div>', unsafe_allow_html=True)
 
-                # Indicateurs
+                # Formatage des indicateurs
                 spread_val = p.get('spread', '--')
                 spread_str = f"{safe_float(spread_val):.5f}" if spread_val != '--' else '--'
                 adx_str = fmt_num(p.get('adx'))
@@ -203,19 +195,12 @@ while True:
 
                 ema50_str = f"{ema50:.5f}" if ema50 is not None else "--"
                 ema200_str = f"{ema200:.5f}" if ema200 is not None else "--"
-                rsi_str = f"{rsi_val:.1f}" if rsi_val is not None else "--"
+                rsi_str = f"{rsi_val:.1f}" if rsi_val is not None else "RSI: --"
 
-                line1 = (
-                    f"<span class='orange-label'>Spread:</span> {spread_str} | "
-                    f"<span class='orange-label'>ADX:</span> {adx_str} | "
-                    f"<span class='orange-label'>+DI:</span> {plus_di_str} | "
-                    f"<span class='orange-label'>-DI:</span> {minus_di_str}"
-                )
-                line2 = (
-                    f"<span class='orange-label'>EMA50:</span> {ema50_str} | "
-                    f"<span class='orange-label'>EMA200:</span> {ema200_str} | "
-                    f"<span class='orange-label'>RSI:</span> {rsi_str}"
-                )
+                # Première ligne : Spread, ADX, +DI, -DI
+                line1 = f"Spread: {spread_str} |   ADX: {adx_str}   | +DI: {plus_di_str}   | -DI: {minus_di_str}"
+                # Deuxième ligne : EMA50, EMA200, RSI
+                line2 = f"EMA50: {ema50_str} |    EMA200: {ema200_str} |   RSI: {rsi_str}"
 
                 st.markdown(f"<div class='indicators-line'>{line1}</div>", unsafe_allow_html=True)
                 st.markdown(f"<div class='indicators-line'>{line2}</div>", unsafe_allow_html=True)
