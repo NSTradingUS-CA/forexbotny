@@ -178,7 +178,7 @@ while True:
         # ---------- Paires ----------
         st.markdown("---")
         cols = st.columns(2)
-        for i, pair in enumerate(["EURUSD", "GBPUSD"]):
+        for i, pair in enumerate(["EUR_USD", "GBP_USD"]):
             with cols[i]:
                 p = data.get("pairs", {}).get(pair, {})
 
