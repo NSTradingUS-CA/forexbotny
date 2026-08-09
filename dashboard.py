@@ -54,17 +54,23 @@ st.markdown("""
     .logo-rounded {
         border-radius: 20px;
     }
-    /* Footer normal */
+    /* Footer sans marge parasite */
     .footer {
         width: 100%;
         box-sizing: border-box;
         text-align: center;
         color: #666;
         font-size: 0.8rem;
-        padding: 0.75rem 0;
-        margin-top: 1.5rem;
+        padding: 0.5rem 0;
+        margin-top: 0;
+        margin-bottom: 0;
         background-color: #0D0D0D;
     }
+    /* Supprimer les marges du conteneur principal et du bloc */
+    .main .block-container {
+        padding-bottom: 0 !important;
+    }
+    footer {display: none !important;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -284,7 +290,5 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# Actualisation du dashboard toutes les 30 secondes.
-# Le footer reste hors de la zone dynamique (placeholder) et ne se duplique pas.
 time.sleep(30)
 st.rerun()
