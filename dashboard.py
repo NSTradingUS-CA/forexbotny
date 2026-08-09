@@ -4,7 +4,7 @@ import time
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-st.set_page_config(page_title="FX Sniper 8-12 Cockpit", layout="wide")
+st.set_page_config(page_title="FX Sniper 8-12", layout="wide")
 
 # ---------- CSS global ----------
 st.markdown("""
@@ -129,7 +129,7 @@ LOGO_URL = "https://raw.githubusercontent.com/NSTradingUS-CA/forexbotny/main/ass
 st.markdown(f"""
 <div style="display: flex; align-items: center; justify-content: center;">
     <img src="{LOGO_URL}" class="logo-rounded" style="width: 100px; height: auto; margin-right: 20px;">
-    <h2 style="color: #00C853; margin: 0;">FX Sniper 8‑12</h2>
+    <h2 style="color: #FF9100; margin: 0;">FX Sniper 8‑12</h2>
 </div>
 """, unsafe_allow_html=True)
 
