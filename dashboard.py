@@ -269,3 +269,9 @@ while True:
                 st.write("No rejected setups.")
 
     time.sleep(30)
+
+    # --- FOOTER ---
+st.markdown(
+    "<p style='text-align: center; color: #666; font-size: 0.8rem; margin-top: 1rem;'>NorthSentinel CORE – Cockpit v2.0 – August, 2026 © NorthSentinel Trading</p>",
+    unsafe_allow_html=True
+)
