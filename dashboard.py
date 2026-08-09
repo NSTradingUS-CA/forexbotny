@@ -1,4 +1,3 @@
-```python
 import streamlit as st
 import requests
 import time
@@ -298,4 +297,4 @@ st.markdown(
 # Le footer reste hors de la zone dynamique (placeholder) et ne se duplique pas.
 time.sleep(30)
 st.rerun()
-```
+
