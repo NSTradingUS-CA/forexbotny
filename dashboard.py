@@ -50,6 +50,10 @@ st.markdown("""
         color: #FF9100;
         font-weight: normal;
     }
+    /* Coins arrondis pour le logo */
+    .logo-rounded {
+        border-radius: 20px;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -120,11 +124,11 @@ def fmt_num(value, decimals=5):
     except (ValueError, TypeError):
         return "--"
 
-# ---------- Logo + nom du bot (même ligne, logo 2x plus grand) ----------
+# ---------- Logo + nom du bot (même ligne, logo arrondi) ----------
 LOGO_URL = "https://raw.githubusercontent.com/NSTradingUS-CA/forexbotny/main/assets/logo.png"
 st.markdown(f"""
 <div style="display: flex; align-items: center; justify-content: center;">
-    <img src="{LOGO_URL}" style="width: 80px; height: auto; margin-right: 20px;">
+    <img src="{LOGO_URL}" class="logo-rounded" style="width: 160px; height: auto; margin-right: 20px;">
     <h2 style="color: #00C853; margin: 0;">FX Sniper 8‑12</h2>
 </div>
 """, unsafe_allow_html=True)
