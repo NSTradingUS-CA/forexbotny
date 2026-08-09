@@ -53,6 +53,14 @@ st.markdown("""
         color: #FF9100;
         font-weight: normal;
     }
+    /* Agrandir les labels de la section Paires (Price) */
+    .pair-metrics [data-testid="stMetricLabel"] {
+    font-size: 1.0rem !important;   /* ajustez la taille ici */
+    }
+    /* Agrandir les labels de la section Active Trade (Pair, Type, Entry, etc.) */
+    .active-trade-metrics [data-testid="stMetricLabel"] {
+    font-size: 0.9rem !important;   /* ajustez la taille ici */
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -186,7 +194,9 @@ while True:
                 st.markdown(f"**{pair}**")
 
                 price = p.get('price')
+                st.markdown('<div class="pair-metrics">', unsafe_allow_html=True)
                 st.metric("Price", f"{price:.5f}" if price is not None else "--")
+                st.markdown('</div>', unsafe_allow_html=True)
 
                 # Formatage des indicateurs
                 spread_val = p.get('spread', '--')
