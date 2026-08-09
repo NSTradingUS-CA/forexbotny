@@ -61,7 +61,7 @@ st.markdown("""
     }
     /* Labels de la section Active Trade (Pair, Type, Entry, etc.) */
     .active-trade-metrics [data-testid="stMetricLabel"] {
-        font-size: 0.9rem !important;   /* augmenté depuis la valeur par défaut */
+        font-size: 1.4rem !important;   /* augmenté depuis la valeur par défaut */
     }
 </style>
 """, unsafe_allow_html=True)
