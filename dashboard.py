@@ -54,6 +54,14 @@ st.markdown("""
     .logo-rounded {
         border-radius: 20px;
     }
+    /* Footer */
+    .footer {
+        text-align: center;
+        color: #666;
+        font-size: 0.8rem;
+        margin-top: 2rem;
+        padding-bottom: 1rem;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -62,7 +70,7 @@ if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 
 if not st.session_state.authenticated:
-    st.markdown("<h1 style='text-align: center; color: #00C853;'>🔐 FX Sniper 8‑12</h1>",
+    st.markdown("<h1 style='text-align: center; color: #00C853;'>🔐 FX Sniper 8‑12 Cockpit - Restricted Access</h1>",
                 unsafe_allow_html=True)
     pwd = st.text_input("Password", type="password")
     if st.button("Sign in"):
@@ -268,10 +276,7 @@ while True:
             else:
                 st.write("No rejected setups.")
 
-    time.sleep(30)
+    # ---------- Footer ----------
+    st.markdown('<div class="footer">NorthSentinel Trading – FX Sniper 8‑12 – August, 2026 ©</div>', unsafe_allow_html=True)
 
-    # --- FOOTER ---
-st.markdown(
-    "<p style='text-align: center; color: #666; font-size: 0.8rem; margin-top: 1rem;'>NorthSentinel CORE – Cockpit v2.0 – August, 2026 © NorthSentinel Trading</p>",
-    unsafe_allow_html=True
-)
+    time.sleep(30)
