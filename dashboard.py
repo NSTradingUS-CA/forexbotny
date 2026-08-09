@@ -37,30 +37,28 @@ st.markdown("""
         line-height: 1.3 !important;
         color: #EAEAEA;
     }
-    /* Labels de toutes les métriques en bleu */
+    /* Labels en bleu pour toutes les métriques */
     [data-testid="stMetricLabel"] {
         color: #1E90FF !important;
     }
     .stMarkdown h4, .stMarkdown label {
         color: #1E90FF !important;
     }
-    /* Mots‑clés orange */
     .orange-label {
         color: #FF9100;
         font-weight: normal;
     }
 
-    /* Taille des labels pour la section Paires (Price) */
-    .pair-metrics [data-testid="stMetricLabel"] {
-        font-size: 1.0rem !important;
-    }
-    /* Taille des labels pour la section Active Trade (Pair, Type, Entry, etc.) */
+    /* ---- AUGMENTATION DE LA TAILLE DES LABELS CIBLÉS ---- */
+    /* Price, Pair, Type, Entry, Current, P&L, SL, TP, Trail */
+    .pair-metrics [data-testid="stMetricLabel"],
     .active-trade-metrics [data-testid="stMetricLabel"] {
-        font-size: 1.0rem !important;
+        font-size: 1.2rem !important;   /* ajustez ici */
     }
-    /* Taille des valeurs du trade actif (légèrement plus grandes pour rester lisibles) */
+    /* Les valeurs correspondantes un peu plus petites pour l'équilibre */
+    .pair-metrics [data-testid="stMetricValue"],
     .active-trade-metrics [data-testid="stMetricValue"] {
-        font-size: 0.8rem !important;
+        font-size: 1.0rem !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -191,7 +189,7 @@ while True:
                 p = data.get("pairs", {}).get(pair, {})
                 st.markdown(f"**{pair}**")
 
-                # Price dans un bloc avec la classe pair-metrics
+                # Price avec sa classe
                 st.markdown('<div class="pair-metrics">', unsafe_allow_html=True)
                 price = p.get('price')
                 st.metric("Price", f"{price:.5f}" if price is not None else "--")
