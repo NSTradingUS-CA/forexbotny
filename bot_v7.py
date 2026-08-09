@@ -65,18 +65,22 @@ SPREAD_WINDOW = 5
 closed_trades_today = []
 rejected_signals = []
 
+# Fichier séparé pour l'historique des trades fermés
+CLOSED_TRADES_FILE = "closed_trades.json"
 
-def push_status_json(data_dict):
+
+def push_json_file(filename, data_dict):
+    """Pousse un fichier JSON dans le dépôt GitHub (comme status.json)."""
     if not GH_PAT:
         return
     try:
-        url = f"https://api.github.com/repos/{os.getenv('GITHUB_REPOSITORY')}/contents/status.json"
+        url = f"https://api.github.com/repos/{os.getenv('GITHUB_REPOSITORY')}/contents/{filename}"
         headers = {"Authorization": f"token {GH_PAT}", "Accept": "application/vnd.github.v3+json"}
         resp = requests.get(url, headers=headers, timeout=10)
         sha = resp.json().get("sha") if resp.status_code == 200 else None
         content = json.dumps(data_dict, indent=2, default=str).encode()
         payload = {
-            "message": "Update status",
+            "message": f"Update {filename}",
             "content": base64.b64encode(content).decode(),
             "branch": "main"
         }
@@ -84,9 +88,22 @@ def push_status_json(data_dict):
             payload["sha"] = sha
         put_resp = requests.put(url, headers=headers, json=payload, timeout=10)
         if put_resp.status_code not in (200, 201):
-            print(f"Status push failed: {put_resp.status_code} {put_resp.text}")
+            print(f"Push {filename} failed: {put_resp.status_code} {put_resp.text}")
     except Exception as e:
-        print(f"Error pushing status.json: {e}")
+        print(f"Error pushing {filename}: {e}")
+
+
+def push_status_json(data_dict):
+    push_json_file("status.json", data_dict)
+
+
+def push_closed_trades_json():
+    """Pousse l'historique des trades fermés dans closed_trades.json."""
+    data = {
+        "time": datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S"),
+        "closed_trades_today": closed_trades_today
+    }
+    push_json_file(CLOSED_TRADES_FILE, data)
 
 
 def save_status_json(pair_indicators):
@@ -150,6 +167,7 @@ def save_status_json(pair_indicators):
             }
 
     push_status_json(status)
+    push_closed_trades_json()
 
 
 def count_all_trades_today():
@@ -707,6 +725,8 @@ def check_closed_trade():
             "status": "CLOSED"
         })
         last_close_time = datetime.now(tz)
+        # Mise à jour immédiate des fichiers JSON
+        push_closed_trades_json()
     except Exception as e:
         print(f"Error retrieving closed trade: {e}")
         send_telegram_message(f"⚠️ Trade on {pair} closed (details unavailable).")
