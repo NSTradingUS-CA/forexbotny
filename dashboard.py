@@ -54,18 +54,16 @@ st.markdown("""
     .logo-rounded {
         border-radius: 20px;
     }
-    /* Footer */
+    /* Footer normal */
     .footer {
-        position: fixed;
-        bottom: 0;
-        left: 0;
         width: 100%;
+        box-sizing: border-box;
         text-align: center;
         color: #666;
         font-size: 0.8rem;
-        padding: 0.5rem 0;
+        padding: 0.75rem 0;
+        margin-top: 1.5rem;
         background-color: #0D0D0D;
-        z-index: 1000;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -163,7 +161,14 @@ while True:
     if not data:
         with placeholder.container():
             st.error("Status unavailable – retrying in 30s")
-        time.sleep(30)
+        # Footer rendered once per Streamlit run, after the dashboard content.
+    st.markdown(
+        '<div class="footer">NorthSentinel Trading • Forex Sniper 8‑12 • August, 2026 ©</div>',
+        unsafe_allow_html=True
+    )
+
+    time.sleep(30)
+    st.rerun()
         continue
 
     with placeholder.container():
@@ -282,6 +287,3 @@ while True:
                 st.write("No rejected setups.")
 
     time.sleep(30)
-
-# ---------- Footer ----------
-st.markdown('<div class="footer">NorthSentinel Trading • Forex Sniper 8‑12 • August, 2026 ©</div>', unsafe_allow_html=True)
