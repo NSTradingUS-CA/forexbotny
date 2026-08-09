@@ -124,7 +124,7 @@ def fmt_num(value, decimals=5):
 LOGO_URL = "https://raw.githubusercontent.com/NSTradingUS-CA/forexbotny/main/assets/logo.png"
 st.markdown(f"""
 <div style="display: flex; align-items: center; justify-content: center;">
-    <img src="{LOGO_URL}" style="width: 160px; height: auto; margin-right: 20px;">
+    <img src="{LOGO_URL}" style="width: 80px; height: auto; margin-right: 20px;">
     <h2 style="color: #00C853; margin: 0;">FX Sniper 8‑12</h2>
 </div>
 """, unsafe_allow_html=True)
