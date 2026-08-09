@@ -4,7 +4,7 @@ import time
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-st.set_page_config(page_title="MyForexBotNY Cockpit", layout="wide")
+st.set_page_config(page_title="FX Sniper 8-12 Cockpit", layout="wide")
 
 # ---------- CSS global ----------
 st.markdown("""
@@ -24,7 +24,7 @@ st.markdown("""
     }
     .session-metrics h4 {
         margin-bottom: 0.1rem !important;
-        color: #1E90FF !important;   /* titres de session en bleu */
+        color: #1E90FF !important;
     }
     .session-metrics .stMetric {
         margin-top: 0 !important;
@@ -40,15 +40,12 @@ st.markdown("""
         line-height: 1.3 !important;
         color: #EAEAEA;
     }
-    /* Labels de toutes les métriques en bleu */
     [data-testid="stMetricLabel"] {
         color: #1E90FF !important;
     }
-    /* Ajustement optionnel pour les autres labels markdown si nécessaire */
     .stMarkdown h4, .stMarkdown label {
         color: #1E90FF !important;
     }
-    /* Nouvelle classe pour les mots clés orange */
     .orange-label {
         color: #FF9100;
         font-weight: normal;
@@ -61,7 +58,7 @@ if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 
 if not st.session_state.authenticated:
-    st.markdown("<h1 style='text-align: center; color: #00C853;'>🔐 MyForexBotNY</h1>",
+    st.markdown("<h1 style='text-align: center; color: #00C853;'>🔐 FX Sniper 8‑12</h1>",
                 unsafe_allow_html=True)
     pwd = st.text_input("Password", type="password")
     if st.button("Sign in"):
@@ -118,16 +115,21 @@ def safe_float(value, default=0.0):
         return default
 
 def fmt_num(value, decimals=5):
-    """Formate un nombre avec un nombre fixe de décimales, ou retourne '--' si invalide."""
     try:
         return f"{float(value):.{decimals}f}"
     except (ValueError, TypeError):
         return "--"
 
-# ---------- Interface ----------
-st.markdown("<h2 style='text-align: center; color: #00C853; margin-top: 0;'>🖥️ MyForexBotNY Cockpit</h2>",
-            unsafe_allow_html=True)
+# ---------- Logo + nom du bot ----------
+LOGO_URL = "https://raw.githubusercontent.com/NSTradingUS-CA/forexbotny/main/assets/logo.png"
+st.markdown(f"""
+<div style="text-align: center;">
+    <img src="{LOGO_URL}" style="width: 80px; height: auto; margin-bottom: 0;">
+    <h2 style="color: #00C853; margin-top: 0;">FX Sniper 8‑12</h2>
+</div>
+""", unsafe_allow_html=True)
 
+# ---------- Bouton Sign out ----------
 col_empty, col_signout = st.columns([6, 1])
 with col_signout:
     if st.button("Sign out"):
@@ -181,14 +183,11 @@ while True:
         for i, pair in enumerate(["EUR_USD", "GBP_USD"]):
             with cols[i]:
                 p = data.get("pairs", {}).get(pair, {})
-
-                # Affichage simple du nom de la paire (sans bullish/bearish)
                 st.markdown(f"**{pair}**")
 
                 price = p.get('price')
                 st.metric("Price", f"{price:.5f}" if price is not None else "--")
 
-                # Formatage des indicateurs
                 spread_val = p.get('spread', '--')
                 spread_str = f"{safe_float(spread_val):.5f}" if spread_val != '--' else '--'
                 adx_str = fmt_num(p.get('adx'))
@@ -202,14 +201,12 @@ while True:
                 ema200_str = f"{ema200:.5f}" if ema200 is not None else "--"
                 rsi_str = f"{rsi_val:.1f}" if rsi_val is not None else "--"
 
-                # Ligne 1 avec labels en orange
                 line1 = (
                     f"<span class='orange-label'>Spread:</span> {spread_str} | "
                     f"<span class='orange-label'>ADX:</span> {adx_str} | "
                     f"<span class='orange-label'>+DI:</span> {plus_di_str} | "
                     f"<span class='orange-label'>-DI:</span> {minus_di_str}"
                 )
-                # Ligne 2 avec labels en orange
                 line2 = (
                     f"<span class='orange-label'>EMA50:</span> {ema50_str} | "
                     f"<span class='orange-label'>EMA200:</span> {ema200_str} | "
