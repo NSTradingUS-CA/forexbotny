@@ -23,7 +23,7 @@ st.markdown("""
         font-size: 0.7rem !important;
     }
     .session-metrics h4 {
-        margin-bottom: 1rem !important;
+        margin-bottom: 0.1rem !important;
         color: #1E90FF !important;   /* titres de session en bleu */
     }
     .session-metrics .stMetric {
