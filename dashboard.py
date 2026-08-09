@@ -55,11 +55,11 @@ st.markdown("""
     }
     /* Agrandir les labels de la section Paires (Price) */
     .pair-metrics [data-testid="stMetricLabel"] {
-    font-size: 1.0rem !important;   /* ajustez la taille ici */
+    font-size: 1.5rem !important;   /* ajustez la taille ici */
     }
     /* Agrandir les labels de la section Active Trade (Pair, Type, Entry, etc.) */
     .active-trade-metrics [data-testid="stMetricLabel"] {
-    font-size: 0.9rem !important;   /* ajustez la taille ici */
+    font-size: 1.5rem !important;   /* ajustez la taille ici */
     }
 </style>
 """, unsafe_allow_html=True)
