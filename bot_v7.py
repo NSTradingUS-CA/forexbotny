@@ -98,7 +98,15 @@ def push_status_json(data_dict):
 
 
 def push_closed_trades_json():
-    """Pousse l'historique des trades fermés dans closed_trades.json."""
+    """
+    Pousse l'historique des trades fermés dans closed_trades.json.
+    Appelle d'abord load_closed_trades_today() pour s'assurer qu'il est à jour,
+    puis n'écrase le fichier que si la liste n'est pas vide.
+    """
+    load_closed_trades_today()
+    if not closed_trades_today:
+        print("No closed trades to push, skipping closed_trades.json update.")
+        return
     data = {
         "time": datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S"),
         "closed_trades_today": closed_trades_today
@@ -190,11 +198,13 @@ def count_all_trades_today():
 
 
 def load_closed_trades_today():
-    """Charge l'historique des trades fermés aujourd'hui au démarrage."""
+    """Charge l'historique des trades fermés aujourd'hui depuis OANDA."""
     global closed_trades_today
     today_str = datetime.now(tz).strftime("%Y-%m-%d")
     try:
         resp = retry_api_call(ctx.trade.list, ACCOUNT_ID, state='CLOSED', count=100)
+        # Réinitialiser la liste pour éviter les doublons
+        closed_trades_today = []
         for t in resp.body.get('trades', []):
             open_time = t.openTime if isinstance(t.openTime, str) else str(t.openTime)
             if open_time.startswith(today_str):
