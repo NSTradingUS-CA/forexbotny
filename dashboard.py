@@ -53,16 +53,6 @@ st.markdown("""
         color: #FF9100;
         font-weight: normal;
     }
-
-    /* ---- Tailles de police personnalisées pour les labels demandés ---- */
-    /* Label "Price" dans la section des paires */
-    .price-label [data-testid="stMetricLabel"] {
-        font-size: 1.2rem !important;   /* plus grand que la normale */
-    }
-    /* Labels de la section Active Trade (Pair, Type, Entry, etc.) */
-    .active-trade-metrics [data-testid="stMetricLabel"] {
-        font-size: 1.4rem !important;   /* augmenté depuis la valeur par défaut */
-    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -188,18 +178,15 @@ while True:
         # ---------- Paires ----------
         st.markdown("---")
         cols = st.columns(2)
-        for i, pair in enumerate(["EUR_USD", "GBP_USD"]):
+        for i, pair in enumerate(["EURUSD", "GBPUSD"]):
             with cols[i]:
                 p = data.get("pairs", {}).get(pair, {})
 
                 # Affichage simple du nom de la paire (sans bullish/bearish)
                 st.markdown(f"**{pair}**")
 
-                # Prix avec son propre conteneur pour agrandir le label "Price"
-                st.markdown('<div class="price-label">', unsafe_allow_html=True)
                 price = p.get('price')
                 st.metric("Price", f"{price:.5f}" if price is not None else "--")
-                st.markdown('</div>', unsafe_allow_html=True)
 
                 # Formatage des indicateurs
                 spread_val = p.get('spread', '--')
