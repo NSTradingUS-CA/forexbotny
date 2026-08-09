@@ -22,12 +22,11 @@ FINNHUB_API_KEY = os.getenv("FINNHUB_API_KEY")
 GH_PAT = os.getenv("GH_PAT")
 PAIRS = ["EUR_USD", "GBP_USD"]
 RISK_PERCENT = 1.0
-TRADING_HOURS_START = 8
+TRADING_HOURS_START = 8      # le bot démarre à 7h55, mais ne trad qu'à partir de 8h30
 TRADING_HOURS_END = 12
 TIMEZONE = 'America/Toronto'
 MAX_TRADES_PER_DAY = 2
 MIN_MINUTES_BETWEEN_TRADES = 20
-TRAILING_DISTANCE_PIPS = 15
 ATR_PERIOD = 14
 ADX_PERIOD = 10
 NEWS_BLOCK_MINUTES = 30
@@ -38,6 +37,11 @@ MACD_FAST = 5
 MACD_SLOW = 13
 MACD_SIGNAL = 9
 USE_VOLUME_FILTER = False
+
+# ---- NOUVEAUX PARAMÈTRES ----
+BE_PIPS = 15                     # seuil de déclenchement du break‑even (pips)
+TP_PARTIAL_RATIO = 0.5           # 50 % de la position clôturés au premier TP
+TRAILING_ATR_MULT = 2.0          # multiplicateur ATR pour le trailing stop dynamique
 
 PAIR_CONFIG = {
     "EUR_USD": {"MAX_SPREAD_PIPS": 2.5, "ADX_THRESHOLD": 20, "ATR_MULTIPLIER": 2.0},
@@ -93,8 +97,8 @@ def save_status_json(pair_indicators):
         "session": {
             "trades_today": trades_today,
             "max_trades": MAX_TRADES_PER_DAY,
-            "start": f"{TRADING_HOURS_START:02d}:00",
-            "end": f"{TRADING_HOURS_END:02d}:00"
+            "start": "08:30",
+            "end": "11:00"
         },
         "pairs": pair_indicators,
         "active_trade": None,
@@ -115,7 +119,7 @@ def save_status_json(pair_indicators):
             current_price = active_trade['entry_price']
 
         sl_distance = abs(current_price - active_trade['sl'])
-        tp_distance = abs(active_trade['tp'] - current_price)
+        tp_distance = abs(active_trade['tp2'] - current_price) if active_trade.get('tp2') else 0
         unrealized_pnl = (current_price - active_trade['entry_price']) * abs(active_trade['units'])
         if active_trade['direction'] == 'sell':
             unrealized_pnl = -unrealized_pnl
@@ -125,12 +129,13 @@ def save_status_json(pair_indicators):
             "type": "Buy" if active_trade['direction'] == 'buy' else "Sell",
             "entry": active_trade['entry_price'],
             "sl": active_trade['sl'],
-            "tp": active_trade['tp'],
-            "trailing_stop": TRAILING_DISTANCE_PIPS,
+            "tp1": active_trade.get('tp1'),
+            "tp2": active_trade.get('tp2'),
+            "trailing_stop": active_trade.get('trailing_distance', 'ATR'),
             "current_price": current_price,
             "unrealized_pnl": round(unrealized_pnl, 2),
             "distance_to_sl_pips": round(sl_distance / 0.0001, 1),
-            "distance_to_tp_pips": round(tp_distance / 0.0001, 1)
+            "distance_to_tp2_pips": round(tp_distance / 0.0001, 1) if tp_distance else 0
         }
 
     events = news_cache["events"]
@@ -419,6 +424,125 @@ def get_account_balance(response):
         return float(response.body['account'].balance)
 
 
+# ---------------------------------------------------------------------
+# NOUVELLES FONCTIONS DE GESTION ACTIVE DU TRADE
+# ---------------------------------------------------------------------
+def close_partial_position(units_to_close):
+    """Clôture une partie de la position active (en unités)."""
+    pair = active_trade['pair']
+    direction = active_trade['direction']
+    close_units = -units_to_close if direction == 'buy' else units_to_close
+    body = {
+        "units": str(close_units)
+    }
+    try:
+        r = retry_api_call(ctx.position.close, ACCOUNT_ID, instrument=pair, data=body)
+        if r.status_code == 200:
+            print(f"Partial close: {abs(units_to_close)} units closed on {pair}")
+            return True
+    except Exception as e:
+        print(f"Partial close failed: {e}")
+    return False
+
+
+def manage_active_trade():
+    """
+    Gère le break‑even, le TP partiel et le trailing stop dynamique
+    pour le trade en cours.
+    """
+    global active_trade
+    if active_trade is None:
+        return
+
+    pair = active_trade['pair']
+    direction = active_trade['direction']
+
+    # Prix courant
+    try:
+        resp = ctx.pricing.get(ACCOUNT_ID, instruments=pair)
+        price_info = resp.body['prices'][0]
+        bid = float(price_info.bids[0].price)
+        ask = float(price_info.asks[0].price)
+        if direction == 'buy':
+            current_price = bid
+        else:
+            current_price = ask
+    except:
+        return  # impossible de récupérer le prix, on réessaiera plus tard
+
+    entry = active_trade['entry_price']
+    units = abs(active_trade['units'])
+    sl = active_trade['sl']
+    tp2 = active_trade.get('tp2')  # TP final (2e partie)
+    tp1 = active_trade.get('tp1')  # TP partiel (peut être None si déjà clôturé)
+
+    # Calcul du move en pips
+    move_pips = (current_price - entry) / 0.0001
+    if direction == 'sell':
+        move_pips = -move_pips
+
+    # --- Break‑even ---
+    if not active_trade.get('be_triggered') and move_pips >= BE_PIPS:
+        # Ramener le SL au prix d'entrée (+ un petit offset)
+        offset = 0.5 * 0.0001  # 0.5 pip
+        new_sl = entry + offset if direction == 'buy' else entry - offset
+        if (direction == 'buy' and new_sl > sl) or (direction == 'sell' and new_sl < sl):
+            try:
+                # Modifier le SL de la position
+                body = {"stopLoss": {"price": f"{new_sl:.5f}"}}
+                retry_api_call(ctx.position.close, ACCOUNT_ID, instrument=pair, data=body)
+                active_trade['sl'] = new_sl
+                active_trade['be_triggered'] = True
+                print(f"Break‑even triggered, SL moved to {new_sl:.5f}")
+                send_telegram_message(f"🛡️ Break‑even triggered on {pair}, SL moved to {new_sl:.5f}")
+            except Exception as e:
+                print(f"Break‑even update failed: {e}")
+
+    # --- Take Profit partiel (TP1) ---
+    if tp1 is not None and not active_trade.get('tp1_hit'):
+        if (direction == 'buy' and current_price >= tp1) or (direction == 'sell' and current_price <= tp1):
+            # Clôturer 50 % de la position
+            partial_units = int(units * TP_PARTIAL_RATIO)
+            if close_partial_position(partial_units):
+                active_trade['units'] = units - partial_units
+                active_trade['tp1_hit'] = True
+                active_trade['tp1'] = None  # pour ne plus le considérer
+                print(f"TP1 hit on {pair}, {partial_units} units closed")
+                send_telegram_message(f"🎯 TP1 atteint sur {pair} ! {partial_units} unités clôturées.")
+
+    # --- Trailing stop dynamique (basé sur l'ATR) ---
+    if active_trade.get('be_triggered') or active_trade.get('tp1_hit'):
+        # Récupérer l'ATR récent
+        df = get_candles(pair, count=ATR_PERIOD+2)
+        atr_val = df['atr'].iloc[-2]
+        trail_distance = atr_val * TRAILING_ATR_MULT
+        if direction == 'buy':
+            new_sl = current_price - trail_distance
+            if new_sl > active_trade['sl']:
+                try:
+                    body = {"stopLoss": {"price": f"{new_sl:.5f}"}}
+                    retry_api_call(ctx.position.close, ACCOUNT_ID, instrument=pair, data=body)
+                    active_trade['sl'] = new_sl
+                    active_trade['trailing_distance'] = f"{TRAILING_ATR_MULT}x ATR"
+                    print(f"Trailing SL updated to {new_sl:.5f} (distance {trail_distance:.5f})")
+                except Exception as e:
+                    print(f"Trailing SL update failed: {e}")
+        else:
+            new_sl = current_price + trail_distance
+            if new_sl < active_trade['sl']:
+                try:
+                    body = {"stopLoss": {"price": f"{new_sl:.5f}"}}
+                    retry_api_call(ctx.position.close, ACCOUNT_ID, instrument=pair, data=body)
+                    active_trade['sl'] = new_sl
+                    active_trade['trailing_distance'] = f"{TRAILING_ATR_MULT}x ATR"
+                    print(f"Trailing SL updated to {new_sl:.5f} (distance {trail_distance:.5f})")
+                except Exception as e:
+                    print(f"Trailing SL update failed: {e}")
+
+
+# ---------------------------------------------------------------------
+# PLACE TRADE (modifié pour créer deux TP)
+# ---------------------------------------------------------------------
 def place_trade(instrument, entry, sl, tp, units, direction):
     global active_trade, trades_today
     if active_trade is not None:
@@ -426,15 +550,20 @@ def place_trade(instrument, entry, sl, tp, units, direction):
         return False
     if direction == 'sell':
         units = -units
-    trailing_distance = str(round(TRAILING_DISTANCE_PIPS * 0.0001, 5))
+
+    # Diviser le TP en deux : TP1 (partiel) et TP2 (final)
+    sl_distance = abs(entry - sl)
+    tp_distance = sl_distance * 2  # R/R = 1:2
+    tp1 = entry + (tp_distance * 0.5) if direction == 'buy' else entry - (tp_distance * 0.5)
+    tp2 = tp  # le TP original devient le TP final
 
     order_body = {
         "type": "MARKET",
         "instrument": instrument,
         "units": str(units),
         "stopLossOnFill": {"price": f"{sl:.5f}"},
-        "takeProfitOnFill": {"price": f"{tp:.5f}"},
-        "trailingStopLossOnFill": {"distance": trailing_distance}
+        "takeProfitOnFill": {"price": f"{tp2:.5f}"}   # TP final enregistré côté serveur
+        # Le TP1 sera géré localement via manage_active_trade
     }
 
     r = retry_api_call(ctx.order.create, ACCOUNT_ID, order=order_body)
@@ -457,8 +586,12 @@ def place_trade(instrument, entry, sl, tp, units, direction):
             'units': units_filled,
             'entry_price': entry_price,
             'sl': sl,
-            'tp': tp,
-            'direction': direction
+            'tp1': tp1,
+            'tp2': tp2,
+            'direction': direction,
+            'be_triggered': False,
+            'tp1_hit': False,
+            'trailing_distance': f"{TRAILING_ATR_MULT}x ATR"
         }
     except Exception as e:
         print(f"Failed to extract trade details: {e}")
@@ -469,10 +602,10 @@ def place_trade(instrument, entry, sl, tp, units, direction):
 
     if direction == 'buy':
         risk = entry - sl
-        reward = tp - entry
+        reward = tp2 - entry
     else:
         risk = sl - entry
-        reward = entry - tp
+        reward = entry - tp2
     rr = round(reward / risk, 2) if risk > 0 else 0.0
 
     msg = (f"<b>✅ Trade opened ({trades_today}/{MAX_TRADES_PER_DAY})</b>\n"
@@ -480,9 +613,11 @@ def place_trade(instrument, entry, sl, tp, units, direction):
            f"Type: {'Buy' if direction == 'buy' else 'Sell'}\n"
            f"Volume: {abs(units)} units\n"
            f"Entry: {entry:.5f}\n"
-           f"Stop Loss: {sl:.5f}\n"
-           f"Take Profit: {tp:.5f}\n"
-           f"Trailing Stop: {TRAILING_DISTANCE_PIPS} pips\n"
+           f"SL: {sl:.5f}\n"
+           f"TP1 (partial): {tp1:.5f}\n"
+           f"TP2 (final): {tp2:.5f}\n"
+           f"BE trigger: +{BE_PIPS} pips\n"
+           f"Trailing: {TRAILING_ATR_MULT}x ATR\n"
            f"R/R: 1:{rr}\n"
            f"Time: {datetime.now(tz).strftime('%Y-%m-%d %H:%M:%S')}")
     send_telegram_message(msg)
@@ -493,7 +628,8 @@ def place_trade(instrument, entry, sl, tp, units, direction):
         "pair": instrument,
         "entry": entry,
         "sl": sl,
-        "tp": tp,
+        "tp1": tp1,
+        "tp2": tp2,
         "units": abs(units),
         "direction": direction,
         "rr": rr,
@@ -511,44 +647,42 @@ def check_closed_trade():
         return
     try:
         resp = retry_api_call(ctx.trade.list, ACCOUNT_ID,
-                              instrument=pair, count=1, state='CLOSED')
+                              instrument=pair, count=2, state='CLOSED')
         closed_trades = resp.body.get('trades', [])
-        if closed_trades:
-            last_trade = closed_trades[0]
-            realized_pl = float(last_trade.realizedPL)
-            close_price = float(last_trade.price)
-            entry_price = active_trade['entry_price']
-            units = active_trade['units']
-            direction = active_trade.get('direction', 'buy')
+        total_pnl = sum(float(t.realizedPL) for t in closed_trades)
+        close_price = float(closed_trades[0].price) if closed_trades else 0
+        entry_price = active_trade['entry_price']
+        units = active_trade['units']
+        direction = active_trade.get('direction', 'buy')
 
-            msg = (f"<b>🔴 Trade closed ({trades_today}/{MAX_TRADES_PER_DAY})</b>\n"
-                   f"Pair: {pair}\n"
-                   f"Type: {'Buy' if direction == 'buy' else 'Sell'}\n"
-                   f"Entry: {entry_price:.5f}\n"
-                   f"Exit: {close_price:.5f}\n"
-                   f"Volume: {abs(units)}\n"
-                   f"P&L: {realized_pl:.2f} USD\n"
-                   f"Time: {datetime.now(tz).strftime('%Y-%m-%d %H:%M:%S')}")
-            send_telegram_message(msg)
+        msg = (f"<b>🔴 Trade closed ({trades_today}/{MAX_TRADES_PER_DAY})</b>\n"
+               f"Pair: {pair}\n"
+               f"Type: {'Buy' if direction == 'buy' else 'Sell'}\n"
+               f"Entry: {entry_price:.5f}\n"
+               f"Exit: {close_price:.5f}\n"
+               f"Volume: {abs(units)}\n"
+               f"P&L: {total_pnl:.2f} USD\n"
+               f"Time: {datetime.now(tz).strftime('%Y-%m-%d %H:%M:%S')}")
+        send_telegram_message(msg)
 
-            closed_trades_today.append({
-                "pair": pair,
-                "type": "Buy" if direction == 'buy' else "Sell",
-                "pnl": realized_pl,
-                "time": datetime.now(tz).strftime("%H:%M:%S")
-            })
+        closed_trades_today.append({
+            "pair": pair,
+            "type": "Buy" if direction == 'buy' else "Sell",
+            "pnl": total_pnl,
+            "time": datetime.now(tz).strftime("%H:%M:%S")
+        })
 
-            log_trade({
-                "time": datetime.now(tz).isoformat(),
-                "pair": pair,
-                "entry": entry_price,
-                "exit": close_price,
-                "units": abs(units),
-                "pnl": realized_pl,
-                "direction": direction,
-                "status": "CLOSED"
-            })
-            last_close_time = datetime.now(tz)
+        log_trade({
+            "time": datetime.now(tz).isoformat(),
+            "pair": pair,
+            "entry": entry_price,
+            "exit": close_price,
+            "units": abs(units),
+            "pnl": total_pnl,
+            "direction": direction,
+            "status": "CLOSED"
+        })
+        last_close_time = datetime.now(tz)
     except Exception as e:
         print(f"Error retrieving closed trade: {e}")
         send_telegram_message(f"⚠️ Trade on {pair} closed (details unavailable).")
@@ -645,9 +779,8 @@ def collect_indicators(pair):
     try:
         spread = get_spread(pair)
     except:
-        return None  # on ne peut rien faire
+        return None
 
-    # Si on ne peut pas avoir les bougies, on renvoie juste le spread
     try:
         df = get_candles(pair)
         last_candle = df.iloc[-2]
@@ -666,7 +799,6 @@ def collect_indicators(pair):
         }
     except Exception as e:
         print(f"Erreur get_candles {pair} : {e}")
-        # Fallback : on retourne un minimum
         return {
             "price": None,
             "spread": spread,
@@ -690,7 +822,7 @@ def main():
         load_existing_open_position()
     print(f"Trades already taken today: {trades_today}, active trade: {active_trade is not None}")
 
-    start_msg = (f"🟢 MyForexBotNY started – max {MAX_TRADES_PER_DAY} trades/day, "
+    start_msg = (f"🟢 Forex Sniper 8‑12 started – max {MAX_TRADES_PER_DAY} trades/day, "
                  f"buffer {MIN_MINUTES_BETWEEN_TRADES}min, Buy & Sell. "
                  f"({trades_today} already taken)")
     print(start_msg)
@@ -701,11 +833,10 @@ def main():
             now = datetime.now(tz)
 
             if now.hour > TRADING_HOURS_END or (now.hour == TRADING_HOURS_END and now.minute >= 5):
-                stop_msg = (f"🔴 MyForexBotNY stopped – End of session ({now.strftime('%H:%M')}), "
+                stop_msg = (f"🔴 Forex Sniper 8‑12 stopped – End of session ({now.strftime('%H:%M')}), "
                             f"{trades_today} trade(s) taken today.")
                 print(stop_msg)
                 send_telegram_message(stop_msg)
-                # Dernière collecte pour figer l'état
                 pair_indicators = {}
                 for pair in PAIRS:
                     indicators = collect_indicators(pair)
@@ -723,6 +854,8 @@ def main():
                 if active_trade is None:
                     load_existing_open_position()
 
+            # Gestion active du trade (break‑even, TP partiel, trailing dynamique)
+            manage_active_trade()
             check_closed_trade()
 
             if not hasattr(main, "next_news_check"):
@@ -731,7 +864,12 @@ def main():
                 update_news_filters()
                 main.next_news_check = now + timedelta(seconds=60)
 
-            in_trading_hours = TRADING_HOURS_START <= now.hour < TRADING_HOURS_END
+            # Fenêtre de trading effective : 8h30 – 11h00
+            in_trading_hours = (
+                (now.hour == 8 and now.minute >= 30) or
+                (now.hour > 8 and now.hour < 11) or
+                (now.hour == 11 and now.minute == 0)
+            )
             calendar_blocked = is_news_time_blocked()
 
             can_trade_time = True
@@ -748,7 +886,7 @@ def main():
                          and not calendar_blocked
                          and can_trade_time)
 
-            # ★ Collecte des indicateurs pour le cockpit TOUJOURS
+            # Collecte des indicateurs pour le cockpit TOUJOURS
             pair_indicators = {}
             for pair in PAIRS:
                 indicators = collect_indicators(pair)
@@ -759,9 +897,8 @@ def main():
                           f"EMA50:{indicators.get('ema50','--')} EMA200:{indicators.get('ema200','--')} "
                           f"RSI:{indicators.get('rsi','--')}")
 
-                # Si on peut trader, vérifier les signaux
                 if can_trade and not has_open_position(pair) and is_spread_ok(pair, indicators.get('spread', 0)):
-                    df = get_candles(pair)  # on recharge pour le signal (déjà fait dans collect mais okay)
+                    df = get_candles(pair)
                     signal, price, sl, tp, sl_pips, direction = check_signal(df, pair)
                     if signal:
                         print(f" -> SIGNAL {direction}")
