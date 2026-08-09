@@ -48,19 +48,6 @@ st.markdown("""
     .stMarkdown h4, .stMarkdown label {
         color: #1E90FF !important;
     }
-    /* Nouvelle classe pour les mots clés orange */
-    .orange-label {
-        color: #FF9100;
-        font-weight: normal;
-    }
-    /* Agrandir les labels de la section Paires (Price) */
-    .pair-metrics [data-testid="stMetricLabel"] {
-    font-size: 1.5rem !important;   /* ajustez la taille ici */
-    }
-    /* Agrandir les labels de la section Active Trade (Pair, Type, Entry, etc.) */
-    .active-trade-metrics [data-testid="stMetricLabel"] {
-    font-size: 1.5rem !important;   /* ajustez la taille ici */
-    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -194,9 +181,7 @@ while True:
                 st.markdown(f"**{pair}**")
 
                 price = p.get('price')
-                st.markdown('<div class="pair-metrics">', unsafe_allow_html=True)
                 st.metric("Price", f"{price:.5f}" if price is not None else "--")
-                st.markdown('</div>', unsafe_allow_html=True)
 
                 # Formatage des indicateurs
                 spread_val = p.get('spread', '--')
@@ -210,21 +195,12 @@ while True:
 
                 ema50_str = f"{ema50:.5f}" if ema50 is not None else "--"
                 ema200_str = f"{ema200:.5f}" if ema200 is not None else "--"
-                rsi_str = f"{rsi_val:.1f}" if rsi_val is not None else "--"
+                rsi_str = f"{rsi_val:.1f}" if rsi_val is not None else "RSI: --"
 
-                # Ligne 1 avec labels en orange
-                line1 = (
-                    f"<span class='orange-label'>Spread:</span> {spread_str} | "
-                    f"<span class='orange-label'>ADX:</span> {adx_str} | "
-                    f"<span class='orange-label'>+DI:</span> {plus_di_str} | "
-                    f"<span class='orange-label'>-DI:</span> {minus_di_str}"
-                )
-                # Ligne 2 avec labels en orange
-                line2 = (
-                    f"<span class='orange-label'>EMA50:</span> {ema50_str} | "
-                    f"<span class='orange-label'>EMA200:</span> {ema200_str} | "
-                    f"<span class='orange-label'>RSI:</span> {rsi_str}"
-                )
+                # Première ligne : Spread, ADX, +DI, -DI
+                line1 = f"Spread: {spread_str} |   ADX: {adx_str}   | +DI: {plus_di_str}   | -DI: {minus_di_str}"
+                # Deuxième ligne : EMA50, EMA200, RSI
+                line2 = f"EMA50: {ema50_str} |    EMA200: {ema200_str} |   RSI: {rsi_str}"
 
                 st.markdown(f"<div class='indicators-line'>{line1}</div>", unsafe_allow_html=True)
                 st.markdown(f"<div class='indicators-line'>{line2}</div>", unsafe_allow_html=True)
