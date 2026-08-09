@@ -1,3 +1,4 @@
+```python
 import v20
 import pandas as pd
 import pytz
@@ -171,6 +172,26 @@ def count_all_trades_today():
     return count
 
 
+def load_closed_trades_today():
+    """Charge l'historique des trades fermés aujourd'hui au démarrage."""
+    global closed_trades_today
+    today_str = datetime.now(tz).strftime("%Y-%m-%d")
+    try:
+        resp = retry_api_call(ctx.trade.list, ACCOUNT_ID, state='CLOSED', count=100)
+        for t in resp.body.get('trades', []):
+            open_time = t.openTime if isinstance(t.openTime, str) else str(t.openTime)
+            if open_time.startswith(today_str):
+                closed_trades_today.append({
+                    "pair": t.instrument,
+                    "type": "Buy" if float(t.currentUnits) > 0 else "Sell",
+                    "pnl": float(t.realizedPL),
+                    "time": str(t.closeTime)[11:19] if t.closeTime else ""
+                })
+        print(f"Loaded {len(closed_trades_today)} closed trades from today")
+    except Exception as e:
+        print(f"Error loading closed trades: {e}")
+
+
 def load_existing_open_position():
     global active_trade
     try:
@@ -193,8 +214,12 @@ def load_existing_open_position():
                         'units': int(trade.currentUnits),
                         'entry_price': float(trade.price),
                         'sl': float(trade.stopLossOrder.price) if trade.stopLossOrder else None,
-                        'tp': float(trade.takeProfitOrder.price) if trade.takeProfitOrder else None,
-                        'direction': 'buy' if int(trade.currentUnits) > 0 else 'sell'
+                        'tp1': None,
+                        'tp2': float(trade.takeProfitOrder.price) if trade.takeProfitOrder else None,
+                        'direction': 'buy' if int(trade.currentUnits) > 0 else 'sell',
+                        'be_triggered': False,
+                        'tp1_hit': False,
+                        'trailing_distance': f"{TRAILING_ATR_MULT}x ATR"
                     }
                     print(f"Existing open position loaded: {instrument} {active_trade['direction']}")
                     return
@@ -817,6 +842,9 @@ def collect_indicators(pair):
 def main():
     global trades_today, last_trade_date, last_close_time, active_trade
 
+    # Charger l'historique des trades déjà fermés aujourd'hui
+    load_closed_trades_today()
+
     trades_today = count_all_trades_today()
     if active_trade is None:
         load_existing_open_position()
@@ -851,6 +879,7 @@ def main():
                 last_trade_date = today
                 last_close_time = None
                 closed_trades_today.clear()
+                load_closed_trades_today()
                 if active_trade is None:
                     load_existing_open_position()
 
@@ -922,3 +951,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+```
