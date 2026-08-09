@@ -24,6 +24,7 @@ st.markdown("""
     }
     .session-metrics h4 {
         margin-bottom: 0.1rem !important;
+        color: #1E90FF !important;   /* titres de session en bleu */
     }
     .session-metrics .stMetric {
         margin-top: 0 !important;
@@ -38,6 +39,14 @@ st.markdown("""
         font-size: 1.1rem !important;
         line-height: 1.3 !important;
         color: #EAEAEA;
+    }
+    /* Labels de toutes les métriques en bleu */
+    [data-testid="stMetricLabel"] {
+        color: #1E90FF !important;
+    }
+    /* Ajustement optionnel pour les autres labels markdown si nécessaire */
+    .stMarkdown h4, .stMarkdown label {
+        color: #1E90FF !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -167,10 +176,10 @@ while True:
         for i, pair in enumerate(["EUR_USD", "GBP_USD"]):
             with cols[i]:
                 p = data.get("pairs", {}).get(pair, {})
-                ema = p.get('ema_orientation','')
-                macd = p.get('macd_signal','')
-                st.markdown(f"**{pair}** <span class='green'>{ema}</span> / <span class='orange'>{macd}</span>",
-                            unsafe_allow_html=True)
+
+                # Affichage simple du nom de la paire (sans bullish/bearish)
+                st.markdown(f"**{pair}**")
+
                 price = p.get('price')
                 st.metric("Price", f"{price:.5f}" if price is not None else "--")
 
@@ -184,11 +193,17 @@ while True:
                 ema200 = p.get('ema200')
                 rsi_val = p.get('rsi')
 
-                ema_str = f"EMA50: {ema50:.5f} | EMA200: {ema200:.5f}" if (ema50 is not None and ema200 is not None) else "EMA: --"
-                rsi_str = f"RSI: {rsi_val:.1f}" if rsi_val is not None else "RSI: --"
+                ema50_str = f"{ema50:.5f}" if ema50 is not None else "--"
+                ema200_str = f"{ema200:.5f}" if ema200 is not None else "--"
+                rsi_str = f"{rsi_val:.1f}" if rsi_val is not None else "RSI: --"
 
-                indicators_line = (f"Spread: {spread_str} | ADX: {adx_str}  +DI: {plus_di_str} / -DI: {minus_di_str}  |  {ema_str}  |  {rsi_str}")
-                st.markdown(f"<div class='indicators-line'>{indicators_line}</div>", unsafe_allow_html=True)
+                # Première ligne : Spread, ADX, +DI, -DI
+                line1 = f"Spread: {spread_str} |   ADX: {adx_str}   +DI: {plus_di_str} / -DI: {minus_di_str}"
+                # Deuxième ligne : EMA50, EMA200, RSI
+                line2 = f"EMA50: {ema50_str} |    EMA200: {ema200_str} |   {rsi_str}"
+
+                st.markdown(f"<div class='indicators-line'>{line1}</div>", unsafe_allow_html=True)
+                st.markdown(f"<div class='indicators-line'>{line2}</div>", unsafe_allow_html=True)
 
                 sig = p.get('last_signal')
                 if sig:
