@@ -316,12 +316,30 @@ def get_finnhub_sentiment(pair):
 def update_news_filters():
     global last_news_block_time, news_sentiment_filter
     now = datetime.now(tz)
+
+    # Vérifier si le blocage calendaire doit être levé
     if last_news_block_time:
-        if now - last_news_block_time > timedelta(minutes=BREAKING_NEWS_BLOCK_MINUTES):
+        if now - last_news_block_time > timedelta(minutes=NEWS_BLOCK_MINUTES):
             last_news_block_time = None
             news_sentiment_filter = {}
-            send_telegram_message("🟢 News sentiment filter lifted – normal trading resumed")
-            print("News sentiment filter lifted.")
+            send_telegram_message("🟢 News block lifted – trading resumed")
+            print("News block lifted.")
+
+    # Détection des nouveaux événements à fort impact
+    events = get_high_impact_news()
+    for event in events:
+        block_start = event["time"] - timedelta(minutes=NEWS_BLOCK_MINUTES)
+        block_end = event["time"] + timedelta(minutes=NEWS_BLOCK_MINUTES)
+        if block_start <= now <= block_end and last_news_block_time is None:
+            last_news_block_time = now
+            msg = (f"📅 High-impact news detected: {event['title']} at "
+                   f"{event['time'].strftime('%H:%M')} – Trading blocked until "
+                   f"{block_end.strftime('%H:%M')}")
+            send_telegram_message(msg)
+            print(msg)
+            break  # un seul message par blocage
+
+    # Filtre directionnel (Finnhub)
     for pair in PAIRS:
         sentiment = get_finnhub_sentiment(pair)
         if sentiment != 'neutral':
@@ -359,12 +377,8 @@ def get_high_impact_news():
 
 def is_news_time_blocked():
     now_local = datetime.now(tz)
-    events = get_high_impact_news()
-    for event in events:
-        block_start = event["time"] - timedelta(minutes=NEWS_BLOCK_MINUTES)
-        block_end = event["time"] + timedelta(minutes=NEWS_BLOCK_MINUTES)
-        if block_start <= now_local <= block_end:
-            print(f"⛔ Calendar news block: {event['title']} at {event['time'].strftime('%H:%M')} local")
+    if last_news_block_time:
+        if now_local - last_news_block_time <= timedelta(minutes=NEWS_BLOCK_MINUTES):
             return True
     return False
 
