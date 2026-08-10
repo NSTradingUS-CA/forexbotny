@@ -1,5 +1,5 @@
 {
-  "time": "2026-08-10 12:05:05",
+  "time": "2026-08-10 12:42:11",
   "bot_status": "running",
   "session": {
     "trades_today": 0,
@@ -10,7 +10,7 @@
   "pairs": {
     "EUR_USD": {
       "price": 1.1552,
-      "spread": 0.00017000000000000348,
+      "spread": 0.00014999999999987246,
       "adx": 25.513563118798743,
       "plus_di": 17.244800921154084,
       "minus_di": 19.84302011530859,
@@ -24,7 +24,7 @@
     },
     "GBP_USD": {
       "price": 1.35208,
-      "spread": 0.00017000000000000348,
+      "spread": 0.00021000000000004349,
       "adx": 32.037165976682026,
       "plus_di": 36.528656518321114,
       "minus_di": 10.30023625837869,
@@ -40,9 +40,5 @@
   "active_trade": null,
   "closed_trades_today": [],
   "rejected_signals": [],
-  "next_news_event": {
-    "title": "Core CPI m/m",
-    "time": "08:30",
-    "impact": "High"
-  }
+  "next_news_event": null
 }
