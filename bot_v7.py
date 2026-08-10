@@ -154,25 +154,31 @@ def save_status_json(pair_indicators):
 
 
 def load_closed_trades_from_oanda():
-    """Charge l'historique des trades fermés aujourd'hui depuis OANDA."""
+    """Charge l'historique des trades fermés aujourd'hui depuis OANDA en utilisant l'API transactions."""
     global closed_trades_today
     today_str = datetime.now(tz).strftime("%Y-%m-%d")
     loaded = 0
+    seen_trade_ids = set()
     try:
-        for pair in PAIRS:
-            resp = retry_api_call(ctx.trade.list, ACCOUNT_ID, instrument=pair, count=50)
-            for t in resp.body.get('trades', []):
-                open_time = t.openTime if isinstance(t.openTime, str) else str(t.openTime)
-                if open_time.startswith(today_str) and t.state == 'CLOSED':
-                    direction = 'buy' if int(t.currentUnits) > 0 else 'sell'
-                    closed_trades_today.append({
-                        "pair": t.instrument,
-                        "type": "Buy" if direction == 'buy' else "Sell",
-                        "pnl": float(t.realizedPL),
-                        "time": t.closeTime if isinstance(t.closeTime, str) else str(t.closeTime)
-                    })
-                    loaded += 1
-        print(f"Loaded {loaded} closed trades from OANDA history.")
+        resp = retry_api_call(ctx.transaction.list, ACCOUNT_ID, count=500)
+        transactions = resp.body.get('transactions', [])
+        for tx in transactions:
+            tx_time = tx.time if isinstance(tx.time, str) else str(tx.time)
+            if tx_time.startswith(today_str) and tx.type == 'ORDER_FILL':
+                if hasattr(tx, 'tradeID') and tx.tradeID and tx.tradeID not in seen_trade_ids:
+                    units = float(tx.units)
+                    if units < 0 or units > 0:
+                        direction = 'sell' if units < 0 else 'buy'
+                        pnl = float(tx.pl) if hasattr(tx, 'pl') else 0.0
+                        closed_trades_today.append({
+                            "pair": tx.instrument,
+                            "type": "Buy" if units > 0 else "Sell",
+                            "pnl": pnl,
+                            "time": tx_time.split('T')[1].split('.')[0] if 'T' in tx_time else tx_time
+                        })
+                        seen_trade_ids.add(tx.tradeID)
+                        loaded += 1
+        print(f"Loaded {loaded} closed trades from OANDA transaction history.")
     except Exception as e:
         print(f"Error loading closed trades: {e}")
 
