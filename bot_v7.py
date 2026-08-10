@@ -205,6 +205,7 @@ def save_status_json(pair_indicators):
                 "time": next_ev["time"].strftime("%H:%M"),
                 "impact": "High"
             }
+    # Si pas d'événement futur, status["next_news_event"] reste None (initialisé plus haut)
 
     push_status_json(status)
 
