@@ -156,25 +156,32 @@ def save_status_json(pair_indicators):
 def load_closed_trades_from_oanda():
     """Charge l'historique des trades fermés aujourd'hui depuis OANDA en utilisant l'API transactions."""
     global closed_trades_today
-    today_str = datetime.now(tz).strftime("%Y-%m-%d")
+    oanda_tz = pytz.timezone('Etc/GMT+12')
+    today_start = datetime.now(oanda_tz).replace(hour=0, minute=0, second=0, microsecond=0)
+    today_end = today_start + timedelta(days=1)
     loaded = 0
     seen_trade_ids = set()
     try:
         resp = retry_api_call(ctx.transaction.list, ACCOUNT_ID, count=500)
         transactions = resp.body.get('transactions', [])
         for tx in transactions:
-            tx_time = tx.time if isinstance(tx.time, str) else str(tx.time)
-            if tx_time.startswith(today_str) and tx.type == 'ORDER_FILL':
+            tx_time_str = tx.time if isinstance(tx.time, str) else str(tx.time)
+            try:
+                tx_dt = datetime.fromisoformat(tx_time_str.replace('Z', '+00:00'))
+                tx_dt = tx_dt.astimezone(oanda_tz)
+            except:
+                continue
+            
+            if today_start <= tx_dt < today_end and tx.type == 'ORDER_FILL':
                 if hasattr(tx, 'tradeID') and tx.tradeID and tx.tradeID not in seen_trade_ids:
                     units = float(tx.units)
-                    if units < 0 or units > 0:
-                        direction = 'sell' if units < 0 else 'buy'
+                    if units != 0:
                         pnl = float(tx.pl) if hasattr(tx, 'pl') else 0.0
                         closed_trades_today.append({
                             "pair": tx.instrument,
                             "type": "Buy" if units > 0 else "Sell",
                             "pnl": pnl,
-                            "time": tx_time.split('T')[1].split('.')[0] if 'T' in tx_time else tx_time
+                            "time": tx_dt.strftime("%H:%M:%S")
                         })
                         seen_trade_ids.add(tx.tradeID)
                         loaded += 1
