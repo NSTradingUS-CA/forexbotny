@@ -311,7 +311,7 @@ def get_finnhub_sentiment(pair):
 
 
 def update_news_filters():
-    """Envoie seulement une alerte Telegram si un événement à fort impact est détecté, sans bloquer le trading."""
+    """Envoie une alerte Telegram si un événement à fort impact est détecté, sans bloquer le trading."""
     global news_sentiment_filter
     now = datetime.now(tz)
     events = get_high_impact_news()
@@ -690,8 +690,11 @@ def check_closed_trade():
 
 
 def check_signal(df, instrument):
+    """Retourne (signal, price, sl, tp, sl_pips, direction, reason).
+    reason est une chaîne expliquant pourquoi le signal a été rejeté."""
     if len(df) < 200:
-        return False, 0, 0, 0, 0, None
+        return False, 0, 0, 0, 0, None, "Not enough candles"
+
     last_candle = df.iloc[-2]
     price = last_candle['c']
     ema50 = last_candle['ema50']
@@ -701,14 +704,22 @@ def check_signal(df, instrument):
     adx = last_candle['adx']
     plus_di = last_candle['plus_di']
     minus_di = last_candle['minus_di']
+
     if pd.isna(atr) or pd.isna(ema50) or pd.isna(adx):
-        return False, 0, 0, 0, 0, None
+        return False, 0, 0, 0, 0, None, "Missing indicator values"
+
     config = PAIR_CONFIG[instrument]
     adx_threshold = config["ADX_THRESHOLD"]
     atr_multiplier = config["ATR_MULTIPLIER"]
     sentiment = news_sentiment_filter.get(instrument, None)
+
+    # --- Signal ACHAT ---
     if sentiment is None or sentiment == 'bullish':
-        if adx >= adx_threshold and plus_di > minus_di:
+        if adx < adx_threshold:
+            pass  # sera capturé plus bas
+        elif plus_di <= minus_di:
+            pass
+        else:
             macd_ok = True
             if USE_MACD_FILTER:
                 macd_line = last_candle['macd_line']
@@ -733,9 +744,26 @@ def check_signal(df, instrument):
                         sl_distance = price - sl
                         sl_pips = sl_distance / 0.0001
                         tp = price + 2 * sl_distance
-                        return True, price, sl, tp, sl_pips, 'buy'
+                        return True, price, sl, tp, sl_pips, 'buy', ""
+                    else:
+                        reasons = []
+                        if not trend_up: reasons.append("EMA50 not above EMA200")
+                        if not touched_ema: reasons.append("No EMA50 touch")
+                        if not bullish_rejection: reasons.append("No bullish rejection")
+                        if not rsi_ok: reasons.append(f"RSI out of range ({rsi:.1f})")
+                        return False, 0, 0, 0, 0, None, ", ".join(reasons)
+                else:
+                    return False, 0, 0, 0, 0, None, "Volume too low"
+            else:
+                return False, 0, 0, 0, 0, None, "MACD not bullish"
+
+    # --- Signal VENTE ---
     if sentiment is None or sentiment == 'bearish':
-        if adx >= adx_threshold and minus_di > plus_di:
+        if adx < adx_threshold:
+            pass
+        elif minus_di <= plus_di:
+            pass
+        else:
             macd_ok = True
             if USE_MACD_FILTER:
                 macd_line = last_candle['macd_line']
@@ -760,8 +788,25 @@ def check_signal(df, instrument):
                         sl_distance = sl - price
                         sl_pips = sl_distance / 0.0001
                         tp = price - 2 * sl_distance
-                        return True, price, sl, tp, sl_pips, 'sell'
-    return False, 0, 0, 0, 0, None
+                        return True, price, sl, tp, sl_pips, 'sell', ""
+                    else:
+                        reasons = []
+                        if not trend_down: reasons.append("EMA50 not below EMA200")
+                        if not touched_ema: reasons.append("No EMA50 touch")
+                        if not bearish_rejection: reasons.append("No bearish rejection")
+                        if not rsi_ok: reasons.append(f"RSI out of range ({rsi:.1f})")
+                        return False, 0, 0, 0, 0, None, ", ".join(reasons)
+                else:
+                    return False, 0, 0, 0, 0, None, "Volume too low"
+            else:
+                return False, 0, 0, 0, 0, None, "MACD not bearish"
+
+    # Raison générique si aucun des blocs ci-dessus n'a retourné
+    if sentiment is not None:
+        return False, 0, 0, 0, 0, None, f"Sentiment filter blocks direction ({sentiment})"
+    if adx < adx_threshold:
+        return False, 0, 0, 0, 0, None, f"ADX too low ({adx:.1f} < {adx_threshold})"
+    return False, 0, 0, 0, 0, None, "DI direction mismatch"
 
 
 def collect_indicators(pair):
@@ -856,12 +901,8 @@ def main():
                 update_news_filters()
                 main.next_news_check = now + timedelta(seconds=60)
 
-            # Fenêtre de trading : 9h00 à 11h30
-            in_trading_hours = (
-                (now.hour == 9 and now.minute >= 0) or
-                (now.hour > 9 and now.hour < 11) or
-                (now.hour == 11 and now.minute <= 30)
-            )
+            # Fenêtre de trading : 9h00 à 12h00
+            in_trading_hours = (now.hour >= 9 and now.hour < 12)
 
             can_trade_time = True
             if last_close_time is not None:
@@ -888,7 +929,7 @@ def main():
 
                 if can_trade and not has_open_position(pair) and is_spread_ok(pair, indicators.get('spread', 0)):
                     df = get_candles(pair)
-                    signal, price, sl, tp, sl_pips, direction = check_signal(df, pair)
+                    signal, price, sl, tp, sl_pips, direction, reason = check_signal(df, pair)
                     if signal:
                         print(f" -> SIGNAL {direction}")
                         pair_indicators[pair]["last_signal"] = direction
@@ -899,6 +940,14 @@ def main():
                         success = place_trade(pair, price, sl, tp, units, direction)
                         if success:
                             break
+                    elif reason:
+                        print(f" -> REJECTED: {reason}")
+                        rejected_signals.append({
+                            "time": now.strftime("%H:%M:%S"),
+                            "pair": pair,
+                            "direction": None,
+                            "reason": reason
+                        })
 
             save_status_json(pair_indicators)
 
