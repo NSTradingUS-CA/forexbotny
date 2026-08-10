@@ -4,7 +4,7 @@ import time
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-st.set_page_config(page_title="Forex Sniper 8-12", layout="wide")
+st.set_page_config(page_title="Forex Sniper 3-12", layout="wide")
 
 # ---------- CSS global ----------
 st.markdown("""
@@ -71,7 +71,7 @@ if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 
 if not st.session_state.authenticated:
-    st.markdown("<h1 style='text-align: center; color: #00C853;'>🔐 Forex Sniper 8‑12 • Cockpit Access</h1>",
+    st.markdown("<h1 style='text-align: center; color: #00C853;'>🔐 Forex Sniper 3‑12 • Cockpit Access</h1>",
                 unsafe_allow_html=True)
     pwd = st.text_input("Password", type="password")
     if st.button("Sign in"):
@@ -134,7 +134,7 @@ LOGO_URL = "https://raw.githubusercontent.com/NSTradingUS-CA/forexbotny/main/ass
 st.markdown(f"""
 <div style="display: flex; align-items: center; justify-content: center;">
     <img src="{LOGO_URL}" class="logo-rounded" style="width: 80px; height: auto; margin-right: 20px;">
-    <h2 style="color: #FF9100; margin: 0;">Forex Sniper 8‑12</h2>
+    <h2 style="color: #FF9100; margin: 0;">Forex Sniper 3‑12</h2>
 </div>
 """, unsafe_allow_html=True)
 
@@ -145,13 +145,7 @@ with col_signout:
         st.session_state.authenticated = False
         st.rerun()
 
-# ---------- Footer ----------
-st.markdown(
-    '<div class="footer">NorthSentinel Trading • Forex Sniper 8‑12 • August, 2026 ©</div>',
-    unsafe_allow_html=True
-)
-
-# ---------- Boucle de rafraîchissement sans flash ----------
+# ---------- Contenu dynamique ----------
 placeholder = st.empty()
 
 while True:
@@ -283,3 +277,9 @@ while True:
                 st.write("No closed trades.")
 
     time.sleep(30)
+
+# ---------- Footer ----------
+st.markdown(
+    '<div class="footer">NorthSentinel Trading • Forex Sniper 3‑12 • August, 2026 ©</div>',
+    unsafe_allow_html=True
+)
