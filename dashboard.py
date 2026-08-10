@@ -204,10 +204,12 @@ with placeholder.container():
             ema50 = p.get('ema50')
             ema200 = p.get('ema200')
             rsi_val = p.get('rsi')
+            atr_val = p.get('atr')       # ★ Récupération de l'ATR
 
             ema50_str = f"{ema50:.5f}" if ema50 is not None else "--"
             ema200_str = f"{ema200:.5f}" if ema200 is not None else "--"
             rsi_str = f"{rsi_val:.1f}" if rsi_val is not None else "--"
+            atr_str = f"{atr_val:.5f}" if atr_val is not None else "--"
 
             line1 = (
                 f"<span class='orange-label'>Spread:</span> {spread_str} | "
@@ -218,7 +220,8 @@ with placeholder.container():
             line2 = (
                 f"<span class='orange-label'>EMA50:</span> {ema50_str} | "
                 f"<span class='orange-label'>EMA200:</span> {ema200_str} | "
-                f"<span class='orange-label'>RSI:</span> {rsi_str}"
+                f"<span class='orange-label'>RSI:</span> {rsi_str} | "
+                f"<span class='orange-label'>ATR:</span> {atr_str}"
             )
 
             st.markdown(f"<div class='indicators-line'>{line1}</div>", unsafe_allow_html=True)
@@ -241,7 +244,6 @@ with placeholder.container():
         c4.metric("Current", f"{active.get('current_price',0):.5f}")
         pnl = active.get('unrealized_pnl',0)
         c1.metric("P&L", f"{pnl:.2f} USD", delta_color="normal" if pnl>=0 else "inverse")
-        # Affichage du TP1 (partiel), TP2 (final), SL et trailing stop
         tp1_val = active.get('tp1')
         tp2_val = active.get('tp2')
         if tp1_val is not None:
@@ -249,7 +251,11 @@ with placeholder.container():
         if tp2_val is not None:
             c3.metric("TP2 (final)", f"{tp2_val:.5f}")
         c4.metric("SL", f"{active.get('sl',0):.5f} ({active.get('distance_to_sl_pips',0)} pips)")
+        # ★ Affichage du trailing stop avec l'ATR actuel
         trail_info = active.get('trailing_stop', '')
+        atr_active = active.get('atr', None)
+        if atr_active is not None:
+            trail_info = f"{trail_info} (ATR: {atr_active:.5f})"
         if trail_info:
             st.caption(f"Trailing Stop: {trail_info}")
         st.markdown('</div>', unsafe_allow_html=True)
