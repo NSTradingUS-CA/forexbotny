@@ -157,19 +157,22 @@ def load_closed_trades_from_oanda():
     """Charge l'historique des trades fermés aujourd'hui depuis OANDA."""
     global closed_trades_today
     today_str = datetime.now(tz).strftime("%Y-%m-%d")
+    loaded = 0
     try:
-        resp = retry_api_call(ctx.trade.list, ACCOUNT_ID, state='CLOSED', count=100)
-        for t in resp.body.get('trades', []):
-            open_time = t.openTime if isinstance(t.openTime, str) else str(t.openTime)
-            if open_time.startswith(today_str):
-                direction = 'buy' if int(t.currentUnits) > 0 else 'sell'
-                closed_trades_today.append({
-                    "pair": t.instrument,
-                    "type": "Buy" if direction == 'buy' else "Sell",
-                    "pnl": float(t.realizedPL),
-                    "time": t.closeTime if isinstance(t.closeTime, str) else str(t.closeTime)
-                })
-        print(f"Loaded {len(closed_trades_today)} closed trades from OANDA history.")
+        for pair in PAIRS:
+            resp = retry_api_call(ctx.trade.list, ACCOUNT_ID, instrument=pair, count=50)
+            for t in resp.body.get('trades', []):
+                open_time = t.openTime if isinstance(t.openTime, str) else str(t.openTime)
+                if open_time.startswith(today_str) and t.state == 'CLOSED':
+                    direction = 'buy' if int(t.currentUnits) > 0 else 'sell'
+                    closed_trades_today.append({
+                        "pair": t.instrument,
+                        "type": "Buy" if direction == 'buy' else "Sell",
+                        "pnl": float(t.realizedPL),
+                        "time": t.closeTime if isinstance(t.closeTime, str) else str(t.closeTime)
+                    })
+                    loaded += 1
+        print(f"Loaded {loaded} closed trades from OANDA history.")
     except Exception as e:
         print(f"Error loading closed trades: {e}")
 
