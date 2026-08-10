@@ -4,7 +4,7 @@ import time
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-st.set_page_config(page_title="Forex Sniper 8-12", layout="wide")
+st.set_page_config(page_title="Forex Sniper 3-12", layout="wide")
 
 # ---------- CSS global ----------
 st.markdown("""
