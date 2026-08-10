@@ -159,11 +159,22 @@ def load_closed_trades_from_oanda():
     oanda_tz = pytz.timezone('Etc/GMT+12')
     today_start = datetime.now(oanda_tz).replace(hour=0, minute=0, second=0, microsecond=0)
     today_end = today_start + timedelta(days=1)
+    print(f"[DEBUG] OANDA timezone: {oanda_tz}")
+    print(f"[DEBUG] Today (OANDA): {today_start} to {today_end}")
+    print(f"[DEBUG] Today (local): {datetime.now(tz)}")
+    
     loaded = 0
     seen_trade_ids = set()
     try:
         resp = retry_api_call(ctx.transaction.list, ACCOUNT_ID, count=500)
         transactions = resp.body.get('transactions', [])
+        print(f"[DEBUG] Total transactions returned: {len(transactions)}")
+        
+        # Afficher les 5 premières transactions pour diagnostic
+        for i, tx in enumerate(transactions[:5]):
+            tx_time_str = tx.time if isinstance(tx.time, str) else str(tx.time)
+            print(f"[DEBUG] Tx {i}: type={tx.type}, time={tx_time_str}, instrument={tx.instrument if hasattr(tx, 'instrument') else 'N/A'}")
+        
         for tx in transactions:
             tx_time_str = tx.time if isinstance(tx.time, str) else str(tx.time)
             try:
@@ -172,23 +183,28 @@ def load_closed_trades_from_oanda():
             except:
                 continue
             
-            if today_start <= tx_dt < today_end and tx.type == 'ORDER_FILL':
-                if hasattr(tx, 'tradeID') and tx.tradeID and tx.tradeID not in seen_trade_ids:
-                    units = float(tx.units)
-                    if units != 0:
-                        pnl = float(tx.pl) if hasattr(tx, 'pl') else 0.0
-                        closed_trades_today.append({
-                            "pair": tx.instrument,
-                            "type": "Buy" if units > 0 else "Sell",
-                            "pnl": pnl,
-                            "time": tx_dt.strftime("%H:%M:%S")
-                        })
-                        seen_trade_ids.add(tx.tradeID)
-                        loaded += 1
+            if today_start <= tx_dt < today_end:
+                print(f"[DEBUG] Match date: {tx.type} at {tx_dt}")
+                if tx.type == 'ORDER_FILL':
+                    if hasattr(tx, 'tradeID') and tx.tradeID and tx.tradeID not in seen_trade_ids:
+                        units = float(tx.units)
+                        if units != 0:
+                            pnl = float(tx.pl) if hasattr(tx, 'pl') else 0.0
+                            closed_trades_today.append({
+                                "pair": tx.instrument,
+                                "type": "Buy" if units > 0 else "Sell",
+                                "pnl": pnl,
+                                "time": tx_dt.strftime("%H:%M:%S")
+                            })
+                            seen_trade_ids.add(tx.tradeID)
+                            loaded += 1
+            else:
+                print(f"[DEBUG] No match date: {tx.type} at {tx_dt} (range: {today_start} to {today_end})")
+        
         print(f"Loaded {loaded} closed trades from OANDA transaction history.")
     except Exception as e:
         print(f"Error loading closed trades: {e}")
-
+        
 
 def count_all_trades_today():
     today_str = datetime.now(tz).strftime("%Y-%m-%d")
