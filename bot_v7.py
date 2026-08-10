@@ -153,6 +153,27 @@ def save_status_json(pair_indicators):
     push_status_json(status)
 
 
+def load_closed_trades_from_oanda():
+    """Charge l'historique des trades fermés aujourd'hui depuis OANDA."""
+    global closed_trades_today
+    today_str = datetime.now(tz).strftime("%Y-%m-%d")
+    try:
+        resp = retry_api_call(ctx.trade.list, ACCOUNT_ID, state='CLOSED', count=100)
+        for t in resp.body.get('trades', []):
+            open_time = t.openTime if isinstance(t.openTime, str) else str(t.openTime)
+            if open_time.startswith(today_str):
+                direction = 'buy' if int(t.currentUnits) > 0 else 'sell'
+                closed_trades_today.append({
+                    "pair": t.instrument,
+                    "type": "Buy" if direction == 'buy' else "Sell",
+                    "pnl": float(t.realizedPL),
+                    "time": t.closeTime if isinstance(t.closeTime, str) else str(t.closeTime)
+                })
+        print(f"Loaded {len(closed_trades_today)} closed trades from OANDA history.")
+    except Exception as e:
+        print(f"Error loading closed trades: {e}")
+
+
 def count_all_trades_today():
     today_str = datetime.now(tz).strftime("%Y-%m-%d")
     count = 0
@@ -763,7 +784,10 @@ def collect_indicators(pair):
 
 
 def main():
-    global trades_today, last_trade_date, last_close_time, active_trade
+    global trades_today, last_trade_date, last_close_time, active_trade, closed_trades_today
+
+    # Chargement de l'historique depuis OANDA au démarrage
+    load_closed_trades_from_oanda()
 
     trades_today = count_all_trades_today()
     if active_trade is None:
@@ -799,6 +823,7 @@ def main():
                 last_trade_date = today
                 last_close_time = None
                 closed_trades_today.clear()
+                load_closed_trades_from_oanda()
                 if active_trade is None:
                     load_existing_open_position()
 
