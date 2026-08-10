@@ -276,10 +276,10 @@ while True:
             else:
                 st.write("No closed trades.")
 
-    time.sleep(30)
+    # ---------- Footer ----------
+    st.markdown(
+        '<div class="footer">NorthSentinel Trading • Forex Sniper 3‑12 • August, 2026 ©</div>',
+        unsafe_allow_html=True
+    )
 
-# ---------- Footer ----------
-st.markdown(
-    '<div class="footer">NorthSentinel Trading • Forex Sniper 3‑12 • August, 2026 ©</div>',
-    unsafe_allow_html=True
-)
+    time.sleep(30)
