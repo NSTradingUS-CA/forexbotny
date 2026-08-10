@@ -71,7 +71,7 @@ if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 
 if not st.session_state.authenticated:
-    st.markdown("<h1 style='text-align: center; color: #00C853;'>🔐 Forex Sniper 8‑12 • Cockpit Access</h1>",
+    st.markdown("<h1 style='text-align: center; color: #00C853;'>🔐 Forex Sniper 3‑12 • Cockpit Access</h1>",
                 unsafe_allow_html=True)
     pwd = st.text_input("Password", type="password")
     if st.button("Sign in"):
