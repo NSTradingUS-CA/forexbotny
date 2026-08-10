@@ -22,11 +22,11 @@ FINNHUB_API_KEY = os.getenv("FINNHUB_API_KEY")
 GH_PAT = os.getenv("GH_PAT")
 PAIRS = ["EUR_USD", "GBP_USD"]
 RISK_PERCENT = 1.0
-TRADING_HOURS_START = 8
+TRADING_HOURS_START = 3
 TRADING_HOURS_END = 12
 TIMEZONE = 'America/Toronto'
-MAX_TRADES_PER_DAY = 2
-MIN_MINUTES_BETWEEN_TRADES = 20
+MAX_TRADES_PER_DAY = 4
+MIN_MINUTES_BETWEEN_TRADES = 40
 ATR_PERIOD = 14
 ADX_PERIOD = 10
 HIGH_IMPACT_EVENTS = ["NFP", "CPI", "FOMC", "Interest Rate", "GDP", "Retail Sales"]
@@ -901,8 +901,8 @@ def main():
                 update_news_filters()
                 main.next_news_check = now + timedelta(seconds=60)
 
-            # Fenêtre de trading : 9h00 à 12h00
-            in_trading_hours = (now.hour >= 9 and now.hour < 12)
+            # Fenêtre de trading : 3h00 à 12h00
+            in_trading_hours = (now.hour >= 3 and now.hour < 12)
 
             can_trade_time = True
             if last_close_time is not None:
