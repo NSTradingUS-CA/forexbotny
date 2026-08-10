@@ -136,7 +136,8 @@ def save_status_json(pair_indicators):
             "current_price": current_price,
             "unrealized_pnl": round(unrealized_pnl, 2),
             "distance_to_sl_pips": round(sl_distance / 0.0001, 1),
-            "distance_to_tp2_pips": round(tp_distance / 0.0001, 1) if tp_distance else 0
+            "distance_to_tp2_pips": round(tp_distance / 0.0001, 1) if tp_distance else 0,
+            "atr": active_trade.get('atr')
         }
 
     events = news_cache["events"]
@@ -469,27 +470,24 @@ def manage_active_trade():
         else:
             current_price = ask
     except:
-        return  # impossible de récupérer le prix, on réessaiera plus tard
+        return
 
     entry = active_trade['entry_price']
     units = abs(active_trade['units'])
     sl = active_trade['sl']
-    tp2 = active_trade.get('tp2')  # TP final (2e partie)
-    tp1 = active_trade.get('tp1')  # TP partiel (peut être None si déjà clôturé)
+    tp2 = active_trade.get('tp2')
+    tp1 = active_trade.get('tp1')
 
-    # Calcul du move en pips
     move_pips = (current_price - entry) / 0.0001
     if direction == 'sell':
         move_pips = -move_pips
 
     # --- Break‑even ---
     if not active_trade.get('be_triggered') and move_pips >= BE_PIPS:
-        # Ramener le SL au prix d'entrée (+ un petit offset)
-        offset = 0.5 * 0.0001  # 0.5 pip
+        offset = 0.5 * 0.0001
         new_sl = entry + offset if direction == 'buy' else entry - offset
         if (direction == 'buy' and new_sl > sl) or (direction == 'sell' and new_sl < sl):
             try:
-                # Modifier le SL de la position
                 body = {"stopLoss": {"price": f"{new_sl:.5f}"}}
                 retry_api_call(ctx.position.close, ACCOUNT_ID, instrument=pair, data=body)
                 active_trade['sl'] = new_sl
@@ -502,20 +500,19 @@ def manage_active_trade():
     # --- Take Profit partiel (TP1) ---
     if tp1 is not None and not active_trade.get('tp1_hit'):
         if (direction == 'buy' and current_price >= tp1) or (direction == 'sell' and current_price <= tp1):
-            # Clôturer 50 % de la position
             partial_units = int(units * TP_PARTIAL_RATIO)
             if close_partial_position(partial_units):
                 active_trade['units'] = units - partial_units
                 active_trade['tp1_hit'] = True
-                active_trade['tp1'] = None  # pour ne plus le considérer
+                active_trade['tp1'] = None
                 print(f"TP1 hit on {pair}, {partial_units} units closed")
                 send_telegram_message(f"🎯 TP1 atteint sur {pair} ! {partial_units} unités clôturées.")
 
     # --- Trailing stop dynamique (basé sur l'ATR) ---
     if active_trade.get('be_triggered') or active_trade.get('tp1_hit'):
-        # Récupérer l'ATR récent
         df = get_candles(pair, count=ATR_PERIOD+2)
         atr_val = df['atr'].iloc[-2]
+        active_trade['atr'] = atr_val     # stocké pour le cockpit
         trail_distance = atr_val * TRAILING_ATR_MULT
         if direction == 'buy':
             new_sl = current_price - trail_distance
@@ -552,13 +549,11 @@ def place_trade(instrument, entry, sl, tp, units, direction):
     if direction == 'sell':
         units = -units
 
-    # Diviser le TP en deux : TP1 (partiel) et TP2 (final)
     sl_distance = abs(entry - sl)
-    tp_distance = sl_distance * 2  # R/R = 1:2
+    tp_distance = sl_distance * 2
     tp1 = entry + (tp_distance * 0.5) if direction == 'buy' else entry - (tp_distance * 0.5)
-    tp2 = tp  # le TP original devient le TP final
+    tp2 = tp
 
-    # Trailing stop fixe initial (côté serveur OANDA, filet de sécurité)
     trailing_distance = str(round(FIXED_TRAILING_PIPS * 0.0001, 5))
 
     order_body = {
@@ -566,8 +561,8 @@ def place_trade(instrument, entry, sl, tp, units, direction):
         "instrument": instrument,
         "units": str(units),
         "stopLossOnFill": {"price": f"{sl:.5f}"},
-        "takeProfitOnFill": {"price": f"{tp2:.5f}"},   # TP final enregistré côté serveur
-        "trailingStopLossOnFill": {"distance": trailing_distance}  # TS fixe initial
+        "takeProfitOnFill": {"price": f"{tp2:.5f}"},
+        "trailingStopLossOnFill": {"distance": trailing_distance}
     }
 
     r = retry_api_call(ctx.order.create, ACCOUNT_ID, order=order_body)
@@ -595,7 +590,8 @@ def place_trade(instrument, entry, sl, tp, units, direction):
             'direction': direction,
             'be_triggered': False,
             'tp1_hit': False,
-            'trailing_distance': f"{FIXED_TRAILING_PIPS} pips (fixed)"
+            'trailing_distance': f"{FIXED_TRAILING_PIPS} pips (fixed)",
+            'atr': 0.0   # sera mis à jour plus tard
         }
     except Exception as e:
         print(f"Failed to extract trade details: {e}")
@@ -797,6 +793,7 @@ def collect_indicators(pair):
             "ema50": last_candle['ema50'],
             "ema200": last_candle['ema200'],
             "rsi": last_candle['rsi'],
+            "atr": last_candle['atr'],
             "ema_orientation": "bullish" if last_candle['ema50'] > last_candle['ema200'] else "bearish",
             "macd_signal": "bullish" if last_candle['macd_line'] > last_candle['macd_signal'] else "bearish",
             "last_signal": None
@@ -812,6 +809,7 @@ def collect_indicators(pair):
             "ema50": None,
             "ema200": None,
             "rsi": None,
+            "atr": None,
             "ema_orientation": "--",
             "macd_signal": "--",
             "last_signal": None
@@ -858,7 +856,6 @@ def main():
                 if active_trade is None:
                     load_existing_open_position()
 
-            # Gestion active du trade (break‑even, TP partiel, trailing dynamique)
             manage_active_trade()
             check_closed_trade()
 
@@ -868,7 +865,6 @@ def main():
                 update_news_filters()
                 main.next_news_check = now + timedelta(seconds=60)
 
-            # Fenêtre de trading effective : 8h30 – 11h00
             in_trading_hours = (
                 (now.hour == 8 and now.minute >= 30) or
                 (now.hour > 8 and now.hour < 11) or
@@ -890,7 +886,6 @@ def main():
                          and not calendar_blocked
                          and can_trade_time)
 
-            # Collecte des indicateurs pour le cockpit TOUJOURS
             pair_indicators = {}
             for pair in PAIRS:
                 indicators = collect_indicators(pair)
@@ -899,7 +894,7 @@ def main():
                     print(f"{now.strftime('%H:%M:%S')} {pair} spread: {indicators['spread']:.5f} | "
                           f"ADX:{indicators.get('adx','--')} +DI:{indicators.get('plus_di','--')} -DI:{indicators.get('minus_di','--')} "
                           f"EMA50:{indicators.get('ema50','--')} EMA200:{indicators.get('ema200','--')} "
-                          f"RSI:{indicators.get('rsi','--')}")
+                          f"RSI:{indicators.get('rsi','--')} ATR:{indicators.get('atr','--')}")
 
                 if can_trade and not has_open_position(pair) and is_spread_ok(pair, indicators.get('spread', 0)):
                     df = get_candles(pair)
