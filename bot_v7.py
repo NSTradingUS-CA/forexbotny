@@ -1,4 +1,3 @@
-```python
 import v20
 import pandas as pd
 import pytz
@@ -99,8 +98,8 @@ def save_status_json(pair_indicators):
         "session": {
             "trades_today": trades_today,
             "max_trades": MAX_TRADES_PER_DAY,
-            "start": "08:30",
-            "end": "11:00"
+            "start": f"{TRADING_HOURS_START:02d}:00",
+            "end": f"{TRADING_HOURS_END:02d}:00"
         },
         "pairs": pair_indicators,
         "active_trade": None,
@@ -513,7 +512,7 @@ def manage_active_trade():
     if active_trade.get('be_triggered') or active_trade.get('tp1_hit'):
         df = get_candles(pair, count=ATR_PERIOD+2)
         atr_val = df['atr'].iloc[-2]
-        active_trade['atr'] = atr_val     # stocké pour le cockpit
+        active_trade['atr'] = atr_val
         trail_distance = atr_val * TRAILING_ATR_MULT
         if direction == 'buy':
             new_sl = current_price - trail_distance
@@ -592,7 +591,7 @@ def place_trade(instrument, entry, sl, tp, units, direction):
             'be_triggered': False,
             'tp1_hit': False,
             'trailing_distance': f"{FIXED_TRAILING_PIPS} pips (fixed)",
-            'atr': 0.0   # sera mis à jour plus tard
+            'atr': 0.0
         }
     except Exception as e:
         print(f"Failed to extract trade details: {e}")
@@ -869,7 +868,7 @@ def main():
             in_trading_hours = (
                 (now.hour == 8 and now.minute >= 30) or
                 (now.hour > 8 and now.hour < 11) or
-                (now.hour == 11 and now.minute == 0)
+                (now.hour == 11 and now.minute <= 30)
             )
             calendar_blocked = is_news_time_blocked()
 
@@ -922,4 +921,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-```
