@@ -22,7 +22,7 @@ FINNHUB_API_KEY = os.getenv("FINNHUB_API_KEY")
 GH_PAT = os.getenv("GH_PAT")
 PAIRS = ["EUR_USD", "GBP_USD"]
 RISK_PERCENT = 1.0
-TRADING_HOURS_START = 8      # le bot démarre à 7h55, mais ne trad qu'à partir de 8h30
+TRADING_HOURS_START = 8
 TRADING_HOURS_END = 12
 TIMEZONE = 'America/Toronto'
 MAX_TRADES_PER_DAY = 2
@@ -38,11 +38,10 @@ MACD_SLOW = 13
 MACD_SIGNAL = 9
 USE_VOLUME_FILTER = False
 
-# ---- NOUVEAUX PARAMÈTRES ----
-BE_PIPS = 15                     # seuil de déclenchement du break‑even (pips)
-TP_PARTIAL_RATIO = 0.5           # 50 % de la position clôturés au premier TP
-TRAILING_ATR_MULT = 2.0          # multiplicateur ATR pour le trailing stop dynamique
-FIXED_TRAILING_PIPS = 20         # trailing stop fixe initial (côté serveur OANDA)
+BE_PIPS = 15
+TP_PARTIAL_RATIO = 0.5
+TRAILING_ATR_MULT = 2.0
+FIXED_TRAILING_PIPS = 20
 
 PAIR_CONFIG = {
     "EUR_USD": {"MAX_SPREAD_PIPS": 2.5, "ADX_THRESHOLD": 20, "ATR_MULTIPLIER": 2.0},
@@ -426,17 +425,11 @@ def get_account_balance(response):
         return float(response.body['account'].balance)
 
 
-# ---------------------------------------------------------------------
-# NOUVELLES FONCTIONS DE GESTION ACTIVE DU TRADE
-# ---------------------------------------------------------------------
 def close_partial_position(units_to_close):
-    """Clôture une partie de la position active (en unités)."""
     pair = active_trade['pair']
     direction = active_trade['direction']
     close_units = -units_to_close if direction == 'buy' else units_to_close
-    body = {
-        "units": str(close_units)
-    }
+    body = {"units": str(close_units)}
     try:
         r = retry_api_call(ctx.position.close, ACCOUNT_ID, instrument=pair, data=body)
         if r.status_code == 200:
@@ -448,41 +441,27 @@ def close_partial_position(units_to_close):
 
 
 def manage_active_trade():
-    """
-    Gère le break‑even, le TP partiel et le trailing stop dynamique
-    pour le trade en cours.
-    """
     global active_trade
     if active_trade is None:
         return
-
     pair = active_trade['pair']
     direction = active_trade['direction']
-
-    # Prix courant
     try:
         resp = ctx.pricing.get(ACCOUNT_ID, instruments=pair)
         price_info = resp.body['prices'][0]
         bid = float(price_info.bids[0].price)
         ask = float(price_info.asks[0].price)
-        if direction == 'buy':
-            current_price = bid
-        else:
-            current_price = ask
+        current_price = bid if direction == 'sell' else ask
     except:
         return
-
     entry = active_trade['entry_price']
     units = abs(active_trade['units'])
     sl = active_trade['sl']
     tp2 = active_trade.get('tp2')
     tp1 = active_trade.get('tp1')
-
     move_pips = (current_price - entry) / 0.0001
     if direction == 'sell':
         move_pips = -move_pips
-
-    # --- Break‑even ---
     if not active_trade.get('be_triggered') and move_pips >= BE_PIPS:
         offset = 0.5 * 0.0001
         new_sl = entry + offset if direction == 'buy' else entry - offset
@@ -496,8 +475,6 @@ def manage_active_trade():
                 send_telegram_message(f"🛡️ Break‑even triggered on {pair}, SL moved to {new_sl:.5f}")
             except Exception as e:
                 print(f"Break‑even update failed: {e}")
-
-    # --- Take Profit partiel (TP1) ---
     if tp1 is not None and not active_trade.get('tp1_hit'):
         if (direction == 'buy' and current_price >= tp1) or (direction == 'sell' and current_price <= tp1):
             partial_units = int(units * TP_PARTIAL_RATIO)
@@ -507,8 +484,6 @@ def manage_active_trade():
                 active_trade['tp1'] = None
                 print(f"TP1 hit on {pair}, {partial_units} units closed")
                 send_telegram_message(f"🎯 TP1 atteint sur {pair} ! {partial_units} unités clôturées.")
-
-    # --- Trailing stop dynamique (basé sur l'ATR) ---
     if active_trade.get('be_triggered') or active_trade.get('tp1_hit'):
         df = get_candles(pair, count=ATR_PERIOD+2)
         atr_val = df['atr'].iloc[-2]
@@ -538,9 +513,6 @@ def manage_active_trade():
                     print(f"Trailing SL update failed: {e}")
 
 
-# ---------------------------------------------------------------------
-# PLACE TRADE (modifié pour créer deux TP + trailing fixe initial)
-# ---------------------------------------------------------------------
 def place_trade(instrument, entry, sl, tp, units, direction):
     global active_trade, trades_today
     if active_trade is not None:
@@ -548,14 +520,11 @@ def place_trade(instrument, entry, sl, tp, units, direction):
         return False
     if direction == 'sell':
         units = -units
-
     sl_distance = abs(entry - sl)
     tp_distance = sl_distance * 2
     tp1 = entry + (tp_distance * 0.5) if direction == 'buy' else entry - (tp_distance * 0.5)
     tp2 = tp
-
     trailing_distance = str(round(FIXED_TRAILING_PIPS * 0.0001, 5))
-
     order_body = {
         "type": "MARKET",
         "instrument": instrument,
@@ -564,15 +533,12 @@ def place_trade(instrument, entry, sl, tp, units, direction):
         "takeProfitOnFill": {"price": f"{tp2:.5f}"},
         "trailingStopLossOnFill": {"distance": trailing_distance}
     }
-
     r = retry_api_call(ctx.order.create, ACCOUNT_ID, order=order_body)
-
     if hasattr(r.body, 'errorMessage') and r.body.errorMessage:
         error_msg = r.body.errorMessage
         print(f"OANDA error: {error_msg}")
         send_telegram_message(f"⚠️ Trade rejected: {error_msg}")
         return False
-
     try:
         fill_trans = r.body['orderFillTransaction']
         trade_opened = fill_trans.tradeOpened
@@ -595,11 +561,8 @@ def place_trade(instrument, entry, sl, tp, units, direction):
         }
     except Exception as e:
         print(f"Failed to extract trade details: {e}")
-        print(f"Response body: {r.body}")
         return False
-
     trades_today += 1
-
     if direction == 'buy':
         risk = entry - sl
         reward = tp2 - entry
@@ -607,7 +570,6 @@ def place_trade(instrument, entry, sl, tp, units, direction):
         risk = sl - entry
         reward = entry - tp2
     rr = round(reward / risk, 2) if risk > 0 else 0.0
-
     msg = (f"<b>✅ Trade opened ({trades_today}/{MAX_TRADES_PER_DAY})</b>\n"
            f"Pair: {instrument}\n"
            f"Type: {'Buy' if direction == 'buy' else 'Sell'}\n"
@@ -621,7 +583,6 @@ def place_trade(instrument, entry, sl, tp, units, direction):
            f"R/R: 1:{rr}\n"
            f"Time: {datetime.now(tz).strftime('%Y-%m-%d %H:%M:%S')}")
     send_telegram_message(msg)
-
     print(f"✅ Trade placed on {instrument} ({direction}) - {abs(units)} units")
     log_trade({
         "time": datetime.now(tz).isoformat(),
@@ -646,15 +607,13 @@ def check_closed_trade():
     if has_open_position(pair):
         return
     try:
-        resp = retry_api_call(ctx.trade.list, ACCOUNT_ID,
-                              instrument=pair, count=2, state='CLOSED')
+        resp = retry_api_call(ctx.trade.list, ACCOUNT_ID, instrument=pair, count=2, state='CLOSED')
         closed_trades = resp.body.get('trades', [])
         total_pnl = sum(float(t.realizedPL) for t in closed_trades)
         close_price = float(closed_trades[0].price) if closed_trades else 0
         entry_price = active_trade['entry_price']
         units = active_trade['units']
         direction = active_trade.get('direction', 'buy')
-
         msg = (f"<b>🔴 Trade closed ({trades_today}/{MAX_TRADES_PER_DAY})</b>\n"
                f"Pair: {pair}\n"
                f"Type: {'Buy' if direction == 'buy' else 'Sell'}\n"
@@ -664,14 +623,12 @@ def check_closed_trade():
                f"P&L: {total_pnl:.2f} USD\n"
                f"Time: {datetime.now(tz).strftime('%Y-%m-%d %H:%M:%S')}")
         send_telegram_message(msg)
-
         closed_trades_today.append({
             "pair": pair,
             "type": "Buy" if direction == 'buy' else "Sell",
             "pnl": total_pnl,
             "time": datetime.now(tz).strftime("%H:%M:%S")
         })
-
         log_trade({
             "time": datetime.now(tz).isoformat(),
             "pair": pair,
@@ -693,7 +650,6 @@ def check_closed_trade():
 def check_signal(df, instrument):
     if len(df) < 200:
         return False, 0, 0, 0, 0, None
-
     last_candle = df.iloc[-2]
     price = last_candle['c']
     ema50 = last_candle['ema50']
@@ -703,17 +659,12 @@ def check_signal(df, instrument):
     adx = last_candle['adx']
     plus_di = last_candle['plus_di']
     minus_di = last_candle['minus_di']
-
     if pd.isna(atr) or pd.isna(ema50) or pd.isna(adx):
         return False, 0, 0, 0, 0, None
-
     config = PAIR_CONFIG[instrument]
     adx_threshold = config["ADX_THRESHOLD"]
     atr_multiplier = config["ATR_MULTIPLIER"]
-
     sentiment = news_sentiment_filter.get(instrument, None)
-
-    # --- Signal ACHAT ---
     if sentiment is None or sentiment == 'bullish':
         if adx >= adx_threshold and plus_di > minus_di:
             macd_ok = True
@@ -741,8 +692,6 @@ def check_signal(df, instrument):
                         sl_pips = sl_distance / 0.0001
                         tp = price + 2 * sl_distance
                         return True, price, sl, tp, sl_pips, 'buy'
-
-    # --- Signal VENTE ---
     if sentiment is None or sentiment == 'bearish':
         if adx >= adx_threshold and minus_di > plus_di:
             macd_ok = True
@@ -770,17 +719,14 @@ def check_signal(df, instrument):
                         sl_pips = sl_distance / 0.0001
                         tp = price - 2 * sl_distance
                         return True, price, sl, tp, sl_pips, 'sell'
-
     return False, 0, 0, 0, 0, None
 
 
 def collect_indicators(pair):
-    """Récupère les indicateurs pour le cockpit, avec fallback minimal."""
     try:
         spread = get_spread(pair)
     except:
         return None
-
     try:
         df = get_candles(pair)
         last_candle = df.iloc[-2]
