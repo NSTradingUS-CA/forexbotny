@@ -65,6 +65,66 @@ SPREAD_WINDOW = 5
 closed_trades_today = []
 rejected_signals = []
 
+CLOSED_TRADES_FILE = "closed_trades.json"
+
+
+def push_file_to_github(local_path, remote_path):
+    if not GH_PAT:
+        return
+    try:
+        with open(local_path, 'r') as f:
+            content = base64.b64encode(f.read().encode()).decode()
+        url = f"https://api.github.com/repos/{os.getenv('GITHUB_REPOSITORY')}/contents/{remote_path}"
+        headers = {"Authorization": f"token {GH_PAT}", "Accept": "application/vnd.github.v3+json"}
+        resp = requests.get(url, headers=headers, timeout=10)
+        sha = resp.json().get("sha") if resp.status_code == 200 else None
+        payload = {"message": f"Update {remote_path}", "content": content, "branch": "main"}
+        if sha:
+            payload["sha"] = sha
+        put_resp = requests.put(url, headers=headers, json=payload, timeout=10)
+        if put_resp.status_code not in (200, 201):
+            print(f"Push {remote_path} failed: {put_resp.status_code}")
+    except Exception as e:
+        print(f"Error pushing {remote_path}: {e}")
+
+
+def load_closed_trades_from_file():
+    global closed_trades_today
+    if os.path.exists(CLOSED_TRADES_FILE):
+        try:
+            with open(CLOSED_TRADES_FILE, 'r') as f:
+                data = json.load(f)
+                last_cleanup = data.get("last_cleanup", "")
+                today_str = datetime.now(tz).strftime("%Y-%m-%d")
+                now = datetime.now(tz)
+                if now.weekday() == 6 and now.hour == 0 and now.minute < 5:
+                    if last_cleanup != today_str:
+                        closed_trades_today = []
+                        data = {"trades": [], "last_cleanup": today_str}
+                        save_closed_trades_to_file()
+                        print("Weekly cleanup: closed_trades.json reset.")
+                        return
+                closed_trades_today = data.get("trades", [])
+                print(f"Loaded {len(closed_trades_today)} closed trades from local file.")
+        except Exception as e:
+            print(f"Error loading closed trades file: {e}")
+            closed_trades_today = []
+    else:
+        closed_trades_today = []
+
+
+def save_closed_trades_to_file():
+    try:
+        data = {
+            "trades": closed_trades_today,
+            "last_cleanup": datetime.now(tz).strftime("%Y-%m-%d")
+        }
+        with open(CLOSED_TRADES_FILE, 'w') as f:
+            json.dump(data, f, indent=2)
+        push_file_to_github(CLOSED_TRADES_FILE, CLOSED_TRADES_FILE)
+    except Exception as e:
+        print(f"Error saving closed trades file: {e}")
+
 
 def push_status_json(data_dict):
     if not GH_PAT:
@@ -75,11 +135,7 @@ def push_status_json(data_dict):
         resp = requests.get(url, headers=headers, timeout=10)
         sha = resp.json().get("sha") if resp.status_code == 200 else None
         content = json.dumps(data_dict, indent=2, default=str).encode()
-        payload = {
-            "message": "Update status",
-            "content": base64.b64encode(content).decode(),
-            "branch": "main"
-        }
+        payload = {"message": "Update status", "content": base64.b64encode(content).decode(), "branch": "main"}
         if sha:
             payload["sha"] = sha
         put_resp = requests.put(url, headers=headers, json=payload, timeout=10)
@@ -153,60 +209,6 @@ def save_status_json(pair_indicators):
     push_status_json(status)
 
 
-def load_closed_trades_from_oanda():
-    """Charge l'historique des trades fermés aujourd'hui depuis OANDA en utilisant l'API trades."""
-    global closed_trades_today
-    oanda_tz = pytz.timezone('Etc/GMT+12')
-    today_start = datetime.now(oanda_tz).replace(hour=0, minute=0, second=0, microsecond=0)
-    today_end = today_start + timedelta(days=1)
-    loaded = 0
-
-    try:
-        # Essayer d'abord avec count=500
-        try:
-            resp = retry_api_call(ctx.trade.list, ACCOUNT_ID, count=500)
-        except:
-            # Fallback : sans paramètre
-            resp = retry_api_call(ctx.trade.list, ACCOUNT_ID)
-
-        trades = resp.body.get('trades', [])
-        print(f"[DEBUG] Total trades returned: {len(trades)}")
-
-        for t in trades:
-            open_time = t.openTime if isinstance(t.openTime, str) else str(t.openTime)
-            try:
-                tx_dt = datetime.fromisoformat(open_time.replace('Z', '+00:00'))
-                tx_dt = tx_dt.astimezone(oanda_tz)
-            except:
-                tx_dt = datetime.fromisoformat(open_time)
-
-            if today_start <= tx_dt < today_end:
-                state = t.state if hasattr(t, 'state') else 'UNKNOWN'
-                print(f"[DEBUG] Trade: {t.id} state={state} instrument={t.instrument} units={t.currentUnits} time={open_time}")
-
-                if state == 'CLOSED':
-                    direction = 'buy' if int(t.currentUnits) > 0 else 'sell'
-                    pnl = float(t.realizedPL) if hasattr(t, 'realizedPL') else 0.0
-                    close_time = t.closeTime if isinstance(t.closeTime, str) else str(t.closeTime) if hasattr(t, 'closeTime') else open_time
-                    try:
-                        close_dt = datetime.fromisoformat(close_time.replace('Z', '+00:00'))
-                        close_str = close_dt.astimezone(oanda_tz).strftime("%H:%M:%S")
-                    except:
-                        close_str = close_time.split('T')[1].split('.')[0] if 'T' in close_time else close_time
-
-                    closed_trades_today.append({
-                        "pair": t.instrument,
-                        "type": "Buy" if direction == 'buy' else "Sell",
-                        "pnl": pnl,
-                        "time": close_str
-                    })
-                    loaded += 1
-
-        print(f"Loaded {loaded} closed trades from OANDA trade history.")
-    except Exception as e:
-        print(f"Error loading closed trades: {e}")
-
-
 def count_all_trades_today():
     today_str = datetime.now(tz).strftime("%Y-%m-%d")
     count = 0
@@ -237,8 +239,7 @@ def load_existing_open_position():
             long_units = int(pos.long.units)
             short_units = int(pos.short.units)
             if long_units != 0 or short_units != 0:
-                resp_trades = retry_api_call(ctx.trade.list, ACCOUNT_ID,
-                                             instrument=instrument, state='OPEN', count=1)
+                resp_trades = retry_api_call(ctx.trade.list, ACCOUNT_ID, instrument=instrument, state='OPEN', count=1)
                 open_trades = resp_trades.body.get('trades', [])
                 if open_trades:
                     trade = open_trades[0]
@@ -389,9 +390,7 @@ def retry_api_call(func, *args, **kwargs):
 
 def compute_adx(df, period=14):
     high, low, close = df['h'], df['l'], df['c']
-    df['tr'] = pd.concat([high - low,
-                          (high - close.shift()).abs(),
-                          (low - close.shift()).abs()], axis=1).max(axis=1)
+    df['tr'] = pd.concat([high - low, (high - close.shift()).abs(), (low - close.shift()).abs()], axis=1).max(axis=1)
     df['atr_adx'] = df['tr'].ewm(alpha=1/period, adjust=False).mean()
     df['up_move'] = high - high.shift()
     df['down_move'] = low.shift() - low
@@ -683,6 +682,7 @@ def check_closed_trade():
             "pnl": total_pnl,
             "time": datetime.now(tz).strftime("%H:%M:%S")
         })
+        save_closed_trades_to_file()
         log_trade({
             "time": datetime.now(tz).isoformat(),
             "pair": pair,
@@ -819,8 +819,7 @@ def collect_indicators(pair):
 def main():
     global trades_today, last_trade_date, last_close_time, active_trade, closed_trades_today
 
-    # Chargement de l'historique depuis OANDA au démarrage
-    load_closed_trades_from_oanda()
+    load_closed_trades_from_file()
 
     trades_today = count_all_trades_today()
     if active_trade is None:
@@ -856,7 +855,7 @@ def main():
                 last_trade_date = today
                 last_close_time = None
                 closed_trades_today.clear()
-                load_closed_trades_from_oanda()
+                load_closed_trades_from_file()
                 if active_trade is None:
                     load_existing_open_position()
 
@@ -915,6 +914,13 @@ def main():
                             break
 
             save_status_json(pair_indicators)
+
+            if not hasattr(main, "next_trade_save"):
+                main.next_trade_save = now
+            if now >= main.next_trade_save:
+                save_closed_trades_to_file()
+                main.next_trade_save = now + timedelta(minutes=5)
+
             time.sleep(30)
 
     except KeyboardInterrupt:
