@@ -4,7 +4,7 @@ import time
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-st.set_page_config(page_title="Forex Sniper 3-12", layout="wide")
+st.set_page_config(page_title="Forex Sniper 8-12", layout="wide")
 
 # ---------- CSS global ----------
 st.markdown("""
@@ -71,7 +71,7 @@ if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 
 if not st.session_state.authenticated:
-    st.markdown("<h1 style='text-align: center; color: #00C853;'>🔐 Forex Sniper 3‑12 • Cockpit Access</h1>",
+    st.markdown("<h1 style='text-align: center; color: #00C853;'>🔐 Forex Sniper 8‑12 • Cockpit Access</h1>",
                 unsafe_allow_html=True)
     pwd = st.text_input("Password", type="password")
     if st.button("Sign in"):
@@ -99,7 +99,6 @@ def fetch_status():
     return None
 
 def check_bot_running():
-    """Vérifie si un workflow GitHub Actions est en cours ou en attente."""
     token = st.secrets.get("GH_PAT")
     repo = st.secrets["GITHUB_REPOSITORY"]
     headers = {"Accept": "application/vnd.github.v3+json"}
@@ -130,12 +129,12 @@ def fmt_num(value, decimals=5):
     except (ValueError, TypeError):
         return "--"
 
-# ---------- Logo + nom du bot (même ligne, logo arrondi) ----------
+# ---------- Logo + nom du bot ----------
 LOGO_URL = "https://raw.githubusercontent.com/NSTradingUS-CA/forexbotny/main/assets/logo.png"
 st.markdown(f"""
 <div style="display: flex; align-items: center; justify-content: center;">
     <img src="{LOGO_URL}" class="logo-rounded" style="width: 80px; height: auto; margin-right: 20px;">
-    <h2 style="color: #FF9100; margin: 0;">Forex Sniper 3‑12</h2>
+    <h2 style="color: #FF9100; margin: 0;">Forex Sniper 8‑12</h2>
 </div>
 """, unsafe_allow_html=True)
 
@@ -146,140 +145,141 @@ with col_signout:
         st.session_state.authenticated = False
         st.rerun()
 
-placeholder = st.empty()
-
-data = fetch_status()
-now_mtl = datetime.now(MONTREAL_TZ).strftime('%H:%M:%S')
-bot_is_running = check_bot_running()
-
-if not data:
-    with placeholder.container():
-        st.error("Status unavailable – retrying in 15s")
-    time.sleep(15)
-    st.rerun()
-
-with placeholder.container():
-    # ---------- Session ----------
-    st.markdown('<div class="session-metrics">', unsafe_allow_html=True)
-    sess = data.get("session", {})
-    col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
-    trades = sess.get('trades_today', 0)
-    max_tr = sess.get('max_trades', 2)
-
-    col1.markdown("#### Trades")
-    col1.metric("", f"{trades}/{max_tr}")
-
-    col2.markdown("#### Session")
-    col2.metric("", f"03:00–12:00")
-
-    col3.markdown("#### Status")
-    col3.metric("", "🟢" if bot_is_running else "🔴")
-
-    col4.markdown("#### Time")
-    col4.metric("", now_mtl)
-    st.markdown('</div>', unsafe_allow_html=True)
-
-    # ---------- News ----------
-    news = data.get("next_news_event")
-    if news:
-        st.markdown(
-            f"⏰ **{news['title']}** at {news['time']} – :orange[{news.get('impact','')}]"
-        )
-
-    # ---------- Paires ----------
-    st.markdown("---")
-    cols = st.columns(2)
-    for i, pair in enumerate(["EUR_USD", "GBP_USD"]):
-        with cols[i]:
-            p = data.get("pairs", {}).get(pair, {})
-            st.markdown(f"**{pair}**")
-
-            price = p.get('price')
-            st.metric("Price", f"{price:.5f}" if price is not None else "--")
-
-            spread_val = p.get('spread', '--')
-            spread_str = f"{safe_float(spread_val):.5f}" if spread_val != '--' else '--'
-            adx_str = fmt_num(p.get('adx'))
-            plus_di_str = fmt_num(p.get('plus_di'))
-            minus_di_str = fmt_num(p.get('minus_di'))
-            ema50 = p.get('ema50')
-            ema200 = p.get('ema200')
-            rsi_val = p.get('rsi')
-            atr_val = p.get('atr')
-
-            ema50_str = f"{ema50:.5f}" if ema50 is not None else "--"
-            ema200_str = f"{ema200:.5f}" if ema200 is not None else "--"
-            rsi_str = f"{rsi_val:.1f}" if rsi_val is not None else "--"
-            atr_str = f"{atr_val:.5f}" if atr_val is not None else "--"
-
-            line1 = (
-                f"<span class='orange-label'>Spread:</span> {spread_str} | "
-                f"<span class='orange-label'>ADX:</span> {adx_str} | "
-                f"<span class='orange-label'>+DI:</span> {plus_di_str} | "
-                f"<span class='orange-label'>-DI:</span> {minus_di_str}"
-            )
-            line2 = (
-                f"<span class='orange-label'>EMA50:</span> {ema50_str} | "
-                f"<span class='orange-label'>EMA200:</span> {ema200_str} | "
-                f"<span class='orange-label'>RSI:</span> {rsi_str} | "
-                f"<span class='orange-label'>ATR:</span> {atr_str}"
-            )
-
-            st.markdown(f"<div class='indicators-line'>{line1}</div>", unsafe_allow_html=True)
-            st.markdown(f"<div class='indicators-line'>{line2}</div>", unsafe_allow_html=True)
-
-            sig = p.get('last_signal')
-            if sig:
-                st.markdown(f"Signal: <span class='green'>{sig.upper()}</span>", unsafe_allow_html=True)
-
-    # ---------- Active Trade ----------
-    active = data.get("active_trade")
-    if active:
-        st.markdown("---")
-        st.markdown("#### 🔥 Active Trade")
-        st.markdown('<div class="active-trade-metrics">', unsafe_allow_html=True)
-        c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Pair", active.get("pair",""))
-        c2.metric("Type", active.get("type",""))
-        c3.metric("Entry", f"{active.get('entry',0):.5f}")
-        c4.metric("Current", f"{active.get('current_price',0):.5f}")
-        pnl = active.get('unrealized_pnl',0)
-        c1.metric("P&L", f"{pnl:.2f} USD", delta_color="normal" if pnl>=0 else "inverse")
-        tp1_val = active.get('tp1')
-        tp2_val = active.get('tp2')
-        if tp1_val is not None:
-            c2.metric("TP1 (partial)", f"{tp1_val:.5f}")
-        if tp2_val is not None:
-            c3.metric("TP2 (final)", f"{tp2_val:.5f}")
-        c4.metric("SL", f"{active.get('sl',0):.5f} ({active.get('distance_to_sl_pips',0)} pips)")
-        trail_info = active.get('trailing_stop', '')
-        atr_active = active.get('atr', None)
-        if atr_active is not None:
-            trail_info = f"{trail_info} (ATR: {atr_active:.5f})"
-        if trail_info:
-            st.caption(f"Trailing Stop: {trail_info}")
-        st.markdown('</div>', unsafe_allow_html=True)
-
-    # ---------- Historique ----------
-    st.markdown("---")
-    tab1 = st.tabs(["📜 Closed"])
-    with tab1[0]:
-        closed = data.get("closed_trades_today", [])
-        if closed:
-            for t in closed[::-1]:
-                pnl = t.get('pnl',0)
-                color = "green" if pnl >= 0 else "red"
-                st.markdown(
-                    f"<span class='{color}'>{t.get('pair','')} {t.get('type','')} – {pnl:.2f} USD ({t.get('time','')})</span>",
-                    unsafe_allow_html=True)
-        else:
-            st.write("No closed trades.")
-
 # ---------- Footer ----------
 st.markdown(
-    '<div class="footer">NorthSentinel Trading • Forex Sniper 3‑12 • August, 2026 ©</div>',
+    '<div class="footer">NorthSentinel Trading • Forex Sniper 8‑12 • August, 2026 ©</div>',
     unsafe_allow_html=True
 )
 
-time.sleep(30)
-st.rerun()
+# ---------- Boucle de rafraîchissement sans flash ----------
+placeholder = st.empty()
+
+while True:
+    data = fetch_status()
+    now_mtl = datetime.now(MONTREAL_TZ).strftime('%H:%M:%S')
+    bot_is_running = check_bot_running()
+
+    if not data:
+        with placeholder.container():
+            st.error("Status unavailable – retrying in 15s")
+        time.sleep(15)
+        continue
+
+    with placeholder.container():
+        # ---------- Session ----------
+        st.markdown('<div class="session-metrics">', unsafe_allow_html=True)
+        sess = data.get("session", {})
+        col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
+        trades = sess.get('trades_today', 0)
+        max_tr = sess.get('max_trades', 2)
+
+        col1.markdown("#### Trades")
+        col1.metric("", f"{trades}/{max_tr}")
+
+        col2.markdown("#### Session")
+        col2.metric("", f"03:00–12:00")
+
+        col3.markdown("#### Status")
+        col3.metric("", "🟢" if bot_is_running else "🔴")
+
+        col4.markdown("#### Time")
+        col4.metric("", now_mtl)
+        st.markdown('</div>', unsafe_allow_html=True)
+
+        # ---------- News ----------
+        news = data.get("next_news_event")
+        if news:
+            st.markdown(
+                f"⏰ **{news['title']}** at {news['time']} – :orange[{news.get('impact','')}]"
+            )
+
+        # ---------- Paires ----------
+        st.markdown("---")
+        cols = st.columns(2)
+        for i, pair in enumerate(["EUR_USD", "GBP_USD"]):
+            with cols[i]:
+                p = data.get("pairs", {}).get(pair, {})
+                st.markdown(f"**{pair}**")
+
+                price = p.get('price')
+                st.metric("Price", f"{price:.5f}" if price is not None else "--")
+
+                spread_val = p.get('spread', '--')
+                spread_str = f"{safe_float(spread_val):.5f}" if spread_val != '--' else '--'
+                adx_str = fmt_num(p.get('adx'))
+                plus_di_str = fmt_num(p.get('plus_di'))
+                minus_di_str = fmt_num(p.get('minus_di'))
+                ema50 = p.get('ema50')
+                ema200 = p.get('ema200')
+                rsi_val = p.get('rsi')
+                atr_val = p.get('atr')
+
+                ema50_str = f"{ema50:.5f}" if ema50 is not None else "--"
+                ema200_str = f"{ema200:.5f}" if ema200 is not None else "--"
+                rsi_str = f"{rsi_val:.1f}" if rsi_val is not None else "--"
+                atr_str = f"{atr_val:.5f}" if atr_val is not None else "--"
+
+                line1 = (
+                    f"<span class='orange-label'>Spread:</span> {spread_str} | "
+                    f"<span class='orange-label'>ADX:</span> {adx_str} | "
+                    f"<span class='orange-label'>+DI:</span> {plus_di_str} | "
+                    f"<span class='orange-label'>-DI:</span> {minus_di_str}"
+                )
+                line2 = (
+                    f"<span class='orange-label'>EMA50:</span> {ema50_str} | "
+                    f"<span class='orange-label'>EMA200:</span> {ema200_str} | "
+                    f"<span class='orange-label'>RSI:</span> {rsi_str} | "
+                    f"<span class='orange-label'>ATR:</span> {atr_str}"
+                )
+
+                st.markdown(f"<div class='indicators-line'>{line1}</div>", unsafe_allow_html=True)
+                st.markdown(f"<div class='indicators-line'>{line2}</div>", unsafe_allow_html=True)
+
+                sig = p.get('last_signal')
+                if sig:
+                    st.markdown(f"Signal: <span class='green'>{sig.upper()}</span>", unsafe_allow_html=True)
+
+        # ---------- Active Trade ----------
+        active = data.get("active_trade")
+        if active:
+            st.markdown("---")
+            st.markdown("#### 🔥 Active Trade")
+            st.markdown('<div class="active-trade-metrics">', unsafe_allow_html=True)
+            c1, c2, c3, c4 = st.columns(4)
+            c1.metric("Pair", active.get("pair",""))
+            c2.metric("Type", active.get("type",""))
+            c3.metric("Entry", f"{active.get('entry',0):.5f}")
+            c4.metric("Current", f"{active.get('current_price',0):.5f}")
+            pnl = active.get('unrealized_pnl',0)
+            c1.metric("P&L", f"{pnl:.2f} USD", delta_color="normal" if pnl>=0 else "inverse")
+            tp1_val = active.get('tp1')
+            tp2_val = active.get('tp2')
+            if tp1_val is not None:
+                c2.metric("TP1 (partial)", f"{tp1_val:.5f}")
+            if tp2_val is not None:
+                c3.metric("TP2 (final)", f"{tp2_val:.5f}")
+            c4.metric("SL", f"{active.get('sl',0):.5f} ({active.get('distance_to_sl_pips',0)} pips)")
+            trail_info = active.get('trailing_stop', '')
+            atr_active = active.get('atr', None)
+            if atr_active is not None:
+                trail_info = f"{trail_info} (ATR: {atr_active:.5f})"
+            if trail_info:
+                st.caption(f"Trailing Stop: {trail_info}")
+            st.markdown('</div>', unsafe_allow_html=True)
+
+        # ---------- Historique ----------
+        st.markdown("---")
+        tab1 = st.tabs(["📜 Closed"])
+        with tab1[0]:
+            closed = data.get("closed_trades_today", [])
+            if closed:
+                for t in closed[::-1]:
+                    pnl = t.get('pnl',0)
+                    color = "green" if pnl >= 0 else "red"
+                    st.markdown(
+                        f"<span class='{color}'>{t.get('pair','')} {t.get('type','')} – {pnl:.2f} USD ({t.get('time','')})</span>",
+                        unsafe_allow_html=True)
+            else:
+                st.write("No closed trades.")
+
+    time.sleep(30)
