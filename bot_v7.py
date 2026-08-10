@@ -154,57 +154,58 @@ def save_status_json(pair_indicators):
 
 
 def load_closed_trades_from_oanda():
-    """Charge l'historique des trades fermés aujourd'hui depuis OANDA en utilisant l'API transactions."""
+    """Charge l'historique des trades fermés aujourd'hui depuis OANDA en utilisant l'API trades."""
     global closed_trades_today
     oanda_tz = pytz.timezone('Etc/GMT+12')
     today_start = datetime.now(oanda_tz).replace(hour=0, minute=0, second=0, microsecond=0)
     today_end = today_start + timedelta(days=1)
-    print(f"[DEBUG] OANDA timezone: {oanda_tz}")
-    print(f"[DEBUG] Today (OANDA): {today_start} to {today_end}")
-    print(f"[DEBUG] Today (local): {datetime.now(tz)}")
-    
     loaded = 0
-    seen_trade_ids = set()
+
     try:
-        resp = retry_api_call(ctx.transaction.list, ACCOUNT_ID, count=500)
-        transactions = resp.body.get('transactions', [])
-        print(f"[DEBUG] Total transactions returned: {len(transactions)}")
-        
-        # Afficher les 5 premières transactions pour diagnostic
-        for i, tx in enumerate(transactions[:5]):
-            tx_time_str = tx.time if isinstance(tx.time, str) else str(tx.time)
-            print(f"[DEBUG] Tx {i}: type={tx.type}, time={tx_time_str}, instrument={tx.instrument if hasattr(tx, 'instrument') else 'N/A'}")
-        
-        for tx in transactions:
-            tx_time_str = tx.time if isinstance(tx.time, str) else str(tx.time)
+        # Essayer d'abord avec count=500
+        try:
+            resp = retry_api_call(ctx.trade.list, ACCOUNT_ID, count=500)
+        except:
+            # Fallback : sans paramètre
+            resp = retry_api_call(ctx.trade.list, ACCOUNT_ID)
+
+        trades = resp.body.get('trades', [])
+        print(f"[DEBUG] Total trades returned: {len(trades)}")
+
+        for t in trades:
+            open_time = t.openTime if isinstance(t.openTime, str) else str(t.openTime)
             try:
-                tx_dt = datetime.fromisoformat(tx_time_str.replace('Z', '+00:00'))
+                tx_dt = datetime.fromisoformat(open_time.replace('Z', '+00:00'))
                 tx_dt = tx_dt.astimezone(oanda_tz)
             except:
-                continue
-            
+                tx_dt = datetime.fromisoformat(open_time)
+
             if today_start <= tx_dt < today_end:
-                print(f"[DEBUG] Match date: {tx.type} at {tx_dt}")
-                if tx.type == 'ORDER_FILL':
-                    if hasattr(tx, 'tradeID') and tx.tradeID and tx.tradeID not in seen_trade_ids:
-                        units = float(tx.units)
-                        if units != 0:
-                            pnl = float(tx.pl) if hasattr(tx, 'pl') else 0.0
-                            closed_trades_today.append({
-                                "pair": tx.instrument,
-                                "type": "Buy" if units > 0 else "Sell",
-                                "pnl": pnl,
-                                "time": tx_dt.strftime("%H:%M:%S")
-                            })
-                            seen_trade_ids.add(tx.tradeID)
-                            loaded += 1
-            else:
-                print(f"[DEBUG] No match date: {tx.type} at {tx_dt} (range: {today_start} to {today_end})")
-        
-        print(f"Loaded {loaded} closed trades from OANDA transaction history.")
+                state = t.state if hasattr(t, 'state') else 'UNKNOWN'
+                print(f"[DEBUG] Trade: {t.id} state={state} instrument={t.instrument} units={t.currentUnits} time={open_time}")
+
+                if state == 'CLOSED':
+                    direction = 'buy' if int(t.currentUnits) > 0 else 'sell'
+                    pnl = float(t.realizedPL) if hasattr(t, 'realizedPL') else 0.0
+                    close_time = t.closeTime if isinstance(t.closeTime, str) else str(t.closeTime) if hasattr(t, 'closeTime') else open_time
+                    try:
+                        close_dt = datetime.fromisoformat(close_time.replace('Z', '+00:00'))
+                        close_str = close_dt.astimezone(oanda_tz).strftime("%H:%M:%S")
+                    except:
+                        close_str = close_time.split('T')[1].split('.')[0] if 'T' in close_time else close_time
+
+                    closed_trades_today.append({
+                        "pair": t.instrument,
+                        "type": "Buy" if direction == 'buy' else "Sell",
+                        "pnl": pnl,
+                        "time": close_str
+                    })
+                    loaded += 1
+
+        print(f"Loaded {loaded} closed trades from OANDA trade history.")
     except Exception as e:
         print(f"Error loading closed trades: {e}")
-        
+
 
 def count_all_trades_today():
     today_str = datetime.now(tz).strftime("%Y-%m-%d")
