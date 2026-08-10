@@ -60,9 +60,9 @@ st.markdown("""
         box-sizing: border-box;
         text-align: center;
         color: #666;
-        font-size: 0.85rem;
+        font-size: 0.8rem;
         padding: 0.75rem 0;
-        margin-top: 4.5rem;
+        margin-top: 1.5rem;
         background-color: #0D0D0D;
     }
 </style>
@@ -88,10 +88,9 @@ if not st.session_state.authenticated:
 MONTREAL_TZ = ZoneInfo("America/Toronto")
 
 @st.cache_data(ttl=30)
-def fetch_json(filename):
-    """Récupère un fichier JSON depuis le dépôt GitHub."""
+def fetch_status():
     repo = st.secrets["GITHUB_REPOSITORY"]
-    url = f"https://raw.githubusercontent.com/{repo}/main/{filename}"
+    url = f"https://raw.githubusercontent.com/{repo}/main/status.json"
     try:
         resp = requests.get(url, timeout=10)
         if resp.status_code == 200:
@@ -99,16 +98,6 @@ def fetch_json(filename):
     except Exception:
         pass
     return None
-
-def fetch_status():
-    return fetch_json("status.json")
-
-def fetch_closed_trades():
-    """Récupère les trades fermés depuis le fichier dédié."""
-    data = fetch_json("closed_trades.json")
-    if data:
-        return data.get("closed_trades_today", [])
-    return []
 
 def check_bot_running():
     token = st.secrets.get("GH_PAT")
@@ -162,18 +151,19 @@ with col_signout:
         st.session_state.authenticated = False
         st.rerun()
 
-# ---------- Actualisation du dashboard toutes les 30 secondes ----------
-while True:
-    data = fetch_status()
-    closed_trades = fetch_closed_trades()
-    now_mtl = datetime.now(MONTREAL_TZ).strftime('%H:%M:%S')
-    bot_is_running = check_bot_running()
+placeholder = st.empty()
 
-    if not data:
+data = fetch_status()
+now_mtl = datetime.now(MONTREAL_TZ).strftime('%H:%M:%S')
+bot_is_running = check_bot_running()
+
+if not data:
+    with placeholder.container():
         st.error("Status unavailable – retrying in 30s")
-        time.sleep(30)
-        st.rerun()
+    time.sleep(30)
+    st.rerun()
 
+with placeholder.container():
     # ---------- Session ----------
     st.markdown('<div class="session-metrics">', unsafe_allow_html=True)
     sess = data.get("session", {})
@@ -258,16 +248,16 @@ while True:
         pnl = active.get('unrealized_pnl',0)
         c1.metric("P&L", f"{pnl:.2f} USD", delta_color="normal" if pnl>=0 else "inverse")
         c2.metric("SL", f"{active.get('sl',0):.5f} ({active.get('distance_to_sl_pips',0)}p)")
-        c3.metric("TP1", f"{active.get('tp1',0):.5f}" if active.get('tp1') else "--")
-        c4.metric("TP2", f"{active.get('tp2',0):.5f} ({active.get('distance_to_tp2_pips',0)}p)" if active.get('tp2') else "--")
+        c3.metric("TP", f"{active.get('tp',0):.5f} ({active.get('distance_to_tp_pips',0)}p)")
+        c4.metric("Trail", f"{active.get('trailing_stop',0)}p")
         st.markdown('</div>', unsafe_allow_html=True)
 
     # ---------- Historique & Rejets ----------
     tab1, tab2 = st.tabs(["📜 Closed", "🚫 Rejected"])
     with tab1:
-        # Utiliser les trades du fichier dédié
-        if closed_trades:
-            for t in closed_trades[::-1]:
+        closed = data.get("closed_trades_today", [])
+        if closed:
+            for t in closed[::-1]:
                 pnl = t.get('pnl',0)
                 color = "green" if pnl >= 0 else "red"
                 st.markdown(
@@ -288,10 +278,13 @@ while True:
         else:
             st.write("No rejected setups.")
 
-    # ---------- Footer ----------
-    st.markdown(
-        '<div class="footer">NorthSentinel Trading • Forex Sniper 8‑12 • August, 2026 ©</div>',
-        unsafe_allow_html=True
-    )
+# ---------- Footer ----------
+st.markdown(
+    '<div class="footer">NorthSentinel Trading • Forex Sniper 8‑12 • August, 2026 ©</div>',
+    unsafe_allow_html=True
+)
 
-    time.sleep(30)
+# Actualisation du dashboard toutes les 30 secondes.
+# Le footer reste hors de la zone dynamique (placeholder) et ne se duplique pas.
+time.sleep(30)
+st.rerun()
