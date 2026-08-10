@@ -192,16 +192,18 @@ def save_status_json(pair_indicators):
             "atr": active_trade.get('atr')
         }
 
+    # ★ MODIFICATION : afficher l'événement seulement s'il est dans le futur OU passé depuis moins de 30 minutes
     events = news_cache["events"]
     if events:
-        future_events = [e for e in events if e["time"] > now]
-        if future_events:
-            next_ev = min(future_events, key=lambda e: e["time"])
-            status["next_news_event"] = {
-                "title": next_ev["title"],
-                "time": next_ev["time"].strftime("%H:%M"),
-                "impact": "High"
-            }
+        for e in events:
+            time_since_event = now - e["time"]
+            if time_since_event < timedelta(minutes=30):  # encore pertinent
+                status["next_news_event"] = {
+                    "title": e["title"],
+                    "time": e["time"].strftime("%H:%M"),
+                    "impact": "High"
+                }
+                break  # un seul événement affiché à la fois
 
     push_status_json(status)
 
@@ -690,8 +692,7 @@ def check_closed_trade():
 
 
 def check_signal(df, instrument):
-    """Retourne (signal, price, sl, tp, sl_pips, direction, reason).
-    reason est une chaîne expliquant pourquoi le signal a été rejeté."""
+    """Retourne (signal, price, sl, tp, sl_pips, direction, reason)."""
     if len(df) < 200:
         return False, 0, 0, 0, 0, None, "Not enough candles"
 
@@ -716,7 +717,7 @@ def check_signal(df, instrument):
     # --- Signal ACHAT ---
     if sentiment is None or sentiment == 'bullish':
         if adx < adx_threshold:
-            pass  # sera capturé plus bas
+            pass
         elif plus_di <= minus_di:
             pass
         else:
@@ -801,7 +802,6 @@ def check_signal(df, instrument):
             else:
                 return False, 0, 0, 0, 0, None, "MACD not bearish"
 
-    # Raison générique si aucun des blocs ci-dessus n'a retourné
     if sentiment is not None:
         return False, 0, 0, 0, 0, None, f"Sentiment filter blocks direction ({sentiment})"
     if adx < adx_threshold:
