@@ -277,7 +277,7 @@ with placeholder.container():
 
 # ---------- Footer ----------
 st.markdown(
-    '<div class="footer">NorthSentinel Trading • Forex Sniper 8‑12 • August, 2026 ©</div>',
+    '<div class="footer">NorthSentinel Trading • Forex Sniper 3‑12 • August, 2026 ©</div>',
     unsafe_allow_html=True
 )
 
