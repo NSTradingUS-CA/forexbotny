@@ -205,7 +205,6 @@ def save_status_json(pair_indicators):
                 "time": next_ev["time"].strftime("%H:%M"),
                 "impact": "High"
             }
-    # Si pas d'événement futur, status["next_news_event"] reste None (initialisé plus haut)
 
     push_status_json(status)
 
@@ -318,13 +317,19 @@ def update_news_filters():
     global last_news_block_time, news_sentiment_filter
     now = datetime.now(tz)
 
+    # Lever le blocage si la durée est écoulée
     if last_news_block_time:
-        if now - last_news_block_time > timedelta(minutes=NEWS_BLOCK_MINUTES):
+        elapsed = now - last_news_block_time
+        if elapsed > timedelta(minutes=NEWS_BLOCK_MINUTES):
+            print(f"[DEBUG] Lifting news block. Elapsed: {elapsed}")
             last_news_block_time = None
             news_sentiment_filter = {}
             send_telegram_message("🟢 News block lifted – trading resumed")
             print("News block lifted.")
+        else:
+            print(f"[DEBUG] News block active. Elapsed: {elapsed} / {NEWS_BLOCK_MINUTES} min")
 
+    # Détecter les nouveaux événements
     events = get_high_impact_news()
     for event in events:
         block_start = event["time"] - timedelta(minutes=NEWS_BLOCK_MINUTES)
@@ -374,7 +379,9 @@ def get_high_impact_news():
 def is_news_time_blocked():
     if last_news_block_time is None:
         return False
-    return (datetime.now(tz) - last_news_block_time) <= timedelta(minutes=NEWS_BLOCK_MINUTES)
+    blocked = (datetime.now(tz) - last_news_block_time) <= timedelta(minutes=NEWS_BLOCK_MINUTES)
+    print(f"[DEBUG] is_news_time_blocked() = {blocked}, last_news_block_time = {last_news_block_time}")
+    return blocked
 
 
 def log_trade(data):
