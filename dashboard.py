@@ -170,7 +170,7 @@ with placeholder.container():
     col1.metric("", f"{trades}/{max_tr}")
 
     col2.markdown("#### Session")
-    col2.metric("", f"{sess.get('start','08')}–{sess.get('end','12')}")
+    col2.metric("", f"08:00–12:00")
 
     col3.markdown("#### Status")
     col3.metric("", "🟢" if bot_is_running else "🔴")
