@@ -94,16 +94,6 @@ def load_closed_trades_from_file():
         try:
             with open(CLOSED_TRADES_FILE, 'r') as f:
                 data = json.load(f)
-                last_cleanup = data.get("last_cleanup", "")
-                today_str = datetime.now(tz).strftime("%Y-%m-%d")
-                now = datetime.now(tz)
-                if now.weekday() == 6 and now.hour == 0 and now.minute < 5:
-                    if last_cleanup != today_str:
-                        closed_trades_today = []
-                        data = {"trades": [], "last_cleanup": today_str}
-                        save_closed_trades_to_file()
-                        print("Weekly cleanup: closed_trades.json reset.")
-                        return
                 closed_trades_today = data.get("trades", [])
                 print(f"Loaded {len(closed_trades_today)} closed trades from local file.")
         except Exception as e:
@@ -317,31 +307,24 @@ def update_news_filters():
     global last_news_block_time, news_sentiment_filter
     now = datetime.now(tz)
 
-    # Lever le blocage si la durée est écoulée
     if last_news_block_time:
-        elapsed = now - last_news_block_time
-        if elapsed > timedelta(minutes=NEWS_BLOCK_MINUTES):
-            print(f"[DEBUG] Lifting news block. Elapsed: {elapsed}")
+        if now - last_news_block_time > timedelta(minutes=NEWS_BLOCK_MINUTES):
             last_news_block_time = None
             news_sentiment_filter = {}
-            send_telegram_message("🟢 News block lifted – trading resumed")
             print("News block lifted.")
-        else:
-            print(f"[DEBUG] News block active. Elapsed: {elapsed} / {NEWS_BLOCK_MINUTES} min")
-
-    # Détecter les nouveaux événements
-    events = get_high_impact_news()
-    for event in events:
-        block_start = event["time"] - timedelta(minutes=NEWS_BLOCK_MINUTES)
-        block_end = event["time"] + timedelta(minutes=NEWS_BLOCK_MINUTES)
-        if block_start <= now <= block_end and last_news_block_time is None:
-            last_news_block_time = now
-            msg = (f"📅 High-impact news detected: {event['title']} at "
-                   f"{event['time'].strftime('%H:%M')} – Trading blocked until "
-                   f"{block_end.strftime('%H:%M')}")
-            send_telegram_message(msg)
-            print(msg)
-            break
+    else:
+        events = get_high_impact_news()
+        for event in events:
+            block_start = event["time"] - timedelta(minutes=NEWS_BLOCK_MINUTES)
+            block_end = event["time"] + timedelta(minutes=NEWS_BLOCK_MINUTES)
+            if block_start <= now <= block_end:
+                last_news_block_time = now
+                msg = (f"📅 High-impact news detected: {event['title']} at "
+                       f"{event['time'].strftime('%H:%M')} – Trading blocked until "
+                       f"{block_end.strftime('%H:%M')}")
+                send_telegram_message(msg)
+                print(msg)
+                break
 
     for pair in PAIRS:
         sentiment = get_finnhub_sentiment(pair)
@@ -379,9 +362,7 @@ def get_high_impact_news():
 def is_news_time_blocked():
     if last_news_block_time is None:
         return False
-    blocked = (datetime.now(tz) - last_news_block_time) <= timedelta(minutes=NEWS_BLOCK_MINUTES)
-    print(f"[DEBUG] is_news_time_blocked() = {blocked}, last_news_block_time = {last_news_block_time}")
-    return blocked
+    return (datetime.now(tz) - last_news_block_time) <= timedelta(minutes=NEWS_BLOCK_MINUTES)
 
 
 def log_trade(data):
@@ -850,6 +831,7 @@ def main():
     try:
         while True:
             now = datetime.now(tz)
+            print(f"[LOOP] {now.strftime('%H:%M:%S')} - Loop running")
 
             if now.hour > TRADING_HOURS_END or (now.hour == TRADING_HOURS_END and now.minute >= 5):
                 stop_msg = (f"🔴 Forex Sniper 8‑12 stopped – End of session ({now.strftime('%H:%M')}), "
@@ -889,6 +871,8 @@ def main():
                 (now.hour == 11 and now.minute <= 30)
             )
             calendar_blocked = is_news_time_blocked()
+            
+            print(f"[LOOP] in_trading_hours={in_trading_hours}, calendar_blocked={calendar_blocked}")
 
             can_trade_time = True
             if last_close_time is not None:
@@ -904,15 +888,14 @@ def main():
                          and not calendar_blocked
                          and can_trade_time)
 
+            print(f"[LOOP] can_trade={can_trade}")
+
             pair_indicators = {}
             for pair in PAIRS:
                 indicators = collect_indicators(pair)
                 if indicators:
                     pair_indicators[pair] = indicators
-                    print(f"{now.strftime('%H:%M:%S')} {pair} spread: {indicators['spread']:.5f} | "
-                          f"ADX:{indicators.get('adx','--')} +DI:{indicators.get('plus_di','--')} -DI:{indicators.get('minus_di','--')} "
-                          f"EMA50:{indicators.get('ema50','--')} EMA200:{indicators.get('ema200','--')} "
-                          f"RSI:{indicators.get('rsi','--')} ATR:{indicators.get('atr','--')}")
+                    print(f"{now.strftime('%H:%M:%S')} {pair} spread: {indicators['spread']:.5f}")
 
                 if can_trade and not has_open_position(pair) and is_spread_ok(pair, indicators.get('spread', 0)):
                     df = get_candles(pair)
