@@ -50,11 +50,9 @@ st.markdown("""
         color: #FF9100;
         font-weight: normal;
     }
-    /* Coins arrondis pour le logo */
     .logo-rounded {
         border-radius: 20px;
     }
-    /* Footer normal */
     .footer {
         width: 100%;
         box-sizing: border-box;
@@ -87,7 +85,7 @@ if not st.session_state.authenticated:
 # ---------- Utilitaires ----------
 MONTREAL_TZ = ZoneInfo("America/Toronto")
 
-@st.cache_data(ttl=30)
+@st.cache_data(ttl=15)
 def fetch_status():
     repo = st.secrets["GITHUB_REPOSITORY"]
     url = f"https://raw.githubusercontent.com/{repo}/main/status.json"
@@ -100,27 +98,23 @@ def fetch_status():
     return None
 
 def check_bot_running():
+    """Vérifie si un workflow GitHub Actions est en cours ou en attente."""
     token = st.secrets.get("GH_PAT")
     repo = st.secrets["GITHUB_REPOSITORY"]
     headers = {"Accept": "application/vnd.github.v3+json"}
     if token:
         headers["Authorization"] = f"token {token}"
     url = f"https://api.github.com/repos/{repo}/actions/runs"
-    params = {"status": "in_progress"}
-    try:
-        resp = requests.get(url, headers=headers, params=params, timeout=10)
-        if resp.status_code == 200:
-            runs = resp.json()
-            if runs["workflow_runs"]:
-                return True
-        params["status"] = "queued"
-        resp = requests.get(url, headers=headers, params=params, timeout=10)
-        if resp.status_code == 200:
-            runs = resp.json()
-            if runs["workflow_runs"]:
-                return True
-    except Exception:
-        pass
+    for status in ("in_progress", "queued"):
+        params = {"status": status}
+        try:
+            resp = requests.get(url, headers=headers, params=params, timeout=10)
+            if resp.status_code == 200:
+                runs = resp.json()
+                if runs.get("workflow_runs"):
+                    return True
+        except Exception:
+            pass
     return False
 
 def safe_float(value, default=0.0):
@@ -159,8 +153,8 @@ bot_is_running = check_bot_running()
 
 if not data:
     with placeholder.container():
-        st.error("Status unavailable – retrying in 30s")
-    time.sleep(30)
+        st.error("Status unavailable – retrying in 15s")
+    time.sleep(15)
     st.rerun()
 
 with placeholder.container():
@@ -247,14 +241,23 @@ with placeholder.container():
         c4.metric("Current", f"{active.get('current_price',0):.5f}")
         pnl = active.get('unrealized_pnl',0)
         c1.metric("P&L", f"{pnl:.2f} USD", delta_color="normal" if pnl>=0 else "inverse")
-        c2.metric("SL", f"{active.get('sl',0):.5f} ({active.get('distance_to_sl_pips',0)}p)")
-        c3.metric("TP", f"{active.get('tp',0):.5f} ({active.get('distance_to_tp_pips',0)}p)")
-        c4.metric("Trail", f"{active.get('trailing_stop',0)}p")
+        # Affichage du TP1 (partiel), TP2 (final), SL et trailing stop
+        tp1_val = active.get('tp1')
+        tp2_val = active.get('tp2')
+        if tp1_val is not None:
+            c2.metric("TP1 (partial)", f"{tp1_val:.5f}")
+        if tp2_val is not None:
+            c3.metric("TP2 (final)", f"{tp2_val:.5f}")
+        c4.metric("SL", f"{active.get('sl',0):.5f} ({active.get('distance_to_sl_pips',0)} pips)")
+        trail_info = active.get('trailing_stop', '')
+        if trail_info:
+            st.caption(f"Trailing Stop: {trail_info}")
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # ---------- Historique & Rejets ----------
-    tab1, tab2 = st.tabs(["📜 Closed", "🚫 Rejected"])
-    with tab1:
+    # ---------- Historique ----------
+    st.markdown("---")
+    tab1 = st.tabs(["📜 Closed"])
+    with tab1[0]:
         closed = data.get("closed_trades_today", [])
         if closed:
             for t in closed[::-1]:
@@ -265,18 +268,6 @@ with placeholder.container():
                     unsafe_allow_html=True)
         else:
             st.write("No closed trades.")
-    with tab2:
-        rejected = data.get("rejected_signals", [])
-        if rejected:
-            for r in rejected[::-1]:
-                st.markdown(
-                    f"<span class='orange'>{r.get('time','')} {r.get('pair','')} – {r.get('reason','')}</span>",
-                    unsafe_allow_html=True)
-                if "indicators" in r:
-                    with st.expander("Details"):
-                        st.json(r["indicators"])
-        else:
-            st.write("No rejected setups.")
 
 # ---------- Footer ----------
 st.markdown(
@@ -284,7 +275,5 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# Actualisation du dashboard toutes les 30 secondes.
-# Le footer reste hors de la zone dynamique (placeholder) et ne se duplique pas.
 time.sleep(30)
 st.rerun()
