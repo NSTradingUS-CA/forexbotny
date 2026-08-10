@@ -54,14 +54,18 @@ st.markdown("""
         border-radius: 20px;
     }
     .footer {
+        position: fixed;
+        left: 0;
+        bottom: 0;
         width: 100%;
         box-sizing: border-box;
         text-align: center;
         color: #666;
         font-size: 0.8rem;
         padding: 0.75rem 0;
-        margin-top: 1.5rem;
+        margin-top: 0;
         background-color: #0D0D0D;
+        z-index: 9999;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -280,6 +284,3 @@ st.markdown(
     '<div class="footer">NorthSentinel Trading • Forex Sniper 3‑12 • August, 2026 ©</div>',
     unsafe_allow_html=True
 )
-
-time.sleep(30)
-st.rerun()
