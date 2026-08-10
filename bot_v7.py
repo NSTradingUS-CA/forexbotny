@@ -195,7 +195,6 @@ def save_status_json(pair_indicators):
             "atr": active_trade.get('atr')
         }
 
-    # ★ CORRECTION : ne garder que les événements strictement futurs, sinon None
     events = news_cache["events"]
     if events:
         future_events = [e for e in events if e["time"] > now]
@@ -318,7 +317,6 @@ def update_news_filters():
     global last_news_block_time, news_sentiment_filter
     now = datetime.now(tz)
 
-    # Lever le blocage calendaire après NEWS_BLOCK_MINUTES
     if last_news_block_time:
         if now - last_news_block_time > timedelta(minutes=NEWS_BLOCK_MINUTES):
             last_news_block_time = None
@@ -326,7 +324,6 @@ def update_news_filters():
             send_telegram_message("🟢 News block lifted – trading resumed")
             print("News block lifted.")
 
-    # Détecter les nouveaux événements à fort impact
     events = get_high_impact_news()
     for event in events:
         block_start = event["time"] - timedelta(minutes=NEWS_BLOCK_MINUTES)
@@ -340,7 +337,6 @@ def update_news_filters():
             print(msg)
             break
 
-    # Filtre directionnel Finnhub (indépendant du blocage calendaire)
     for pair in PAIRS:
         sentiment = get_finnhub_sentiment(pair)
         if sentiment != 'neutral':
@@ -732,7 +728,8 @@ def check_signal(df, instrument):
     sentiment = news_sentiment_filter.get(instrument, None)
     if sentiment is None or sentiment == 'bullish':
         if adx >= adx_threshold and plus_di > minus_di:
-            macd_ok = True            if USE_MACD_FILTER:
+            macd_ok = True
+            if USE_MACD_FILTER:
                 macd_line = last_candle['macd_line']
                 macd_signal = last_candle['macd_signal']
                 if pd.isna(macd_line) or macd_line <= macd_signal or macd_line <= 0:
