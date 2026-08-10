@@ -88,7 +88,8 @@ MONTREAL_TZ = ZoneInfo("America/Toronto")
 @st.cache_data(ttl=15)
 def fetch_status():
     repo = st.secrets["GITHUB_REPOSITORY"]
-    url = f"https://raw.githubusercontent.com/{repo}/main/status.json"
+    cache_buster = int(time.time())
+    url = f"https://raw.githubusercontent.com/{repo}/main/status.json?t={cache_buster}"
     try:
         resp = requests.get(url, timeout=10)
         if resp.status_code == 200:
@@ -204,7 +205,7 @@ with placeholder.container():
             ema50 = p.get('ema50')
             ema200 = p.get('ema200')
             rsi_val = p.get('rsi')
-            atr_val = p.get('atr')       # ★ Récupération de l'ATR
+            atr_val = p.get('atr')
 
             ema50_str = f"{ema50:.5f}" if ema50 is not None else "--"
             ema200_str = f"{ema200:.5f}" if ema200 is not None else "--"
@@ -251,7 +252,6 @@ with placeholder.container():
         if tp2_val is not None:
             c3.metric("TP2 (final)", f"{tp2_val:.5f}")
         c4.metric("SL", f"{active.get('sl',0):.5f} ({active.get('distance_to_sl_pips',0)} pips)")
-        # ★ Affichage du trailing stop avec l'ATR actuel
         trail_info = active.get('trailing_stop', '')
         atr_active = active.get('atr', None)
         if atr_active is not None:
