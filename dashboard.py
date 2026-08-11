@@ -215,13 +215,6 @@ def render_dashboard():
     col4.metric("", now_str)
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # ---------- News ----------
-    news = data.get("next_news_event")
-    if news:
-        st.markdown(
-            f"⏰ **{news['title']}** at {news['time']} – :orange[{news.get('impact','')}]"
-        )
-
     # ---------- Paires ----------
     st.markdown("---")
     cols = st.columns(2)
