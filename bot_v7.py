@@ -755,8 +755,17 @@ def check_closed_trade():
 
 
 def check_signal(df, instrument):
+    """
+    Evaluate BUY and SELL independently.
+
+    With neutral/no sentiment, both directions are evaluated on every scan.
+    With a directional sentiment filter, only the matching direction is allowed.
+    A failed BUY evaluation no longer returns immediately and therefore cannot
+    prevent the SELL evaluation from being performed.
+    """
     if len(df) < 200:
         return False, 0, 0, 0, 0, None, "Not enough candles"
+
     last_candle = df.iloc[-2]
     price = last_candle['c']
     ema50 = last_candle['ema50']
@@ -766,102 +775,147 @@ def check_signal(df, instrument):
     adx = last_candle['adx']
     plus_di = last_candle['plus_di']
     minus_di = last_candle['minus_di']
+
     if pd.isna(atr) or pd.isna(ema50) or pd.isna(adx):
         return False, 0, 0, 0, 0, None, "Missing indicator values"
+
     config = PAIR_CONFIG[instrument]
     adx_threshold = config["ADX_THRESHOLD"]
     atr_multiplier = config["ATR_MULTIPLIER"]
     sentiment = news_sentiment_filter.get(instrument, None)
-    if sentiment is None or sentiment == 'bullish':
-        if adx < adx_threshold:
-            pass
-        elif plus_di <= minus_di:
-            pass
-        else:
-            macd_ok = True
-            if USE_MACD_FILTER:
-                macd_line = last_candle['macd_line']
-                macd_signal = last_candle['macd_signal']
-                if pd.isna(macd_line) or macd_line <= macd_signal or macd_line <= 0:
-                    macd_ok = False
-            if macd_ok:
-                vol_ok = True
-                if USE_VOLUME_FILTER:
-                    volume = last_candle['volume']
-                    vol_ma = last_candle['volume_ma']
-                    if pd.isna(vol_ma) or volume < vol_ma:
-                        vol_ok = False
-                if vol_ok:
-                    trend_up = ema50 > ema200
-                    touched_ema = (last_candle['l'] <= ema50 <= last_candle['h'])
-                    bullish_rejection = (last_candle['c'] > last_candle['o']) and \
-                                        ((last_candle['o'] - last_candle['l']) > (last_candle['h'] - last_candle['c']))
-                    rsi_ok = 30 < rsi < 70
-                    if trend_up and touched_ema and bullish_rejection and rsi_ok:
-                        sl = ema200 - (atr_multiplier * atr)
-                        sl_distance = price - sl
-                        sl_pips = sl_distance / 0.0001
-                        tp = price + 2 * sl_distance
-                        return True, price, sl, tp, sl_pips, 'buy', ""
-                    else:
-                        reasons = []
-                        if not trend_up: reasons.append("EMA50 not above EMA200")
-                        if not touched_ema: reasons.append("No EMA50 touch")
-                        if not bullish_rejection: reasons.append("No bullish rejection")
-                        if not rsi_ok: reasons.append(f"RSI out of range ({rsi:.1f})")
-                        return False, 0, 0, 0, 0, None, ", ".join(reasons)
-                else:
-                    return False, 0, 0, 0, 0, None, "Volume too low"
-            else:
-                return False, 0, 0, 0, 0, None, "MACD not bullish"
-    if sentiment is None or sentiment == 'bearish':
-        if adx < adx_threshold:
-            pass
-        elif minus_di <= plus_di:
-            pass
-        else:
-            macd_ok = True
-            if USE_MACD_FILTER:
-                macd_line = last_candle['macd_line']
-                macd_signal = last_candle['macd_signal']
-                if pd.isna(macd_line) or macd_line >= macd_signal or macd_line >= 0:
-                    macd_ok = False
-            if macd_ok:
-                vol_ok = True
-                if USE_VOLUME_FILTER:
-                    volume = last_candle['volume']
-                    vol_ma = last_candle['volume_ma']
-                    if pd.isna(vol_ma) or volume < vol_ma:
-                        vol_ok = False
-                if vol_ok:
-                    trend_down = ema50 < ema200
-                    touched_ema = (last_candle['h'] >= ema50 >= last_candle['l'])
-                    bearish_rejection = (last_candle['c'] < last_candle['o']) and \
-                                        ((last_candle['h'] - last_candle['o']) < (last_candle['c'] - last_candle['l']))
-                    rsi_ok = 30 < rsi < 70
-                    if trend_down and touched_ema and bearish_rejection and rsi_ok:
-                        sl = ema200 + (atr_multiplier * atr)
-                        sl_distance = sl - price
-                        sl_pips = sl_distance / 0.0001
-                        tp = price - 2 * sl_distance
-                        return True, price, sl, tp, sl_pips, 'sell', ""
-                    else:
-                        reasons = []
-                        if not trend_down: reasons.append("EMA50 not below EMA200")
-                        if not touched_ema: reasons.append("No EMA50 touch")
-                        if not bearish_rejection: reasons.append("No bearish rejection")
-                        if not rsi_ok: reasons.append(f"RSI out of range ({rsi:.1f})")
-                        return False, 0, 0, 0, 0, None, ", ".join(reasons)
-                else:
-                    return False, 0, 0, 0, 0, None, "Volume too low"
-            else:
-                return False, 0, 0, 0, 0, None, "MACD not bearish"
-    if sentiment is not None:
-        return False, 0, 0, 0, 0, None, f"Sentiment filter blocks direction ({sentiment})"
-    if adx < adx_threshold:
-        return False, 0, 0, 0, 0, None, f"ADX too low ({adx:.1f} < {adx_threshold})"
-    return False, 0, 0, 0, 0, None, "DI direction mismatch"
 
+    # ------------------------------------------------------------------
+    # BUY evaluation
+    # ------------------------------------------------------------------
+    buy_allowed = sentiment is None or sentiment == 'bullish'
+    buy_reasons = []
+
+    if not buy_allowed:
+        buy_reasons.append(f"blocked by sentiment ({sentiment})")
+    else:
+        if adx < adx_threshold:
+            buy_reasons.append(f"ADX too low ({adx:.1f} < {adx_threshold})")
+        if plus_di <= minus_di:
+            buy_reasons.append("+DI not above -DI")
+
+        macd_ok = True
+        if USE_MACD_FILTER:
+            macd_line = last_candle['macd_line']
+            macd_signal = last_candle['macd_signal']
+            if pd.isna(macd_line) or pd.isna(macd_signal) or macd_line <= macd_signal or macd_line <= 0:
+                macd_ok = False
+                buy_reasons.append("MACD not bullish")
+
+        vol_ok = True
+        if USE_VOLUME_FILTER:
+            volume = last_candle['volume']
+            vol_ma = last_candle['volume_ma']
+            if pd.isna(vol_ma) or volume < vol_ma:
+                vol_ok = False
+                buy_reasons.append("Volume too low")
+
+        trend_up = ema50 > ema200
+        touched_ema = (last_candle['l'] <= ema50 <= last_candle['h'])
+        bullish_rejection = (
+            (last_candle['c'] > last_candle['o']) and
+            ((last_candle['o'] - last_candle['l']) > (last_candle['h'] - last_candle['c']))
+        )
+        rsi_ok = 30 < rsi < 70
+
+        if not trend_up:
+            buy_reasons.append("EMA50 not above EMA200")
+        if not touched_ema:
+            buy_reasons.append("No EMA50 touch")
+        if not bullish_rejection:
+            buy_reasons.append("No bullish rejection")
+        if not rsi_ok:
+            buy_reasons.append(f"RSI out of range ({rsi:.1f})")
+
+        if (adx >= adx_threshold and
+                plus_di > minus_di and
+                macd_ok and
+                vol_ok and
+                trend_up and
+                touched_ema and
+                bullish_rejection and
+                rsi_ok):
+            sl = ema200 - (atr_multiplier * atr)
+            sl_distance = price - sl
+            if sl_distance > 0:
+                sl_pips = sl_distance / 0.0001
+                tp = price + 2 * sl_distance
+                return True, price, sl, tp, sl_pips, 'buy', ""
+            buy_reasons.append("Invalid BUY SL distance")
+
+    # ------------------------------------------------------------------
+    # SELL evaluation
+    # ------------------------------------------------------------------
+    sell_allowed = sentiment is None or sentiment == 'bearish'
+    sell_reasons = []
+
+    if not sell_allowed:
+        sell_reasons.append(f"blocked by sentiment ({sentiment})")
+    else:
+        if adx < adx_threshold:
+            sell_reasons.append(f"ADX too low ({adx:.1f} < {adx_threshold})")
+        if minus_di <= plus_di:
+            sell_reasons.append("-DI not above +DI")
+
+        macd_ok = True
+        if USE_MACD_FILTER:
+            macd_line = last_candle['macd_line']
+            macd_signal = last_candle['macd_signal']
+            if pd.isna(macd_line) or pd.isna(macd_signal) or macd_line >= macd_signal or macd_line >= 0:
+                macd_ok = False
+                sell_reasons.append("MACD not bearish")
+
+        vol_ok = True
+        if USE_VOLUME_FILTER:
+            volume = last_candle['volume']
+            vol_ma = last_candle['volume_ma']
+            if pd.isna(vol_ma) or volume < vol_ma:
+                vol_ok = False
+                sell_reasons.append("Volume too low")
+
+        trend_down = ema50 < ema200
+        touched_ema = (last_candle['h'] >= ema50 >= last_candle['l'])
+        bearish_rejection = (
+            (last_candle['c'] < last_candle['o']) and
+            ((last_candle['h'] - last_candle['o']) < (last_candle['c'] - last_candle['l']))
+        )
+        rsi_ok = 30 < rsi < 70
+
+        if not trend_down:
+            sell_reasons.append("EMA50 not below EMA200")
+        if not touched_ema:
+            sell_reasons.append("No EMA50 touch")
+        if not bearish_rejection:
+            sell_reasons.append("No bearish rejection")
+        if not rsi_ok:
+            sell_reasons.append(f"RSI out of range ({rsi:.1f})")
+
+        if (adx >= adx_threshold and
+                minus_di > plus_di and
+                macd_ok and
+                vol_ok and
+                trend_down and
+                touched_ema and
+                bearish_rejection and
+                rsi_ok):
+            sl = ema200 + (atr_multiplier * atr)
+            sl_distance = sl - price
+            if sl_distance > 0:
+                sl_pips = sl_distance / 0.0001
+                tp = price - 2 * sl_distance
+                return True, price, sl, tp, sl_pips, 'sell', ""
+            sell_reasons.append("Invalid SELL SL distance")
+
+    # No setup was validated. Return BOTH evaluation results so the logs
+    # explicitly show that BUY and SELL were independently checked.
+    buy_reason = ", ".join(buy_reasons) if buy_reasons else "conditions passed"
+    sell_reason = ", ".join(sell_reasons) if sell_reasons else "conditions passed"
+    combined_reason = f"BUY REJECTED: {buy_reason} | SELL REJECTED: {sell_reason}"
+    return False, 0, 0, 0, 0, None, combined_reason
 
 def collect_indicators(pair):
     try:
