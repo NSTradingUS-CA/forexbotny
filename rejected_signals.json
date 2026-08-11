@@ -1,18 +1,6 @@
 {
   "signals": [
     {
-      "time": "09:59:24",
-      "pair": "GBP_USD",
-      "direction": null,
-      "reason": "EMA50 not below EMA200, No bearish rejection"
-    },
-    {
-      "time": "09:59:59",
-      "pair": "EUR_USD",
-      "direction": null,
-      "reason": "MACD not bearish"
-    },
-    {
       "time": "09:59:59",
       "pair": "GBP_USD",
       "direction": null,
@@ -296,6 +284,18 @@
     },
     {
       "time": "10:14:20",
+      "pair": "EUR_USD",
+      "direction": null,
+      "reason": "MACD not bearish"
+    },
+    {
+      "time": "10:14:20",
+      "pair": "GBP_USD",
+      "direction": null,
+      "reason": "EMA50 not below EMA200, No bearish rejection"
+    },
+    {
+      "time": "10:14:55",
       "pair": "EUR_USD",
       "direction": null,
       "reason": "MACD not bearish"
