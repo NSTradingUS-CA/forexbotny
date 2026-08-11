@@ -1,44 +1,48 @@
 {
-  "time": "2026-08-10 12:42:11",
+  "time": "2026-08-11 06:55:36",
   "bot_status": "running",
   "session": {
     "trades_today": 0,
-    "max_trades": 2,
-    "start": "08:00",
-    "end": "12:00"
+    "max_trades": 3,
+    "start": "07:00",
+    "end": "11:00"
   },
   "pairs": {
     "EUR_USD": {
-      "price": 1.1552,
-      "spread": 0.00014999999999987246,
-      "adx": 25.513563118798743,
-      "plus_di": 17.244800921154084,
-      "minus_di": 19.84302011530859,
-      "ema50": 1.154697795690484,
-      "ema200": 1.1513829291256046,
-      "rsi": 51.00122154856413,
-      "atr": 0.000724285714285717,
+      "price": 1.15362,
+      "spread": 0.00016000000000016001,
+      "adx": 27.563478662119408,
+      "plus_di": 7.312913109064318,
+      "minus_di": 21.62457404951986,
+      "ema50": 1.1544331408337227,
+      "ema200": 1.151613378213146,
+      "rsi": 39.5207652640004,
+      "atr": 0.0005264285714285626,
       "ema_orientation": "bullish",
       "macd_signal": "bearish",
       "last_signal": null
     },
     "GBP_USD": {
-      "price": 1.35208,
-      "spread": 0.00021000000000004349,
-      "adx": 32.037165976682026,
-      "plus_di": 36.528656518321114,
-      "minus_di": 10.30023625837869,
-      "ema50": 1.3482181779387037,
-      "ema200": 1.3443443381019098,
-      "rsi": 70.93821357346295,
-      "atr": 0.0009828571428571425,
+      "price": 1.35042,
+      "spread": 0.00018999999999991246,
+      "adx": 21.082384439081665,
+      "plus_di": 11.446506491183785,
+      "minus_di": 20.799175069632646,
+      "ema50": 1.3495740992770482,
+      "ema200": 1.3450907844866635,
+      "rsi": 50.412133347395866,
+      "atr": 0.0007828571428571804,
       "ema_orientation": "bullish",
-      "macd_signal": "bullish",
+      "macd_signal": "bearish",
       "last_signal": null
     }
   },
   "active_trade": null,
   "closed_trades_today": [],
   "rejected_signals": [],
-  "next_news_event": null
+  "next_news_event": {
+    "title": "Core CPI m/m",
+    "time": "08:30",
+    "impact": "High"
+  }
 }
