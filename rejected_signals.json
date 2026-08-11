@@ -2,12 +2,6 @@
   "signals": [
     {
       "time": "09:51:15",
-      "pair": "EUR_USD",
-      "direction": null,
-      "reason": "MACD not bearish"
-    },
-    {
-      "time": "09:51:15",
       "pair": "GBP_USD",
       "direction": null,
       "reason": "EMA50 not below EMA200, No bearish rejection"
@@ -299,6 +293,12 @@
       "pair": "GBP_USD",
       "direction": null,
       "reason": "EMA50 not below EMA200, No bearish rejection"
+    },
+    {
+      "time": "10:05:58",
+      "pair": "EUR_USD",
+      "direction": null,
+      "reason": "MACD not bearish"
     }
   ],
   "last_cleanup": "2026-08-11"
