@@ -218,7 +218,7 @@ def render_dashboard():
     col1.metric("", f"{trades}/{max_tr}")
 
     col2.markdown("#### Session")
-    col2.metric("", f"07:00–11:00")
+    col2.metric("", f"07:00–12:00")
 
     col3.markdown("#### Status")
     col3.metric("", "🟢" if bot_is_running else "🔴")
