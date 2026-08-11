@@ -53,7 +53,6 @@ st.markdown("""
     .logo-rounded {
         border-radius: 20px;
     }
-    /* Bannière de pause news */
     .news-pause-banner {
         background-color: #FF9100;
         color: #0D0D0D;
@@ -113,8 +112,21 @@ def fetch_status():
         pass
     return None
 
+def fetch_closed_trades():
+    """Lit directement le fichier closed_trades.json."""
+    repo = st.secrets["GITHUB_REPOSITORY"]
+    cache_buster = int(time.time())
+    url = f"https://raw.githubusercontent.com/{repo}/main/closed_trades.json?t={cache_buster}"
+    try:
+        resp = requests.get(url, timeout=10)
+        if resp.status_code == 200:
+            data = resp.json()
+            return data.get("trades", [])
+    except Exception:
+        pass
+    return []
+
 def fetch_pause_state():
-    """Récupère le timestamp pause_until depuis le fichier pause_state.json."""
     repo = st.secrets["GITHUB_REPOSITORY"]
     cache_buster = int(time.time())
     url = f"https://raw.githubusercontent.com/{repo}/main/pause_state.json?t={cache_buster}"
@@ -128,7 +140,6 @@ def fetch_pause_state():
     return 0
 
 def check_bot_running():
-    """Vérifie si un workflow GitHub Actions est en cours ou en attente."""
     token = st.secrets.get("GH_PAT")
     repo = st.secrets["GITHUB_REPOSITORY"]
     headers = {"Accept": "application/vnd.github.v3+json"}
@@ -159,7 +170,7 @@ def fmt_num(value, decimals=5):
     except (ValueError, TypeError):
         return "--"
 
-# ---------- Logo + nom du bot (même ligne, logo arrondi) ----------
+# ---------- Logo + nom du bot ----------
 LOGO_URL = "https://raw.githubusercontent.com/NSTradingUS-CA/forexbotny/main/assets/logo.png"
 st.markdown(f"""
 <div style="display: flex; align-items: center; justify-content: center;">
@@ -178,6 +189,7 @@ with col_signout:
 @st.fragment(run_every="30s")
 def render_dashboard():
     data = fetch_status()
+    closed_trades = fetch_closed_trades()
     pause_until = fetch_pause_state()
     now_mtl = datetime.now(MONTREAL_TZ)
     now_str = now_mtl.strftime('%H:%M:%S')
@@ -200,13 +212,13 @@ def render_dashboard():
     sess = data.get("session", {})
     col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
     trades = sess.get('trades_today', 0)
-    max_tr = sess.get('max_trades', 2)
+    max_tr = sess.get('max_trades', 3)
 
     col1.markdown("#### Trades")
     col1.metric("", f"{trades}/{max_tr}")
 
     col2.markdown("#### Session")
-    col2.metric("", f"07:00–12:00")
+    col2.metric("", f"07:00–11:00")
 
     col3.markdown("#### Status")
     col3.metric("", "🟢" if bot_is_running else "🔴")
@@ -289,13 +301,12 @@ def render_dashboard():
             st.caption(f"Trailing Stop: {trail_info}")
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # ---------- Historique ----------
+    # ---------- Historique (lit directement closed_trades.json) ----------
     st.markdown("---")
     tab1 = st.tabs(["📜 Closed"])
     with tab1[0]:
-        closed = data.get("closed_trades_today", [])
-        if closed:
-            for t in closed[::-1]:
+        if closed_trades:
+            for t in closed_trades[::-1]:
                 pnl = t.get('pnl',0)
                 color = "green" if pnl >= 0 else "red"
                 st.markdown(
