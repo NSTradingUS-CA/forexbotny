@@ -22,8 +22,9 @@ FINNHUB_API_KEY = os.getenv("FINNHUB_API_KEY")
 GH_PAT = os.getenv("GH_PAT")
 PAIRS = ["EUR_USD", "GBP_USD"]
 RISK_PERCENT = 1.0
-TRADING_HOURS_START = 7
-TRADING_HOURS_END = 11
+TRADING_HOURS_START = 7       # début de la fenêtre de trading
+TRADING_HOURS_END = 11        # fin de la fenêtre de trading (nouvelles entrées)
+BOT_SHUTDOWN_HOUR = 17        # heure d'arrêt complet du bot (gère encore les positions ouvertes)
 TIMEZONE = 'America/Toronto'
 MAX_TRADES_PER_DAY = 3
 MIN_MINUTES_BETWEEN_TRADES = 15
@@ -129,9 +130,7 @@ def push_file_to_github(local_path, remote_path):
         print(f"Error pushing {remote_path}: {e}")
 
 
-# ★ NETTOYAGE QUOTIDIEN (plus seulement hebdomadaire)
 def cleanup_if_new_day(data, today_str, label):
-    """Si la date a changé, réinitialise la liste et sauvegarde."""
     if data.get("last_cleanup") != today_str:
         print(f"New day detected – resetting {label}.")
         data = {"trades": [] if "trades" in data else [], "signals": [] if "signals" in data else [], "last_cleanup": today_str}
@@ -925,7 +924,8 @@ def main():
         while True:
             now = datetime.now(tz)
 
-            if now.hour > TRADING_HOURS_END or (now.hour == TRADING_HOURS_END and now.minute >= 5):
+            # Arrêt complet du bot (17h05)
+            if now.hour > BOT_SHUTDOWN_HOUR or (now.hour == BOT_SHUTDOWN_HOUR and now.minute >= 5):
                 stop_msg = (f"🔴 Forex Sniper 7-12 stopped – End of session ({now.strftime('%H:%M')}), "
                             f"{trades_today} trade(s) taken today.")
                 print(stop_msg)
@@ -964,6 +964,7 @@ def main():
 
             news_blocked = check_and_block_news(now)
 
+            # Fenêtre de trading : 7h00 – 11h00
             in_trading_hours = (now.hour >= TRADING_HOURS_START and now.hour < TRADING_HOURS_END)
 
             can_trade_time = True
