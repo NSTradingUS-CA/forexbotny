@@ -1,5 +1,5 @@
 {
-  "time": "2026-08-11 07:20:16",
+  "time": "2026-08-11 07:20:51",
   "bot_status": "running",
   "session": {
     "trades_today": 0,
@@ -24,7 +24,7 @@
     },
     "GBP_USD": {
       "price": 1.35043,
-      "spread": 0.00015999999999993797,
+      "spread": 0.00017000000000000348,
       "adx": 21.87458665132589,
       "plus_di": 10.638810442570957,
       "minus_di": 19.33152976396214,
@@ -41,18 +41,6 @@
   "closed_trades_today": [],
   "rejected_signals": [
     {
-      "time": "07:14:58",
-      "pair": "EUR_USD",
-      "direction": null,
-      "reason": "EMA50 not below EMA200, No EMA50 touch, No bearish rejection"
-    },
-    {
-      "time": "07:14:58",
-      "pair": "GBP_USD",
-      "direction": null,
-      "reason": "EMA50 not below EMA200, No EMA50 touch, No bearish rejection"
-    },
-    {
       "time": "07:15:33",
       "pair": "EUR_USD",
       "direction": null,
@@ -156,6 +144,18 @@
     },
     {
       "time": "07:20:13",
+      "pair": "GBP_USD",
+      "direction": null,
+      "reason": "EMA50 not below EMA200, No EMA50 touch, No bearish rejection"
+    },
+    {
+      "time": "07:20:47",
+      "pair": "EUR_USD",
+      "direction": null,
+      "reason": "EMA50 not below EMA200, No EMA50 touch, No bearish rejection"
+    },
+    {
+      "time": "07:20:47",
       "pair": "GBP_USD",
       "direction": null,
       "reason": "EMA50 not below EMA200, No EMA50 touch, No bearish rejection"
