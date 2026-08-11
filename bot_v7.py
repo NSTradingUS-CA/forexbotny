@@ -22,13 +22,14 @@ FINNHUB_API_KEY = os.getenv("FINNHUB_API_KEY")
 GH_PAT = os.getenv("GH_PAT")
 PAIRS = ["EUR_USD", "GBP_USD"]
 RISK_PERCENT = 1.0
-TRADING_HOURS_START = 3
-TRADING_HOURS_END = 12
+TRADING_HOURS_START = 7
+TRADING_HOURS_END = 11
 TIMEZONE = 'America/Toronto'
-MAX_TRADES_PER_DAY = 4
-MIN_MINUTES_BETWEEN_TRADES = 40
+MAX_TRADES_PER_DAY = 3
+MIN_MINUTES_BETWEEN_TRADES = 15
 ATR_PERIOD = 14
 ADX_PERIOD = 10
+NEWS_BLOCK_MINUTES = 15
 HIGH_IMPACT_EVENTS = ["NFP", "CPI", "FOMC", "Interest Rate", "GDP", "Retail Sales"]
 USE_MACD_FILTER = True
 MACD_FAST = 5
@@ -63,6 +64,48 @@ closed_trades_today = []
 rejected_signals = []
 
 CLOSED_TRADES_FILE = "closed_trades.json"
+PAUSE_FILE = "pause_state.json"
+
+
+def get_pause_until():
+    if os.path.exists(PAUSE_FILE):
+        with open(PAUSE_FILE, 'r') as f:
+            return json.load(f).get("pause_until", 0)
+    return 0
+
+
+def set_pause_until(timestamp):
+    with open(PAUSE_FILE, 'w') as f:
+        json.dump({"pause_until": timestamp}, f)
+    push_file_to_github(PAUSE_FILE, PAUSE_FILE)
+
+
+def is_news_block_active(now):
+    pause_until = get_pause_until()
+    return now.timestamp() < pause_until
+
+
+def check_and_block_news(now):
+    events = get_high_impact_news()
+    for event in events:
+        block_start = event["time"] - timedelta(minutes=NEWS_BLOCK_MINUTES)
+        block_end = event["time"] + timedelta(minutes=NEWS_BLOCK_MINUTES)
+        if block_start <= now <= block_end:
+            pause_until = block_end.timestamp()
+            if get_pause_until() < pause_until:
+                set_pause_until(pause_until)
+                msg = (f"📅 High-impact news detected: {event['title']} at "
+                       f"{event['time'].strftime('%H:%M')} – Trading paused from "
+                       f"{block_start.strftime('%H:%M')} to {block_end.strftime('%H:%M')}")
+                send_telegram_message(msg)
+                print(msg)
+            return True
+    # Vérifier si le blocage est terminé
+    if get_pause_until() > 0 and now.timestamp() >= get_pause_until():
+        set_pause_until(0)
+        send_telegram_message("🟢 News pause lifted – trading resumed")
+        print("News pause lifted.")
+    return False
 
 
 def push_file_to_github(local_path, remote_path):
@@ -192,18 +235,17 @@ def save_status_json(pair_indicators):
             "atr": active_trade.get('atr')
         }
 
-    # ★ MODIFICATION : afficher l'événement seulement s'il est dans le futur OU passé depuis moins de 30 minutes
     events = news_cache["events"]
     if events:
         for e in events:
             time_since_event = now - e["time"]
-            if time_since_event < timedelta(minutes=30):  # encore pertinent
+            if time_since_event < timedelta(minutes=30):
                 status["next_news_event"] = {
                     "title": e["title"],
                     "time": e["time"].strftime("%H:%M"),
                     "impact": "High"
                 }
-                break  # un seul événement affiché à la fois
+                break
 
     push_status_json(status)
 
@@ -310,30 +352,6 @@ def get_finnhub_sentiment(pair):
     except Exception as e:
         print(f"Finnhub API error: {e}")
         return 'neutral'
-
-
-def update_news_filters():
-    """Envoie une alerte Telegram si un événement à fort impact est détecté, sans bloquer le trading."""
-    global news_sentiment_filter
-    now = datetime.now(tz)
-    events = get_high_impact_news()
-    for event in events:
-        block_start = event["time"] - timedelta(minutes=30)
-        block_end = event["time"] + timedelta(minutes=30)
-        if block_start <= now <= block_end:
-            msg = (f"📅 High-impact news detected: {event['title']} at "
-                   f"{event['time'].strftime('%H:%M')} (Montreal time)")
-            send_telegram_message(msg)
-            print(msg)
-            break
-
-    for pair in PAIRS:
-        sentiment = get_finnhub_sentiment(pair)
-        if sentiment != 'neutral':
-            news_sentiment_filter[pair] = sentiment
-            msg = (f"⚠️ Breaking news sentiment for {pair}: {sentiment}")
-            send_telegram_message(msg)
-            print(msg)
 
 
 def get_high_impact_news():
@@ -692,10 +710,8 @@ def check_closed_trade():
 
 
 def check_signal(df, instrument):
-    """Retourne (signal, price, sl, tp, sl_pips, direction, reason)."""
     if len(df) < 200:
         return False, 0, 0, 0, 0, None, "Not enough candles"
-
     last_candle = df.iloc[-2]
     price = last_candle['c']
     ema50 = last_candle['ema50']
@@ -705,16 +721,12 @@ def check_signal(df, instrument):
     adx = last_candle['adx']
     plus_di = last_candle['plus_di']
     minus_di = last_candle['minus_di']
-
     if pd.isna(atr) or pd.isna(ema50) or pd.isna(adx):
         return False, 0, 0, 0, 0, None, "Missing indicator values"
-
     config = PAIR_CONFIG[instrument]
     adx_threshold = config["ADX_THRESHOLD"]
     atr_multiplier = config["ATR_MULTIPLIER"]
     sentiment = news_sentiment_filter.get(instrument, None)
-
-    # --- Signal ACHAT ---
     if sentiment is None or sentiment == 'bullish':
         if adx < adx_threshold:
             pass
@@ -726,8 +738,7 @@ def check_signal(df, instrument):
                 macd_line = last_candle['macd_line']
                 macd_signal = last_candle['macd_signal']
                 if pd.isna(macd_line) or macd_line <= macd_signal or macd_line <= 0:
-                    macd_ok = False
-            if macd_ok:
+                    macd_ok = False            if macd_ok:
                 vol_ok = True
                 if USE_VOLUME_FILTER:
                     volume = last_candle['volume']
@@ -757,8 +768,6 @@ def check_signal(df, instrument):
                     return False, 0, 0, 0, 0, None, "Volume too low"
             else:
                 return False, 0, 0, 0, 0, None, "MACD not bullish"
-
-    # --- Signal VENTE ---
     if sentiment is None or sentiment == 'bearish':
         if adx < adx_threshold:
             pass
@@ -801,7 +810,6 @@ def check_signal(df, instrument):
                     return False, 0, 0, 0, 0, None, "Volume too low"
             else:
                 return False, 0, 0, 0, 0, None, "MACD not bearish"
-
     if sentiment is not None:
         return False, 0, 0, 0, 0, None, f"Sentiment filter blocks direction ({sentiment})"
     if adx < adx_threshold:
@@ -895,14 +903,21 @@ def main():
             manage_active_trade()
             check_closed_trade()
 
+            # Vérification des news à chaud (blocage directionnel Finnhub)
             if not hasattr(main, "next_news_check"):
                 main.next_news_check = now
             if now >= main.next_news_check:
-                update_news_filters()
+                # Mise à jour du filtre de sentiment (sans blocage calendaire)
+                for pair in PAIRS:
+                    sentiment = get_finnhub_sentiment(pair)
+                    if sentiment != 'neutral':
+                        news_sentiment_filter[pair] = sentiment
                 main.next_news_check = now + timedelta(seconds=60)
 
-            # Fenêtre de trading : 3h00 à 12h00
-            in_trading_hours = (now.hour >= 3 and now.hour < 12)
+            # Blocage calendaire via le fichier pause_state.json
+            news_blocked = check_and_block_news(now)
+
+            in_trading_hours = (now.hour >= TRADING_HOURS_START and now.hour < TRADING_HOURS_END)
 
             can_trade_time = True
             if last_close_time is not None:
@@ -915,6 +930,7 @@ def main():
             can_trade = (active_trade is None
                          and trades_today < MAX_TRADES_PER_DAY
                          and in_trading_hours
+                         and not news_blocked
                          and can_trade_time)
 
             pair_indicators = {}
