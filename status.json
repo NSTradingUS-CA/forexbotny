@@ -1,5 +1,5 @@
 {
-  "time": "2026-08-11 09:59:28",
+  "time": "2026-08-11 10:00:05",
   "bot_status": "running",
   "session": {
     "trades_today": 0,
@@ -9,29 +9,29 @@
   },
   "pairs": {
     "EUR_USD": {
-      "price": 1.15365,
-      "spread": 0.00013999999999980695,
-      "adx": 27.963757299820614,
-      "plus_di": 14.847239189185052,
-      "minus_di": 15.844782970271043,
-      "ema50": 1.1543474858184417,
-      "ema200": 1.151695920127277,
-      "rsi": 40.31545930702979,
-      "atr": 0.0006128571428571293,
+      "price": 1.15415,
+      "spread": 0.00017000000000000348,
+      "adx": 25.85990219175945,
+      "plus_di": 12.600372646196426,
+      "minus_di": 14.47542765237359,
+      "ema50": 1.1543397412765422,
+      "ema200": 1.1517203388324782,
+      "rsi": 48.70117558308531,
+      "atr": 0.000669999999999996,
       "ema_orientation": "bullish",
       "macd_signal": "bullish",
       "last_signal": null
     },
     "GBP_USD": {
-      "price": 1.34936,
-      "spread": 0.00017000000000000348,
-      "adx": 25.125788366982583,
-      "plus_di": 8.28140128761313,
-      "minus_di": 20.660609516486655,
-      "ema50": 1.3496059527865092,
-      "ema200": 1.345240532749617,
-      "rsi": 41.888894350617,
-      "atr": 0.000877142857142862,
+      "price": 1.34992,
+      "spread": 0.00018999999999991246,
+      "adx": 27.11083206481173,
+      "plus_di": 7.375200250255766,
+      "minus_di": 19.432121844801934,
+      "ema50": 1.3496182684299622,
+      "ema200": 1.3452876025285303,
+      "rsi": 47.17965727324935,
+      "atr": 0.0009350000000000033,
       "ema_orientation": "bullish",
       "macd_signal": "bearish",
       "last_signal": null
@@ -41,18 +41,6 @@
   "closed_trades_today": [],
   "rejected_signals": [
     {
-      "time": "09:54:08",
-      "pair": "EUR_USD",
-      "direction": null,
-      "reason": "MACD not bearish"
-    },
-    {
-      "time": "09:54:08",
-      "pair": "GBP_USD",
-      "direction": null,
-      "reason": "EMA50 not below EMA200, No bearish rejection"
-    },
-    {
       "time": "09:54:43",
       "pair": "EUR_USD",
       "direction": null,
@@ -156,6 +144,18 @@
     },
     {
       "time": "09:59:24",
+      "pair": "GBP_USD",
+      "direction": null,
+      "reason": "EMA50 not below EMA200, No bearish rejection"
+    },
+    {
+      "time": "09:59:59",
+      "pair": "EUR_USD",
+      "direction": null,
+      "reason": "MACD not bearish"
+    },
+    {
+      "time": "09:59:59",
       "pair": "GBP_USD",
       "direction": null,
       "reason": "EMA50 not below EMA200, No bearish rejection"
