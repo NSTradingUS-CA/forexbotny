@@ -100,10 +100,11 @@ if not st.session_state.authenticated:
 MONTREAL_TZ = ZoneInfo("America/Toronto")
 
 @st.cache_data(ttl=15)
-def fetch_status():
+def fetch_json(filename):
+    """Lit un fichier JSON depuis le dépôt GitHub, avec cache-buster pour éviter le cache navigateur."""
     repo = st.secrets["GITHUB_REPOSITORY"]
     cache_buster = int(time.time())
-    url = f"https://raw.githubusercontent.com/{repo}/main/status.json?t={cache_buster}"
+    url = f"https://raw.githubusercontent.com/{repo}/main/{filename}?t={cache_buster}"
     try:
         resp = requests.get(url, timeout=10)
         if resp.status_code == 200:
@@ -112,31 +113,29 @@ def fetch_status():
         pass
     return None
 
+def fetch_status():
+    return fetch_json("status.json")
+
 def fetch_closed_trades():
-    """Lit directement le fichier closed_trades.json."""
-    repo = st.secrets["GITHUB_REPOSITORY"]
-    cache_buster = int(time.time())
-    url = f"https://raw.githubusercontent.com/{repo}/main/closed_trades.json?t={cache_buster}"
-    try:
-        resp = requests.get(url, timeout=10)
-        if resp.status_code == 200:
-            data = resp.json()
+    data = fetch_json("closed_trades.json")
+    if data:
+        today_str = datetime.now(MONTREAL_TZ).strftime("%Y-%m-%d")
+        if data.get("last_cleanup") == today_str or data.get("last_cleanup") is None:
             return data.get("trades", [])
-    except Exception:
-        pass
+    return []
+
+def fetch_rejected_signals():
+    data = fetch_json("rejected_signals.json")
+    if data:
+        today_str = datetime.now(MONTREAL_TZ).strftime("%Y-%m-%d")
+        if data.get("last_cleanup") == today_str or data.get("last_cleanup") is None:
+            return data.get("signals", [])
     return []
 
 def fetch_pause_state():
-    repo = st.secrets["GITHUB_REPOSITORY"]
-    cache_buster = int(time.time())
-    url = f"https://raw.githubusercontent.com/{repo}/main/pause_state.json?t={cache_buster}"
-    try:
-        resp = requests.get(url, timeout=10)
-        if resp.status_code == 200:
-            data = resp.json()
-            return data.get("pause_until", 0)
-    except Exception:
-        pass
+    data = fetch_json("pause_state.json")
+    if data:
+        return data.get("pause_until", 0)
     return 0
 
 def check_bot_running():
@@ -190,6 +189,7 @@ with col_signout:
 def render_dashboard():
     data = fetch_status()
     closed_trades = fetch_closed_trades()
+    rejected = fetch_rejected_signals()
     pause_until = fetch_pause_state()
     now_mtl = datetime.now(MONTREAL_TZ)
     now_str = now_mtl.strftime('%H:%M:%S')
@@ -301,10 +301,10 @@ def render_dashboard():
             st.caption(f"Trailing Stop: {trail_info}")
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # ---------- Historique (lit directement closed_trades.json) ----------
+    # ---------- Historique + Rejets ----------
     st.markdown("---")
-    tab1 = st.tabs(["📜 Closed"])
-    with tab1[0]:
+    tab1, tab2 = st.tabs(["📜 Closed", "🚫 Rejected"])
+    with tab1:
         if closed_trades:
             for t in closed_trades[::-1]:
                 pnl = t.get('pnl',0)
@@ -314,6 +314,14 @@ def render_dashboard():
                     unsafe_allow_html=True)
         else:
             st.write("No closed trades.")
+    with tab2:
+        if rejected:
+            for r in rejected[::-1][:30]:
+                st.markdown(
+                    f"<span class='orange'>{r.get('time','')} {r.get('pair','')} – {r.get('reason','')}</span>",
+                    unsafe_allow_html=True)
+        else:
+            st.write("No rejected setups.")
 
 
 render_dashboard()
