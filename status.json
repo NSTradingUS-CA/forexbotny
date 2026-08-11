@@ -1,5 +1,5 @@
 {
-  "time": "2026-08-11 06:59:53",
+  "time": "2026-08-11 07:00:27",
   "bot_status": "running",
   "session": {
     "trades_today": 0,
@@ -9,29 +9,29 @@
   },
   "pairs": {
     "EUR_USD": {
-      "price": 1.15362,
+      "price": 1.15372,
       "spread": 0.0001500000000000945,
-      "adx": 27.563478662119408,
-      "plus_di": 7.312913109064318,
-      "minus_di": 21.62457404951986,
-      "ema50": 1.1544331408337227,
-      "ema200": 1.151613378213146,
-      "rsi": 39.5207652640004,
-      "atr": 0.0005264285714285626,
+      "adx": 29.7528473545155,
+      "plus_di": 6.797729525676549,
+      "minus_di": 20.101155764371132,
+      "ema50": 1.154405179776363,
+      "ema200": 1.15167446496624,
+      "rsi": 41.136115260642704,
+      "atr": 0.0005364285714285647,
       "ema_orientation": "bullish",
       "macd_signal": "bearish",
       "last_signal": null
     },
     "GBP_USD": {
-      "price": 1.35042,
-      "spread": 0.00017000000000000348,
-      "adx": 21.082384439081665,
-      "plus_di": 11.446506491183785,
-      "minus_di": 20.799175069632646,
-      "ema50": 1.3495740992770482,
-      "ema200": 1.3450907844866635,
-      "rsi": 50.412133347395866,
-      "atr": 0.0007828571428571804,
+      "price": 1.35043,
+      "spread": 0.00016000000000016001,
+      "adx": 21.87458665132589,
+      "plus_di": 10.638810442570957,
+      "minus_di": 19.33152976396214,
+      "ema50": 1.3496076721186365,
+      "ema200": 1.3452058767276414,
+      "rsi": 50.497743099618795,
+      "atr": 0.0007992857142857483,
       "ema_orientation": "bullish",
       "macd_signal": "bearish",
       "last_signal": null
@@ -39,7 +39,20 @@
   },
   "active_trade": null,
   "closed_trades_today": [],
-  "rejected_signals": [],
+  "rejected_signals": [
+    {
+      "time": "07:00:24",
+      "pair": "EUR_USD",
+      "direction": null,
+      "reason": "EMA50 not below EMA200, No EMA50 touch, No bearish rejection"
+    },
+    {
+      "time": "07:00:24",
+      "pair": "GBP_USD",
+      "direction": null,
+      "reason": "EMA50 not below EMA200, No EMA50 touch, No bearish rejection"
+    }
+  ],
   "next_news_event": {
     "title": "Core CPI m/m",
     "time": "08:30",
