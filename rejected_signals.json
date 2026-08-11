@@ -1,12 +1,6 @@
 {
   "signals": [
     {
-      "time": "07:56:46",
-      "pair": "GBP_USD",
-      "direction": null,
-      "reason": "EMA50 not below EMA200, No EMA50 touch, No bearish rejection"
-    },
-    {
       "time": "07:57:20",
       "pair": "EUR_USD",
       "direction": null,
@@ -297,6 +291,12 @@
     {
       "time": "08:11:30",
       "pair": "EUR_USD",
+      "direction": null,
+      "reason": "EMA50 not below EMA200, No EMA50 touch"
+    },
+    {
+      "time": "08:11:30",
+      "pair": "GBP_USD",
       "direction": null,
       "reason": "EMA50 not below EMA200, No EMA50 touch"
     }
