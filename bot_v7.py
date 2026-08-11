@@ -129,24 +129,32 @@ def push_file_to_github(local_path, remote_path):
         print(f"Error pushing {remote_path}: {e}")
 
 
+# ★ NETTOYAGE QUOTIDIEN (plus seulement hebdomadaire)
+def cleanup_if_new_day(data, today_str, label):
+    """Si la date a changé, réinitialise la liste et sauvegarde."""
+    if data.get("last_cleanup") != today_str:
+        print(f"New day detected – resetting {label}.")
+        data = {"trades": [] if "trades" in data else [], "signals": [] if "signals" in data else [], "last_cleanup": today_str}
+        return True, data
+    return False, data
+
+
 def load_closed_trades_from_file():
     global closed_trades_today
+    today_str = datetime.now(tz).strftime("%Y-%m-%d")
     if os.path.exists(CLOSED_TRADES_FILE):
         try:
             with open(CLOSED_TRADES_FILE, 'r') as f:
                 data = json.load(f)
-                last_cleanup = data.get("last_cleanup", "")
-                today_str = datetime.now(tz).strftime("%Y-%m-%d")
-                now = datetime.now(tz)
-                if now.weekday() == 6 and now.hour == 0 and now.minute < 5:
-                    if last_cleanup != today_str:
-                        closed_trades_today = []
-                        data = {"trades": [], "last_cleanup": today_str}
-                        save_closed_trades_to_file()
-                        print("Weekly cleanup: closed_trades.json reset.")
-                        return
-                closed_trades_today = data.get("trades", [])
-                print(f"Loaded {len(closed_trades_today)} closed trades from local file.")
+            reset, data = cleanup_if_new_day(data, today_str, "closed_trades.json")
+            if reset:
+                closed_trades_today = []
+                with open(CLOSED_TRADES_FILE, 'w') as f:
+                    json.dump(data, f, indent=2)
+                push_file_to_github(CLOSED_TRADES_FILE, CLOSED_TRADES_FILE)
+                return
+            closed_trades_today = data.get("trades", [])
+            print(f"Loaded {len(closed_trades_today)} closed trades from local file.")
         except Exception as e:
             print(f"Error loading closed trades file: {e}")
             closed_trades_today = []
@@ -169,22 +177,20 @@ def save_closed_trades_to_file():
 
 def load_rejected_from_file():
     global rejected_signals
+    today_str = datetime.now(tz).strftime("%Y-%m-%d")
     if os.path.exists(REJECTED_FILE):
         try:
             with open(REJECTED_FILE, 'r') as f:
                 data = json.load(f)
-                last_cleanup = data.get("last_cleanup", "")
-                today_str = datetime.now(tz).strftime("%Y-%m-%d")
-                now = datetime.now(tz)
-                if now.weekday() == 6 and now.hour == 0 and now.minute < 5:
-                    if last_cleanup != today_str:
-                        rejected_signals = []
-                        data = {"signals": [], "last_cleanup": today_str}
-                        save_rejected_to_file()
-                        print("Weekly cleanup: rejected_signals.json reset.")
-                        return
-                rejected_signals = data.get("signals", [])
-                print(f"Loaded {len(rejected_signals)} rejected signals from local file.")
+            reset, data = cleanup_if_new_day(data, today_str, "rejected_signals.json")
+            if reset:
+                rejected_signals = []
+                with open(REJECTED_FILE, 'w') as f:
+                    json.dump(data, f, indent=2)
+                push_file_to_github(REJECTED_FILE, REJECTED_FILE)
+                return
+            rejected_signals = data.get("signals", [])
+            print(f"Loaded {len(rejected_signals)} rejected signals from local file.")
         except Exception as e:
             print(f"Error loading rejected signals file: {e}")
             rejected_signals = []
@@ -289,7 +295,7 @@ def save_status_json(pair_indicators):
     push_status_json(status)
 
 
-# ---------- Fonctions de trading (inchangées) ----------
+# ---------- Fonctions de trading ----------
 def count_all_trades_today():
     today_str = datetime.now(tz).strftime("%Y-%m-%d")
     count = 0
