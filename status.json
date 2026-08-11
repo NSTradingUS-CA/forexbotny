@@ -1,5 +1,5 @@
 {
-  "time": "2026-08-11 07:05:06",
+  "time": "2026-08-11 07:05:40",
   "bot_status": "running",
   "session": {
     "trades_today": 0,
@@ -24,7 +24,7 @@
     },
     "GBP_USD": {
       "price": 1.35043,
-      "spread": 0.000180000000000069,
+      "spread": 0.00021000000000004349,
       "adx": 21.87458665132589,
       "plus_di": 10.638810442570957,
       "minus_di": 19.33152976396214,
@@ -144,6 +144,18 @@
     },
     {
       "time": "07:05:02",
+      "pair": "GBP_USD",
+      "direction": null,
+      "reason": "EMA50 not below EMA200, No EMA50 touch, No bearish rejection"
+    },
+    {
+      "time": "07:05:37",
+      "pair": "EUR_USD",
+      "direction": null,
+      "reason": "EMA50 not below EMA200, No EMA50 touch, No bearish rejection"
+    },
+    {
+      "time": "07:05:37",
       "pair": "GBP_USD",
       "direction": null,
       "reason": "EMA50 not below EMA200, No EMA50 touch, No bearish rejection"
