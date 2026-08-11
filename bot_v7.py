@@ -64,9 +64,11 @@ closed_trades_today = []
 rejected_signals = []
 
 CLOSED_TRADES_FILE = "closed_trades.json"
+REJECTED_FILE = "rejected_signals.json"
 PAUSE_FILE = "pause_state.json"
 
 
+# ---------- Fichiers JSON (pause, closed, rejected) ----------
 def get_pause_until():
     if os.path.exists(PAUSE_FILE):
         with open(PAUSE_FILE, 'r') as f:
@@ -100,7 +102,6 @@ def check_and_block_news(now):
                 send_telegram_message(msg)
                 print(msg)
             return True
-    # Vérifier si le blocage est terminé
     if get_pause_until() > 0 and now.timestamp() >= get_pause_until():
         set_pause_until(0)
         send_telegram_message("🟢 News pause lifted – trading resumed")
@@ -164,6 +165,44 @@ def save_closed_trades_to_file():
         push_file_to_github(CLOSED_TRADES_FILE, CLOSED_TRADES_FILE)
     except Exception as e:
         print(f"Error saving closed trades file: {e}")
+
+
+def load_rejected_from_file():
+    global rejected_signals
+    if os.path.exists(REJECTED_FILE):
+        try:
+            with open(REJECTED_FILE, 'r') as f:
+                data = json.load(f)
+                last_cleanup = data.get("last_cleanup", "")
+                today_str = datetime.now(tz).strftime("%Y-%m-%d")
+                now = datetime.now(tz)
+                if now.weekday() == 6 and now.hour == 0 and now.minute < 5:
+                    if last_cleanup != today_str:
+                        rejected_signals = []
+                        data = {"signals": [], "last_cleanup": today_str}
+                        save_rejected_to_file()
+                        print("Weekly cleanup: rejected_signals.json reset.")
+                        return
+                rejected_signals = data.get("signals", [])
+                print(f"Loaded {len(rejected_signals)} rejected signals from local file.")
+        except Exception as e:
+            print(f"Error loading rejected signals file: {e}")
+            rejected_signals = []
+    else:
+        rejected_signals = []
+
+
+def save_rejected_to_file():
+    try:
+        data = {
+            "signals": rejected_signals[-50:],
+            "last_cleanup": datetime.now(tz).strftime("%Y-%m-%d")
+        }
+        with open(REJECTED_FILE, 'w') as f:
+            json.dump(data, f, indent=2)
+        push_file_to_github(REJECTED_FILE, REJECTED_FILE)
+    except Exception as e:
+        print(f"Error saving rejected signals file: {e}")
 
 
 def push_status_json(data_dict):
@@ -250,6 +289,7 @@ def save_status_json(pair_indicators):
     push_status_json(status)
 
 
+# ---------- Fonctions de trading (inchangées) ----------
 def count_all_trades_today():
     today_str = datetime.now(tz).strftime("%Y-%m-%d")
     count = 0
@@ -738,7 +778,8 @@ def check_signal(df, instrument):
                 macd_line = last_candle['macd_line']
                 macd_signal = last_candle['macd_signal']
                 if pd.isna(macd_line) or macd_line <= macd_signal or macd_line <= 0:
-                    macd_ok = False            if macd_ok:
+                    macd_ok = False
+            if macd_ok:
                 vol_ok = True
                 if USE_VOLUME_FILTER:
                     volume = last_candle['volume']
@@ -858,16 +899,17 @@ def collect_indicators(pair):
 
 
 def main():
-    global trades_today, last_trade_date, last_close_time, active_trade, closed_trades_today
+    global trades_today, last_trade_date, last_close_time, active_trade, closed_trades_today, rejected_signals
 
     load_closed_trades_from_file()
+    load_rejected_from_file()
 
     trades_today = count_all_trades_today()
     if active_trade is None:
         load_existing_open_position()
     print(f"Trades already taken today: {trades_today}, active trade: {active_trade is not None}")
 
-    start_msg = (f"🟢 Forex Sniper 8‑12 started – max {MAX_TRADES_PER_DAY} trades/day, "
+    start_msg = (f"🟢 Forex Sniper 7-12 started – max {MAX_TRADES_PER_DAY} trades/day, "
                  f"buffer {MIN_MINUTES_BETWEEN_TRADES}min, Buy & Sell. "
                  f"({trades_today} already taken)")
     print(start_msg)
@@ -878,7 +920,7 @@ def main():
             now = datetime.now(tz)
 
             if now.hour > TRADING_HOURS_END or (now.hour == TRADING_HOURS_END and now.minute >= 5):
-                stop_msg = (f"🔴 Forex Sniper 8‑12 stopped – End of session ({now.strftime('%H:%M')}), "
+                stop_msg = (f"🔴 Forex Sniper 7-12 stopped – End of session ({now.strftime('%H:%M')}), "
                             f"{trades_today} trade(s) taken today.")
                 print(stop_msg)
                 send_telegram_message(stop_msg)
@@ -896,25 +938,24 @@ def main():
                 last_trade_date = today
                 last_close_time = None
                 closed_trades_today.clear()
+                rejected_signals.clear()
                 load_closed_trades_from_file()
+                load_rejected_from_file()
                 if active_trade is None:
                     load_existing_open_position()
 
             manage_active_trade()
             check_closed_trade()
 
-            # Vérification des news à chaud (blocage directionnel Finnhub)
             if not hasattr(main, "next_news_check"):
                 main.next_news_check = now
             if now >= main.next_news_check:
-                # Mise à jour du filtre de sentiment (sans blocage calendaire)
                 for pair in PAIRS:
                     sentiment = get_finnhub_sentiment(pair)
                     if sentiment != 'neutral':
                         news_sentiment_filter[pair] = sentiment
                 main.next_news_check = now + timedelta(seconds=60)
 
-            # Blocage calendaire via le fichier pause_state.json
             news_blocked = check_and_block_news(now)
 
             in_trading_hours = (now.hour >= TRADING_HOURS_START and now.hour < TRADING_HOURS_END)
@@ -964,6 +1005,7 @@ def main():
                             "direction": None,
                             "reason": reason
                         })
+                        save_rejected_to_file()
 
             save_status_json(pair_indicators)
 
@@ -971,6 +1013,7 @@ def main():
                 main.next_trade_save = now
             if now >= main.next_trade_save:
                 save_closed_trades_to_file()
+                save_rejected_to_file()
                 main.next_trade_save = now + timedelta(minutes=5)
 
             time.sleep(30)
