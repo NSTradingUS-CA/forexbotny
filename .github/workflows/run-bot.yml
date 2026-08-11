@@ -7,7 +7,7 @@ on:
 jobs:
   run-bot:
     runs-on: ubuntu-latest
-    timeout-minutes: 260
+    timeout-minutes: 660
     permissions:
       contents: write         # ✅ permet de pusher status.json dans le dépôt
 
