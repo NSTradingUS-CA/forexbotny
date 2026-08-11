@@ -4,7 +4,7 @@ import time
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-st.set_page_config(page_title="Forex Sniper 3-12", layout="wide")
+st.set_page_config(page_title="Forex Sniper 7-12", layout="wide")
 
 # ---------- CSS global ----------
 st.markdown("""
@@ -53,6 +53,17 @@ st.markdown("""
     .logo-rounded {
         border-radius: 20px;
     }
+    /* Bannière de pause news */
+    .news-pause-banner {
+        background-color: #FF9100;
+        color: #0D0D0D;
+        text-align: center;
+        font-weight: bold;
+        font-size: 1rem;
+        padding: 0.6rem;
+        margin: 0.5rem 0;
+        border-radius: 5px;
+    }
     .footer {
         position: fixed;
         left: 0;
@@ -75,7 +86,7 @@ if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 
 if not st.session_state.authenticated:
-    st.markdown("<h1 style='text-align: center; color: #00C853;'>🔐 Forex Sniper 3‑12 • Cockpit Access</h1>",
+    st.markdown("<h1 style='text-align: center; color: #00C853;'>🔐 Forex Sniper 7‑12 • Cockpit Access</h1>",
                 unsafe_allow_html=True)
     pwd = st.text_input("Password", type="password")
     if st.button("Sign in"):
@@ -101,6 +112,20 @@ def fetch_status():
     except Exception:
         pass
     return None
+
+def fetch_pause_state():
+    """Récupère le timestamp pause_until depuis le fichier pause_state.json."""
+    repo = st.secrets["GITHUB_REPOSITORY"]
+    cache_buster = int(time.time())
+    url = f"https://raw.githubusercontent.com/{repo}/main/pause_state.json?t={cache_buster}"
+    try:
+        resp = requests.get(url, timeout=10)
+        if resp.status_code == 200:
+            data = resp.json()
+            return data.get("pause_until", 0)
+    except Exception:
+        pass
+    return 0
 
 def check_bot_running():
     """Vérifie si un workflow GitHub Actions est en cours ou en attente."""
@@ -139,7 +164,7 @@ LOGO_URL = "https://raw.githubusercontent.com/NSTradingUS-CA/forexbotny/main/ass
 st.markdown(f"""
 <div style="display: flex; align-items: center; justify-content: center;">
     <img src="{LOGO_URL}" class="logo-rounded" style="width: 80px; height: auto; margin-right: 20px;">
-    <h2 style="color: #FF9100; margin: 0;">Forex Sniper 3‑12</h2>
+    <h2 style="color: #FF9100; margin: 0;">Forex Sniper 7‑12</h2>
 </div>
 """, unsafe_allow_html=True)
 
@@ -153,12 +178,22 @@ with col_signout:
 @st.fragment(run_every="30s")
 def render_dashboard():
     data = fetch_status()
-    now_mtl = datetime.now(MONTREAL_TZ).strftime('%H:%M:%S')
+    pause_until = fetch_pause_state()
+    now_mtl = datetime.now(MONTREAL_TZ)
+    now_str = now_mtl.strftime('%H:%M:%S')
     bot_is_running = check_bot_running()
 
     if not data:
         st.error("Status unavailable – retrying in 30s")
         return
+
+    # ---------- Bannière de pause news ----------
+    if pause_until > now_mtl.timestamp():
+        resume_time = datetime.fromtimestamp(pause_until, MONTREAL_TZ).strftime('%H:%M')
+        st.markdown(
+            f'<div class="news-pause-banner">📅 High-impact news detected – Trading paused until {resume_time}</div>',
+            unsafe_allow_html=True
+        )
 
     # ---------- Session ----------
     st.markdown('<div class="session-metrics">', unsafe_allow_html=True)
@@ -171,13 +206,13 @@ def render_dashboard():
     col1.metric("", f"{trades}/{max_tr}")
 
     col2.markdown("#### Session")
-    col2.metric("", f"03:00–12:00")
+    col2.metric("", f"07:00–11:00")
 
     col3.markdown("#### Status")
     col3.metric("", "🟢" if bot_is_running else "🔴")
 
     col4.markdown("#### Time")
-    col4.metric("", now_mtl)
+    col4.metric("", now_str)
     st.markdown('</div>', unsafe_allow_html=True)
 
     # ---------- News ----------
@@ -281,6 +316,6 @@ render_dashboard()
 
 # ---------- Footer ----------
 st.markdown(
-    '<div class="footer">NorthSentinel Trading • Forex Sniper 3‑12 • August, 2026 ©</div>',
+    '<div class="footer">NorthSentinel Trading • Forex Sniper 7‑12 • August, 2026 ©</div>',
     unsafe_allow_html=True
 )
