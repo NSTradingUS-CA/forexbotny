@@ -1,18 +1,6 @@
 {
   "signals": [
     {
-      "time": "08:35:22",
-      "pair": "GBP_USD",
-      "direction": null,
-      "reason": "EMA50 not below EMA200, No EMA50 touch"
-    },
-    {
-      "time": "08:35:58",
-      "pair": "EUR_USD",
-      "direction": null,
-      "reason": "EMA50 not below EMA200, No EMA50 touch"
-    },
-    {
       "time": "08:35:58",
       "pair": "GBP_USD",
       "direction": null,
@@ -296,6 +284,18 @@
     },
     {
       "time": "08:49:56",
+      "pair": "EUR_USD",
+      "direction": null,
+      "reason": "EMA50 not below EMA200, No EMA50 touch"
+    },
+    {
+      "time": "08:49:56",
+      "pair": "GBP_USD",
+      "direction": null,
+      "reason": "EMA50 not below EMA200, No EMA50 touch"
+    },
+    {
+      "time": "08:50:30",
       "pair": "EUR_USD",
       "direction": null,
       "reason": "EMA50 not below EMA200, No EMA50 touch"
