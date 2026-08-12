@@ -4,7 +4,7 @@ import time
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-st.set_page_config(page_title="Forex Sniper 7-12", layout="wide")
+st.set_page_config(page_title="Forex Sniper 7‑12", layout="wide")
 
 # ---------- CSS global ----------
 st.markdown("""
@@ -53,29 +53,27 @@ st.markdown("""
     .logo-rounded {
         border-radius: 20px;
     }
-    .news-pause-banner {
-        background-color: #FF9100;
-        color: #0D0D0D;
-        text-align: center;
-        font-weight: bold;
-        font-size: 1rem;
-        padding: 0.6rem;
-        margin: 0.5rem 0;
-        border-radius: 5px;
-    }
     .footer {
-        position: fixed;
-        left: 0;
-        bottom: 0;
         width: 100%;
         box-sizing: border-box;
         text-align: center;
         color: #666;
         font-size: 0.8rem;
         padding: 0.75rem 0;
-        margin-top: 0;
+        margin-top: 1.5rem;
         background-color: #0D0D0D;
-        z-index: 9999;
+    }
+    .setup-badge {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 10px;
+        font-weight: bold;
+        font-size: 0.85rem;
+        margin-right: 6px;
+    }
+    .trade-detail-line {
+        font-size: 0.95rem;
+        line-height: 1.5;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -85,8 +83,10 @@ if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 
 if not st.session_state.authenticated:
-    st.markdown("<h1 style='text-align: center; color: #00C853;'>🔐 Forex Sniper 7‑12 • Cockpit Access</h1>",
-                unsafe_allow_html=True)
+    st.markdown(
+        "<h1 style='text-align: center; color: #00C853;'>🔐 Forex Sniper 7‑12 • Cockpit Access</h1>",
+        unsafe_allow_html=True
+    )
     pwd = st.text_input("Password", type="password")
     if st.button("Sign in"):
         if pwd == st.secrets["DASHBOARD_PASSWORD"]:
@@ -99,68 +99,80 @@ if not st.session_state.authenticated:
 # ---------- Utilitaires ----------
 MONTREAL_TZ = ZoneInfo("America/Toronto")
 
-@st.cache_data(ttl=5)
-def fetch_json(filename):
+
+def github_raw_url(filename):
     repo = st.secrets["GITHUB_REPOSITORY"]
-    cache_buster = int(time.time())
-    url = f"https://raw.githubusercontent.com/{repo}/main/{filename}?t={cache_buster}"
+    return f"https://raw.githubusercontent.com/{repo}/main/{filename}"
+
+
+def fetch_json_file(filename):
+    """Lit un JSON GitHub avec cache-buster pour éviter les données périmées."""
+    url = github_raw_url(filename)
     try:
-        resp = requests.get(url, timeout=10)
+        resp = requests.get(url, params={"t": int(time.time())}, timeout=10)
         if resp.status_code == 200:
             return resp.json()
     except Exception:
         pass
     return None
 
+
 def fetch_status():
-    return fetch_json("status.json")
+    return fetch_json_file("status.json")
+
 
 def fetch_pair_indicators():
-    data = fetch_json("pair_indicators.json")
-    if data:
-        return data
-    return {}
+    data = fetch_json_file("pair_indicators.json")
+    if data is None:
+        return {}
+    # Supporte à la fois un JSON direct {"EUR_USD": {...}}
+    # et un JSON enveloppé {"pairs": {...}}.
+    if isinstance(data, dict) and isinstance(data.get("pairs"), dict):
+        return data["pairs"]
+    return data if isinstance(data, dict) else {}
+
 
 def fetch_closed_trades():
-    data = fetch_json("closed_trades.json")
-    if data:
-        today_str = datetime.now(MONTREAL_TZ).strftime("%Y-%m-%d")
-        if data.get("last_cleanup") == today_str or data.get("last_cleanup") is None:
-            return data.get("trades", [])
-    return []
+    data = fetch_json_file("closed_trades.json")
+    if not data:
+        return []
+    if isinstance(data, dict):
+        return data.get("trades", [])
+    return data if isinstance(data, list) else []
+
 
 def fetch_rejected_signals():
-    data = fetch_json("rejected_signals.json")
-    if data:
-        today_str = datetime.now(MONTREAL_TZ).strftime("%Y-%m-%d")
-        if data.get("last_cleanup") == today_str or data.get("last_cleanup") is None:
-            return data.get("signals", [])
-    return []
+    data = fetch_json_file("rejected_signals.json")
+    if not data:
+        return []
+    if isinstance(data, dict):
+        return data.get("signals", [])
+    return data if isinstance(data, list) else []
 
-def fetch_pause_state():
-    data = fetch_json("pause_state.json")
-    if data:
-        return data.get("pause_until", 0)
-    return 0
 
 def check_bot_running():
+    """Vérifie si un workflow GitHub Actions est en cours ou en attente."""
     token = st.secrets.get("GH_PAT")
     repo = st.secrets["GITHUB_REPOSITORY"]
     headers = {"Accept": "application/vnd.github.v3+json"}
     if token:
         headers["Authorization"] = f"token {token}"
     url = f"https://api.github.com/repos/{repo}/actions/runs"
+
     for status in ("in_progress", "queued"):
-        params = {"status": status}
         try:
-            resp = requests.get(url, headers=headers, params=params, timeout=10)
-            if resp.status_code == 200:
-                runs = resp.json()
-                if runs.get("workflow_runs"):
-                    return True
+            resp = requests.get(
+                url,
+                headers=headers,
+                params={"status": status, "per_page": 10},
+                timeout=10
+            )
+            if resp.status_code == 200 and resp.json().get("workflow_runs"):
+                return True
         except Exception:
             pass
     return False
+
 
 def safe_float(value, default=0.0):
     try:
@@ -168,13 +180,79 @@ def safe_float(value, default=0.0):
     except (ValueError, TypeError):
         return default
 
+
 def fmt_num(value, decimals=5):
     try:
         return f"{float(value):.{decimals}f}"
     except (ValueError, TypeError):
         return "--"
 
-# ---------- Logo + nom du bot ----------
+
+def fmt_pips(value):
+    try:
+        return f"{float(value):.1f} pips"
+    except (ValueError, TypeError):
+        return "--"
+
+
+def setup_name(item):
+    return item.get("setup_type") or item.get("setup") or item.get("strategy") or "--"
+
+
+def score_text(item):
+    score = item.get("score")
+    if score is None:
+        return "--"
+    return f"{score}/9"
+
+
+def direction_text(item):
+    direction = item.get("direction") or item.get("type") or ""
+    direction = str(direction).upper()
+    if direction in ("BUY", "SELL"):
+        return direction
+    return "--"
+
+
+def current_r(active):
+    """Calcule le R flottant si entry/sl/current sont disponibles."""
+    explicit = active.get("current_r", active.get("r_multiple"))
+    if explicit is not None:
+        try:
+            return float(explicit)
+        except (ValueError, TypeError):
+            pass
+
+    entry = active.get("entry", active.get("entry_price"))
+    sl = active.get("sl", active.get("stop_loss"))
+    current = active.get("current_price", active.get("price"))
+    direction = str(active.get("direction", active.get("type", ""))).lower()
+
+    try:
+        risk = abs(float(entry) - float(sl))
+        if risk <= 0:
+            return None
+        move = float(current) - float(entry)
+        if direction == "sell":
+            move *= -1
+        return move / risk
+    except (ValueError, TypeError):
+        return None
+
+
+def trade_pnl(item):
+    return safe_float(item.get("pnl", item.get("realized_pnl", 0)))
+
+
+def trade_r(item):
+    value = item.get("r_multiple", item.get("r"))
+    try:
+        return float(value)
+    except (ValueError, TypeError):
+        return None
+
+
+# ---------- Logo + nom du bot (même ligne, logo arrondi) ----------
 LOGO_URL = "https://raw.githubusercontent.com/NSTradingUS-CA/forexbotny/main/assets/logo.png"
 st.markdown(f"""
 <div style="display: flex; align-items: center; justify-content: center;">
@@ -190,150 +268,251 @@ with col_signout:
         st.session_state.authenticated = False
         st.rerun()
 
-@st.fragment(run_every="10s")
-def render_dashboard():
+placeholder = st.empty()
+
+# ---------- Boucle de rafraîchissement ----------
+while True:
     data = fetch_status()
     pair_data = fetch_pair_indicators()
     closed_trades = fetch_closed_trades()
     rejected = fetch_rejected_signals()
-    pause_until = fetch_pause_state()
-    now_mtl = datetime.now(MONTREAL_TZ)
-    now_str = now_mtl.strftime('%H:%M:%S')
+    now_mtl = datetime.now(MONTREAL_TZ).strftime('%H:%M:%S')
     bot_is_running = check_bot_running()
 
-    if not data:
-        st.error("Status unavailable – retrying in 10s")
-        return
-
-    # ---------- Bannière de pause news ----------
-    if pause_until > now_mtl.timestamp():
-        resume_time = datetime.fromtimestamp(pause_until, MONTREAL_TZ).strftime('%H:%M')
-        st.markdown(
-            f'<div class="news-pause-banner">📅 High-impact news detected – Trading paused until {resume_time}</div>',
-            unsafe_allow_html=True
-        )
-
-    # ---------- Session ----------
-    st.markdown('<div class="session-metrics">', unsafe_allow_html=True)
-    sess = data.get("session", {})
-    col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
-    trades = sess.get('trades_today', 0)
-    max_tr = sess.get('max_trades', 3)
-
-    col1.markdown("#### Trades")
-    col1.metric("", f"{trades}/{max_tr}")
-
-    col2.markdown("#### Session")
-    col2.metric("", f"07:00–11:00")
-
-    col3.markdown("#### Status")
-    col3.metric("", "🟢" if bot_is_running else "🔴")
-
-    col4.markdown("#### Time")
-    col4.metric("", now_str)
-    st.markdown('</div>', unsafe_allow_html=True)
-
-    # ---------- Paires ----------
-    st.markdown("---")
-    cols = st.columns(2)
-    for i, pair in enumerate(["EUR_USD", "GBP_USD"]):
-        with cols[i]:
-            p = pair_data.get(pair, {})
-            st.markdown(f"**{pair}**")
-
-            price = p.get('price')
-            st.metric("Price", f"{price:.5f}" if price is not None else "--")
-
-            spread_val = p.get('spread', '--')
-            spread_str = f"{safe_float(spread_val):.5f}" if spread_val != '--' else '--'
-            adx_str = fmt_num(p.get('adx'))
-            plus_di_str = fmt_num(p.get('plus_di'))
-            minus_di_str = fmt_num(p.get('minus_di'))
-            ema50 = p.get('ema50')
-            ema200 = p.get('ema200')
-            rsi_val = p.get('rsi')
-            atr_val = p.get('atr')
-
-            ema50_str = f"{ema50:.5f}" if ema50 is not None else "--"
-            ema200_str = f"{ema200:.5f}" if ema200 is not None else "--"
-            rsi_str = f"{rsi_val:.1f}" if rsi_val is not None else "--"
-            atr_str = f"{atr_val:.5f}" if atr_val is not None else "--"
-
-            line1 = (
-                f"<span class='orange-label'>Spread:</span> {spread_str} | "
-                f"<span class='orange-label'>ADX:</span> {adx_str} | "
-                f"<span class='orange-label'>+DI:</span> {plus_di_str} | "
-                f"<span class='orange-label'>-DI:</span> {minus_di_str}"
-            )
-            line2 = (
-                f"<span class='orange-label'>EMA50:</span> {ema50_str} | "
-                f"<span class='orange-label'>EMA200:</span> {ema200_str} | "
-                f"<span class='orange-label'>RSI:</span> {rsi_str} | "
-                f"<span class='orange-label'>ATR:</span> {atr_str}"
-            )
-
-            st.markdown(f"<div class='indicators-line'>{line1}</div>", unsafe_allow_html=True)
-            st.markdown(f"<div class='indicators-line'>{line2}</div>", unsafe_allow_html=True)
-
-            sig = p.get('last_signal')
-            if sig:
-                st.markdown(f"Signal: <span class='green'>{sig.upper()}</span>", unsafe_allow_html=True)
-
-    # ---------- Active Trade ----------
-    active = data.get("active_trade")
-    if active:
-        st.markdown("---")
-        st.markdown("#### 🔥 Active Trade")
-        st.markdown('<div class="active-trade-metrics">', unsafe_allow_html=True)
-        c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Pair", active.get("pair",""))
-        c2.metric("Type", active.get("type",""))
-        c3.metric("Entry", f"{active.get('entry',0):.5f}")
-        c4.metric("Current", f"{active.get('current_price',0):.5f}")
-        pnl = active.get('unrealized_pnl',0)
-        c1.metric("P&L", f"{pnl:.2f} USD", delta_color="normal" if pnl>=0 else "inverse")
-        tp1_val = active.get('tp1')
-        tp2_val = active.get('tp2')
-        if tp1_val is not None:
-            c2.metric("TP1 (partial)", f"{tp1_val:.5f}")
-        if tp2_val is not None:
-            c3.metric("TP2 (final)", f"{tp2_val:.5f}")
-        c4.metric("SL", f"{active.get('sl',0):.5f} ({active.get('distance_to_sl_pips',0)} pips)")
-        trail_info = active.get('trailing_stop', '')
-        atr_active = active.get('atr', None)
-        if atr_active is not None:
-            trail_info = f"{trail_info} (ATR: {atr_active:.5f})"
-        if trail_info:
-            st.caption(f"Trailing Stop: {trail_info}")
-        st.markdown('</div>', unsafe_allow_html=True)
-
-    # ---------- Historique + Rejets ----------
-    st.markdown("---")
-    tab1, tab2 = st.tabs(["📜 Closed", "🚫 Rejected"])
-    with tab1:
-        if closed_trades:
-            for t in closed_trades[::-1]:
-                pnl = t.get('pnl',0)
-                color = "green" if pnl >= 0 else "red"
-                st.markdown(
-                    f"<span class='{color}'>{t.get('pair','')} {t.get('type','')} – {pnl:.2f} USD ({t.get('time','')})</span>",
-                    unsafe_allow_html=True)
+    with placeholder.container():
+        if not data:
+            st.error("Status unavailable – retrying in 30s")
         else:
-            st.write("No closed trades.")
-    with tab2:
-        if rejected:
-            for r in rejected[::-1][:30]:
+            # ---------- Session ----------
+            st.markdown('<div class="session-metrics">', unsafe_allow_html=True)
+            sess = data.get("session", {})
+            col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
+
+            trades = sess.get("trades_today", 0)
+            max_tr = sess.get("max_trades", 3)
+
+            col1.markdown("#### Trades")
+            col1.metric("", f"{trades}/{max_tr}")
+
+            col2.markdown("#### Session")
+            col2.metric("", f"{sess.get('start','07')}–{sess.get('end','11')}")
+
+            col3.markdown("#### Status")
+            col3.metric("", "🟢" if bot_is_running else "🔴")
+
+            col4.markdown("#### Time")
+            col4.metric("", now_mtl)
+            st.markdown('</div>', unsafe_allow_html=True)
+
+            # ---------- News ----------
+            news = data.get("next_news_event")
+            if news:
                 st.markdown(
-                    f"<span class='orange'>{r.get('time','')} {r.get('pair','')} – {r.get('reason','')}</span>",
-                    unsafe_allow_html=True)
-        else:
-            st.write("No rejected setups.")
+                    f"⏰ **{news.get('title','News')}** at {news.get('time','--')} – "
+                    f":orange[{news.get('impact','')} ]"
+                )
 
+            # ---------- Paires ----------
+            st.markdown("---")
+            cols = st.columns(2)
+            for i, pair in enumerate(["EUR_USD", "GBP_USD"]):
+                with cols[i]:
+                    p = pair_data.get(pair, {})
+                    st.markdown(f"**{pair}**")
 
-render_dashboard()
+                    price = p.get("price")
+                    st.metric("Price", f"{price:.5f}" if price is not None else "--")
 
-# ---------- Footer ----------
-st.markdown(
-    '<div class="footer">NorthSentinel Trading • Forex Sniper 7‑12 • August, 2026 ©</div>',
-    unsafe_allow_html=True
-)
+                    spread_val = p.get("spread", "--")
+                    spread_str = f"{safe_float(spread_val):.5f}" if spread_val != "--" else "--"
+                    adx_str = fmt_num(p.get("adx"), 1)
+                    plus_di_str = fmt_num(p.get("plus_di"), 1)
+                    minus_di_str = fmt_num(p.get("minus_di"), 1)
+                    ema50_str = fmt_num(p.get("ema50"))
+                    ema200_str = fmt_num(p.get("ema200"))
+                    rsi_val = p.get("rsi")
+                    rsi_str = f"{float(rsi_val):.1f}" if rsi_val is not None else "--"
+
+                    line1 = (
+                        f"<span class='orange-label'>Spread:</span> {spread_str} | "
+                        f"<span class='orange-label'>ADX:</span> {adx_str} | "
+                        f"<span class='orange-label'>+DI:</span> {plus_di_str} | "
+                        f"<span class='orange-label'>-DI:</span> {minus_di_str}"
+                    )
+                    line2 = (
+                        f"<span class='orange-label'>EMA50:</span> {ema50_str} | "
+                        f"<span class='orange-label'>EMA200:</span> {ema200_str} | "
+                        f"<span class='orange-label'>RSI:</span> {rsi_str}"
+                    )
+
+                    st.markdown(f"<div class='indicators-line'>{line1}</div>", unsafe_allow_html=True)
+                    st.markdown(f"<div class='indicators-line'>{line2}</div>", unsafe_allow_html=True)
+
+                    sig = p.get("last_signal")
+                    if sig:
+                        st.markdown(
+                            f"Signal: <span class='green'>{str(sig).upper()}</span>",
+                            unsafe_allow_html=True
+                        )
+
+            # ---------- Active Trade ----------
+            active = data.get("active_trade")
+            st.markdown("---")
+            st.markdown("#### 🔥 Active Trade")
+
+            if active:
+                st.markdown('<div class="active-trade-metrics">', unsafe_allow_html=True)
+
+                c1, c2, c3, c4 = st.columns(4)
+                pair = active.get("pair", "")
+                direction = direction_text(active)
+                setup = setup_name(active)
+                score = score_text(active)
+
+                c1.metric("Pair", pair)
+                c2.metric("Direction", direction)
+                c3.metric("Setup", setup)
+                c4.metric("Score", score)
+
+                c1, c2, c3, c4 = st.columns(4)
+                entry = active.get("entry", active.get("entry_price"))
+                current = active.get("current_price", active.get("price"))
+                sl = active.get("sl", active.get("stop_loss"))
+                tp1 = active.get("tp1")
+                tp2 = active.get("tp2", active.get("tp"))
+
+                c1.metric("Entry", fmt_num(entry))
+                c2.metric("Current", fmt_num(current))
+
+                pnl = safe_float(active.get("unrealized_pnl", active.get("pnl", 0)))
+                c3.metric("P&L", f"{pnl:.2f} USD", delta_color="normal" if pnl >= 0 else "inverse")
+
+                r_now = current_r(active)
+                c4.metric("Current R", f"{r_now:+.2f}R" if r_now is not None else "--")
+
+                c1, c2, c3, c4 = st.columns(4)
+                c1.metric("SL", f"{fmt_num(sl)} ({fmt_pips(active.get('distance_to_sl_pips'))})")
+                c2.metric("TP1 (partial)", fmt_num(tp1) if tp1 is not None else "--")
+                c3.metric("TP2 (final)", fmt_num(tp2) if tp2 is not None else "--")
+                c4.metric("Risk", f"{active.get('risk_percent', active.get('risk', '--'))}%" if active.get('risk_percent', active.get('risk')) is not None else "--")
+
+                status = active.get("trade_status") or active.get("status")
+                be = active.get("be_triggered")
+                trailing = active.get("trailing_stop", active.get("trailing_distance"))
+                atr_active = active.get("atr")
+
+                details = []
+                if status:
+                    details.append(f"Status: <b>{status}</b>")
+                if be is not None:
+                    details.append(f"BE: <b>{'ON' if be else 'OFF'}</b>")
+                if trailing not in (None, ""):
+                    details.append(f"Trailing: <b>{trailing}</b>")
+                if atr_active not in (None, ""):
+                    details.append(f"ATR: <b>{fmt_num(atr_active)}</b>")
+                if details:
+                    st.markdown(
+                        "<div class='trade-detail-line'>" + " | ".join(details) + "</div>",
+                        unsafe_allow_html=True
+                    )
+
+                st.markdown('</div>', unsafe_allow_html=True)
+            else:
+                st.info("No active trade.")
+
+            # ---------- Closed + Rejected ----------
+            tab1, tab2 = st.tabs(["📜 Closed", "🚫 Rejected"])
+
+            with tab1:
+                if closed_trades:
+                    # Résumé du jour
+                    total_pnl = sum(trade_pnl(t) for t in closed_trades)
+                    r_values = [trade_r(t) for t in closed_trades if trade_r(t) is not None]
+                    wins = sum(1 for t in closed_trades if trade_pnl(t) > 0)
+
+                    s1, s2, s3, s4 = st.columns(4)
+                    s1.metric("Trades", len(closed_trades))
+                    s2.metric("Win rate", f"{(wins / len(closed_trades) * 100):.0f}%")
+                    s3.metric("P&L", f"{total_pnl:+.2f} USD")
+                    s4.metric("R total", f"{sum(r_values):+.2f}R" if r_values else "--")
+                    st.markdown("---")
+
+                    for t in closed_trades[::-1]:
+                        pnl = trade_pnl(t)
+                        color = "green" if pnl >= 0 else "red"
+                        r_value = trade_r(t)
+                        r_display = f" | {r_value:+.2f}R" if r_value is not None else ""
+                        setup = setup_name(t)
+                        score = score_text(t)
+                        direction = direction_text(t)
+
+                        st.markdown(
+                            f"<span class='{color}'>"
+                            f"<b>{t.get('time','')}</b> {t.get('pair','')} {direction} – "
+                            f"{setup} – Score {score} – {pnl:+.2f} USD{r_display}"
+                            f"</span>",
+                            unsafe_allow_html=True
+                        )
+
+                        details = {
+                            "Entry": t.get("entry", t.get("entry_price")),
+                            "Exit": t.get("exit", t.get("exit_price")),
+                            "SL": t.get("sl", t.get("stop_loss")),
+                            "TP1": t.get("tp1"),
+                            "TP2": t.get("tp2", t.get("tp")),
+                            "Risk %": t.get("risk_percent", t.get("risk")),
+                            "Setup": setup,
+                            "Score": t.get("score"),
+                            "Reason": t.get("close_reason", t.get("reason")),
+                        }
+                        details = {k: v for k, v in details.items() if v is not None}
+                        if details:
+                            with st.expander("Details"):
+                                st.json(details)
+                else:
+                    st.write("No closed trades.")
+
+            with tab2:
+                if rejected:
+                    # Les rejets sont conservés dans rejected_signals.json,
+                    # indépendamment du status.json.
+                    for r in rejected[::-1][:50]:
+                        setup = setup_name(r)
+                        score = score_text(r)
+                        direction = direction_text(r)
+                        reason = r.get("reason", "Unknown reason")
+
+                        st.markdown(
+                            f"<span class='orange'>"
+                            f"<b>{r.get('time','')}</b> {r.get('pair','')} {direction} – "
+                            f"{setup} – Score {score} – {reason}"
+                            f"</span>",
+                            unsafe_allow_html=True
+                        )
+
+                        details = {}
+                        for key in (
+                            "setup_type", "setup", "score", "direction", "reason",
+                            "risk_percent", "adx", "rsi", "ema50", "ema200",
+                            "plus_di", "minus_di", "atr", "spread", "market_regime"
+                        ):
+                            if key in r and r[key] is not None:
+                                details[key] = r[key]
+
+                        if "indicators" in r and isinstance(r["indicators"], dict):
+                            details["indicators"] = r["indicators"]
+
+                        if details:
+                            with st.expander("Details"):
+                                st.json(details)
+                else:
+                    st.write("No rejected setups.")
+
+    # ---------- Footer ----------
+    st.markdown(
+        '<div class="footer">NorthSentinel Trading • Forex Sniper 7‑12 • August, 2026 ©</div>',
+        unsafe_allow_html=True
+    )
+
+    time.sleep(30)
+    st.rerun()
