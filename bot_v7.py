@@ -112,7 +112,8 @@ def push_file_to_github(local_path, remote_path):
         with open(local_path, 'r') as f:
             content = base64.b64encode(f.read().encode()).decode()
         url = f"https://api.github.com/repos/{os.getenv('GITHUB_REPOSITORY')}/contents/{remote_path}"
-        headers = {"Authorization": f"token {GH_PAT}", "Accept": "application/vnd.github.v3+json"}
+        headers = {"Authorization": f"token {GH_PAT}", "Accept": "application/vnd.github.v3+json",
+                   "Cache-Control": "no-cache"}
         resp = requests.get(url, headers=headers, timeout=10)
         sha = resp.json().get("sha") if resp.status_code == 200 else None
         payload = {"message": f"Update {remote_path}", "content": content, "branch": "main"}
@@ -210,7 +211,8 @@ def push_status_json(data_dict):
         return
     try:
         url = f"https://api.github.com/repos/{os.getenv('GITHUB_REPOSITORY')}/contents/status.json"
-        headers = {"Authorization": f"token {GH_PAT}", "Accept": "application/vnd.github.v3+json"}
+        headers = {"Authorization": f"token {GH_PAT}", "Accept": "application/vnd.github.v3+json",
+                   "Cache-Control": "no-cache"}
         resp = requests.get(url, headers=headers, timeout=10)
         sha = resp.json().get("sha") if resp.status_code == 200 else None
         content = json.dumps(data_dict, indent=2, default=str).encode()
