@@ -1,5 +1,5 @@
 {
-  "time": "2026-08-12 07:06:17",
+  "time": "2026-08-12 07:06:54",
   "bot_status": "running",
   "session": {
     "trades_today": 0,
@@ -10,7 +10,7 @@
   "pairs": {
     "EUR_USD": {
       "price": 1.15362,
-      "spread": 0.00017000000000000348,
+      "spread": 0.0001500000000000945,
       "adx": 20.71451962453145,
       "plus_di": 26.923503551560625,
       "minus_di": 13.561866898106627,
@@ -24,7 +24,7 @@
     },
     "GBP_USD": {
       "price": 1.35129,
-      "spread": 0.000180000000000069,
+      "spread": 0.00018999999999991246,
       "adx": 17.297210798741013,
       "plus_di": 34.19086079263178,
       "minus_di": 9.889565485091909,
@@ -41,18 +41,6 @@
   "closed_trades_today": [],
   "rejected_signals": [
     {
-      "time": "07:00:59",
-      "pair": "EUR_USD",
-      "direction": null,
-      "reason": "BUY REJECTED: MACD not bullish, No bullish rejection | SELL REJECTED: -DI not above +DI, MACD not bearish, EMA50 not below EMA200, No bearish rejection"
-    },
-    {
-      "time": "07:00:59",
-      "pair": "GBP_USD",
-      "direction": null,
-      "reason": "BUY REJECTED: No EMA50 touch, No bullish rejection | SELL REJECTED: -DI not above +DI, MACD not bearish, EMA50 not below EMA200, No EMA50 touch, No bearish rejection"
-    },
-    {
       "time": "07:01:34",
       "pair": "EUR_USD",
       "direction": null,
@@ -156,6 +144,18 @@
     },
     {
       "time": "07:06:14",
+      "pair": "GBP_USD",
+      "direction": null,
+      "reason": "BUY REJECTED: No EMA50 touch, No bullish rejection | SELL REJECTED: -DI not above +DI, MACD not bearish, EMA50 not below EMA200, No EMA50 touch, No bearish rejection"
+    },
+    {
+      "time": "07:06:50",
+      "pair": "EUR_USD",
+      "direction": null,
+      "reason": "BUY REJECTED: MACD not bullish, No bullish rejection | SELL REJECTED: -DI not above +DI, MACD not bearish, EMA50 not below EMA200, No bearish rejection"
+    },
+    {
+      "time": "07:06:50",
       "pair": "GBP_USD",
       "direction": null,
       "reason": "BUY REJECTED: No EMA50 touch, No bullish rejection | SELL REJECTED: -DI not above +DI, MACD not bearish, EMA50 not below EMA200, No EMA50 touch, No bearish rejection"
