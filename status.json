@@ -1,5 +1,5 @@
 {
-  "time": "2026-08-12 07:04:34",
+  "time": "2026-08-12 07:05:09",
   "bot_status": "running",
   "session": {
     "trades_today": 0,
@@ -10,7 +10,7 @@
   "pairs": {
     "EUR_USD": {
       "price": 1.15362,
-      "spread": 0.00016000000000016001,
+      "spread": 0.0001500000000000945,
       "adx": 20.71451962453145,
       "plus_di": 26.923503551560625,
       "minus_di": 13.561866898106627,
@@ -132,6 +132,18 @@
     },
     {
       "time": "07:04:31",
+      "pair": "GBP_USD",
+      "direction": null,
+      "reason": "BUY REJECTED: No EMA50 touch, No bullish rejection | SELL REJECTED: -DI not above +DI, MACD not bearish, EMA50 not below EMA200, No EMA50 touch, No bearish rejection"
+    },
+    {
+      "time": "07:05:05",
+      "pair": "EUR_USD",
+      "direction": null,
+      "reason": "BUY REJECTED: MACD not bullish, No bullish rejection | SELL REJECTED: -DI not above +DI, MACD not bearish, EMA50 not below EMA200, No bearish rejection"
+    },
+    {
+      "time": "07:05:05",
       "pair": "GBP_USD",
       "direction": null,
       "reason": "BUY REJECTED: No EMA50 touch, No bullish rejection | SELL REJECTED: -DI not above +DI, MACD not bearish, EMA50 not below EMA200, No EMA50 touch, No bearish rejection"
