@@ -99,7 +99,7 @@ if not st.session_state.authenticated:
 # ---------- Utilitaires ----------
 MONTREAL_TZ = ZoneInfo("America/Toronto")
 
-@st.cache_data(ttl=15)
+@st.cache_data(ttl=5)
 def fetch_json(filename):
     """Lit un fichier JSON depuis le dépôt GitHub, avec cache-buster pour éviter le cache navigateur."""
     repo = st.secrets["GITHUB_REPOSITORY"]
