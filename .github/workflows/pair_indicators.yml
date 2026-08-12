@@ -1,4 +1,4 @@
-name: Pair Indicators Updater
+name: 💹 Pair Indicators Updater
 
 on:
   workflow_dispatch:
