@@ -1,12 +1,6 @@
 {
   "signals": [
     {
-      "time": "09:52:47",
-      "pair": "GBP_USD",
-      "direction": null,
-      "reason": "BUY REJECTED: No EMA50 touch, No bullish rejection, RSI out of range (71.3) | SELL REJECTED: -DI not above +DI, MACD not bearish, EMA50 not below EMA200, No EMA50 touch, No bearish rejection, RSI out of range (71.3)"
-    },
-    {
       "time": "09:53:22",
       "pair": "EUR_USD",
       "direction": null,
@@ -299,6 +293,12 @@
       "pair": "EUR_USD",
       "direction": null,
       "reason": "BUY REJECTED: RSI out of range (72.4) | SELL REJECTED: -DI not above +DI, MACD not bearish, EMA50 not below EMA200, No bearish rejection, RSI out of range (72.4)"
+    },
+    {
+      "time": "10:07:15",
+      "pair": "GBP_USD",
+      "direction": null,
+      "reason": "BUY REJECTED: No EMA50 touch, RSI out of range (77.3) | SELL REJECTED: -DI not above +DI, MACD not bearish, EMA50 not below EMA200, No EMA50 touch, No bearish rejection, RSI out of range (77.3)"
     }
   ],
   "last_cleanup": "2026-08-12"
