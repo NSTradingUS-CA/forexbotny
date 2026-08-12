@@ -83,11 +83,6 @@ def set_pause_until(timestamp):
     push_file_to_github(PAUSE_FILE, PAUSE_FILE)
 
 
-def is_news_block_active(now):
-    pause_until = get_pause_until()
-    return now.timestamp() < pause_until
-
-
 def check_and_block_news(now):
     events = get_high_impact_news()
     for event in events:
