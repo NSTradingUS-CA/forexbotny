@@ -1,0 +1,30 @@
+name: Pair Indicators Updater
+
+on:
+  workflow_dispatch:
+  repository_dispatch:
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 660
+
+    env:
+      OANDA_API_KEY: ${{ secrets.OANDA_API_KEY }}
+      OANDA_ACCOUNT_ID: ${{ secrets.OANDA_ACCOUNT_ID }}
+      GH_PAT: ${{ secrets.GH_PAT }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install v20 pandas python-dotenv requests pytz
+
+      - name: Run Pair Indicators
+        run: python pair_indicators.py
