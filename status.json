@@ -1,5 +1,5 @@
 {
-  "time": "2026-08-12 06:59:52",
+  "time": "2026-08-12 07:00:28",
   "bot_status": "running",
   "session": {
     "trades_today": 0,
@@ -9,29 +9,29 @@
   },
   "pairs": {
     "EUR_USD": {
-      "price": 1.15372,
-      "spread": 0.0001500000000000945,
-      "adx": 19.34906434697482,
-      "plus_di": 13.14497654420029,
-      "minus_di": 18.452522797159325,
-      "ema50": 1.1541123869388485,
-      "ema200": 1.1521984035673167,
-      "rsi": 44.85583451638904,
-      "atr": 0.00038642857142856535,
+      "price": 1.15362,
+      "spread": 0.00017000000000000348,
+      "adx": 20.71451962453145,
+      "plus_di": 26.923503551560625,
+      "minus_di": 13.561866898106627,
+      "ema50": 1.1540930822988897,
+      "ema200": 1.1522481029062077,
+      "rsi": 43.04538274371153,
+      "atr": 0.00047357142857140655,
       "ema_orientation": "bullish",
       "macd_signal": "bullish",
       "last_signal": null
     },
     "GBP_USD": {
-      "price": 1.3511,
-      "spread": 0.00017999999999984695,
-      "adx": 13.093628982111339,
-      "plus_di": 15.838213002588223,
-      "minus_di": 13.197279903073522,
-      "ema50": 1.3502476006491906,
-      "ema200": 1.3464525235924771,
-      "rsi": 56.48475819480474,
-      "atr": 0.0005214285714285616,
+      "price": 1.35129,
+      "spread": 0.00017000000000000348,
+      "adx": 17.297210798741013,
+      "plus_di": 34.19086079263178,
+      "minus_di": 9.889565485091909,
+      "ema50": 1.3502884792544665,
+      "ema200": 1.3465021814332607,
+      "rsi": 58.75909488350169,
+      "atr": 0.0006157142857142592,
       "ema_orientation": "bullish",
       "macd_signal": "bullish",
       "last_signal": null
@@ -39,7 +39,20 @@
   },
   "active_trade": null,
   "closed_trades_today": [],
-  "rejected_signals": [],
+  "rejected_signals": [
+    {
+      "time": "07:00:23",
+      "pair": "EUR_USD",
+      "direction": null,
+      "reason": "BUY REJECTED: MACD not bullish, No bullish rejection | SELL REJECTED: -DI not above +DI, MACD not bearish, EMA50 not below EMA200, No bearish rejection"
+    },
+    {
+      "time": "07:00:23",
+      "pair": "GBP_USD",
+      "direction": null,
+      "reason": "BUY REJECTED: No EMA50 touch, No bullish rejection | SELL REJECTED: -DI not above +DI, MACD not bearish, EMA50 not below EMA200, No EMA50 touch, No bearish rejection"
+    }
+  ],
   "next_news_event": {
     "title": "Core CPI m/m",
     "time": "08:30",
