@@ -22,9 +22,9 @@ FINNHUB_API_KEY = os.getenv("FINNHUB_API_KEY")
 GH_PAT = os.getenv("GH_PAT")
 PAIRS = ["EUR_USD", "GBP_USD"]
 RISK_PERCENT = 1.0
-TRADING_HOURS_START = 7       # début de la fenêtre de trading
-TRADING_HOURS_END = 11        # fin de la fenêtre de trading (nouvelles entrées)
-BOT_SHUTDOWN_HOUR = 17        # heure d'arrêt complet du bot (gère encore les positions ouvertes)
+TRADING_HOURS_START = 7
+TRADING_HOURS_END = 11
+BOT_SHUTDOWN_HOUR = 17
 TIMEZONE = 'America/Toronto'
 MAX_TRADES_PER_DAY = 3
 MIN_MINUTES_BETWEEN_TRADES = 15
@@ -69,7 +69,7 @@ REJECTED_FILE = "rejected_signals.json"
 PAUSE_FILE = "pause_state.json"
 
 
-# ---------- Fichiers JSON (pause, closed, rejected) ----------
+# ---------- Fichiers JSON ----------
 def get_pause_until():
     if os.path.exists(PAUSE_FILE):
         with open(PAUSE_FILE, 'r') as f:
@@ -754,17 +754,8 @@ def check_closed_trade():
 
 
 def check_signal(df, instrument):
-    """
-    Evaluate BUY and SELL independently.
-
-    With neutral/no sentiment, both directions are evaluated on every scan.
-    With a directional sentiment filter, only the matching direction is allowed.
-    A failed BUY evaluation no longer returns immediately and therefore cannot
-    prevent the SELL evaluation from being performed.
-    """
     if len(df) < 200:
         return False, 0, 0, 0, 0, None, "Not enough candles"
-
     last_candle = df.iloc[-2]
     price = last_candle['c']
     ema50 = last_candle['ema50']
@@ -774,21 +765,15 @@ def check_signal(df, instrument):
     adx = last_candle['adx']
     plus_di = last_candle['plus_di']
     minus_di = last_candle['minus_di']
-
     if pd.isna(atr) or pd.isna(ema50) or pd.isna(adx):
         return False, 0, 0, 0, 0, None, "Missing indicator values"
-
     config = PAIR_CONFIG[instrument]
     adx_threshold = config["ADX_THRESHOLD"]
     atr_multiplier = config["ATR_MULTIPLIER"]
     sentiment = news_sentiment_filter.get(instrument, None)
 
-    # ------------------------------------------------------------------
-    # BUY evaluation
-    # ------------------------------------------------------------------
     buy_allowed = sentiment is None or sentiment == 'bullish'
     buy_reasons = []
-
     if not buy_allowed:
         buy_reasons.append(f"blocked by sentiment ({sentiment})")
     else:
@@ -796,7 +781,6 @@ def check_signal(df, instrument):
             buy_reasons.append(f"ADX too low ({adx:.1f} < {adx_threshold})")
         if plus_di <= minus_di:
             buy_reasons.append("+DI not above -DI")
-
         macd_ok = True
         if USE_MACD_FILTER:
             macd_line = last_candle['macd_line']
@@ -804,7 +788,6 @@ def check_signal(df, instrument):
             if pd.isna(macd_line) or pd.isna(macd_signal) or macd_line <= macd_signal or macd_line <= 0:
                 macd_ok = False
                 buy_reasons.append("MACD not bullish")
-
         vol_ok = True
         if USE_VOLUME_FILTER:
             volume = last_candle['volume']
@@ -812,46 +795,24 @@ def check_signal(df, instrument):
             if pd.isna(vol_ma) or volume < vol_ma:
                 vol_ok = False
                 buy_reasons.append("Volume too low")
-
         trend_up = ema50 > ema200
         touched_ema = (last_candle['l'] <= ema50 <= last_candle['h'])
-        bullish_rejection = (
-            (last_candle['c'] > last_candle['o']) and
-            ((last_candle['o'] - last_candle['l']) > (last_candle['h'] - last_candle['c']))
-        )
+        bullish_rejection = (last_candle['c'] > last_candle['o']) and ((last_candle['o'] - last_candle['l']) > (last_candle['h'] - last_candle['c']))
         rsi_ok = 30 < rsi < 70
-
-        if not trend_up:
-            buy_reasons.append("EMA50 not above EMA200")
-        if not touched_ema:
-            buy_reasons.append("No EMA50 touch")
-        if not bullish_rejection:
-            buy_reasons.append("No bullish rejection")
-        if not rsi_ok:
-            buy_reasons.append(f"RSI out of range ({rsi:.1f})")
-
-        if (adx >= adx_threshold and
-                plus_di > minus_di and
-                macd_ok and
-                vol_ok and
-                trend_up and
-                touched_ema and
-                bullish_rejection and
-                rsi_ok):
+        if not trend_up: buy_reasons.append("EMA50 not above EMA200")
+        if not touched_ema: buy_reasons.append("No EMA50 touch")
+        if not bullish_rejection: buy_reasons.append("No bullish rejection")
+        if not rsi_ok: buy_reasons.append(f"RSI out of range ({rsi:.1f})")
+        if (adx >= adx_threshold and plus_di > minus_di and macd_ok and vol_ok and trend_up and touched_ema and bullish_rejection and rsi_ok):
             sl = ema200 - (atr_multiplier * atr)
             sl_distance = price - sl
             if sl_distance > 0:
                 sl_pips = sl_distance / 0.0001
                 tp = price + 2 * sl_distance
                 return True, price, sl, tp, sl_pips, 'buy', ""
-            buy_reasons.append("Invalid BUY SL distance")
 
-    # ------------------------------------------------------------------
-    # SELL evaluation
-    # ------------------------------------------------------------------
     sell_allowed = sentiment is None or sentiment == 'bearish'
     sell_reasons = []
-
     if not sell_allowed:
         sell_reasons.append(f"blocked by sentiment ({sentiment})")
     else:
@@ -859,7 +820,6 @@ def check_signal(df, instrument):
             sell_reasons.append(f"ADX too low ({adx:.1f} < {adx_threshold})")
         if minus_di <= plus_di:
             sell_reasons.append("-DI not above +DI")
-
         macd_ok = True
         if USE_MACD_FILTER:
             macd_line = last_candle['macd_line']
@@ -867,7 +827,6 @@ def check_signal(df, instrument):
             if pd.isna(macd_line) or pd.isna(macd_signal) or macd_line >= macd_signal or macd_line >= 0:
                 macd_ok = False
                 sell_reasons.append("MACD not bearish")
-
         vol_ok = True
         if USE_VOLUME_FILTER:
             volume = last_candle['volume']
@@ -875,46 +834,27 @@ def check_signal(df, instrument):
             if pd.isna(vol_ma) or volume < vol_ma:
                 vol_ok = False
                 sell_reasons.append("Volume too low")
-
         trend_down = ema50 < ema200
         touched_ema = (last_candle['h'] >= ema50 >= last_candle['l'])
-        bearish_rejection = (
-            (last_candle['c'] < last_candle['o']) and
-            ((last_candle['h'] - last_candle['o']) < (last_candle['c'] - last_candle['l']))
-        )
+        bearish_rejection = (last_candle['c'] < last_candle['o']) and ((last_candle['h'] - last_candle['o']) < (last_candle['c'] - last_candle['l']))
         rsi_ok = 30 < rsi < 70
-
-        if not trend_down:
-            sell_reasons.append("EMA50 not below EMA200")
-        if not touched_ema:
-            sell_reasons.append("No EMA50 touch")
-        if not bearish_rejection:
-            sell_reasons.append("No bearish rejection")
-        if not rsi_ok:
-            sell_reasons.append(f"RSI out of range ({rsi:.1f})")
-
-        if (adx >= adx_threshold and
-                minus_di > plus_di and
-                macd_ok and
-                vol_ok and
-                trend_down and
-                touched_ema and
-                bearish_rejection and
-                rsi_ok):
+        if not trend_down: sell_reasons.append("EMA50 not below EMA200")
+        if not touched_ema: sell_reasons.append("No EMA50 touch")
+        if not bearish_rejection: sell_reasons.append("No bearish rejection")
+        if not rsi_ok: sell_reasons.append(f"RSI out of range ({rsi:.1f})")
+        if (adx >= adx_threshold and minus_di > plus_di and macd_ok and vol_ok and trend_down and touched_ema and bearish_rejection and rsi_ok):
             sl = ema200 + (atr_multiplier * atr)
             sl_distance = sl - price
             if sl_distance > 0:
                 sl_pips = sl_distance / 0.0001
                 tp = price - 2 * sl_distance
                 return True, price, sl, tp, sl_pips, 'sell', ""
-            sell_reasons.append("Invalid SELL SL distance")
 
-    # No setup was validated. Return BOTH evaluation results so the logs
-    # explicitly show that BUY and SELL were independently checked.
     buy_reason = ", ".join(buy_reasons) if buy_reasons else "conditions passed"
     sell_reason = ", ".join(sell_reasons) if sell_reasons else "conditions passed"
     combined_reason = f"BUY REJECTED: {buy_reason} | SELL REJECTED: {sell_reason}"
     return False, 0, 0, 0, 0, None, combined_reason
+
 
 def collect_indicators(pair):
     try:
@@ -977,7 +917,7 @@ def main():
         while True:
             now = datetime.now(tz)
 
-            # Arrêt complet du bot (17h05)
+            # Arrêt complet du bot
             if now.hour > BOT_SHUTDOWN_HOUR or (now.hour == BOT_SHUTDOWN_HOUR and now.minute >= 5):
                 stop_msg = (f"🔴 Forex Sniper 7-12 stopped – End of session ({now.strftime('%H:%M')}), "
                             f"{trades_today} trade(s) taken today.")
@@ -1017,7 +957,6 @@ def main():
 
             news_blocked = check_and_block_news(now)
 
-            # Fenêtre de trading : 7h00 – 11h00
             in_trading_hours = (now.hour >= TRADING_HOURS_START and now.hour < TRADING_HOURS_END)
 
             can_trade_time = True
@@ -1034,6 +973,7 @@ def main():
                          and not news_blocked
                          and can_trade_time)
 
+            # ★ Collecte TOUJOURS (même si can_trade est False)
             pair_indicators = {}
             for pair in PAIRS:
                 indicators = collect_indicators(pair)
@@ -1044,7 +984,13 @@ def main():
                           f"EMA50:{indicators.get('ema50','--')} EMA200:{indicators.get('ema200','--')} "
                           f"RSI:{indicators.get('rsi','--')} ATR:{indicators.get('atr','--')}")
 
-                if can_trade and not has_open_position(pair) and is_spread_ok(pair, indicators.get('spread', 0)):
+            # ★ Détection des signaux/rejets UNIQUEMENT si can_trade
+            if can_trade:
+                for pair in PAIRS:
+                    if has_open_position(pair):
+                        continue
+                    if not is_spread_ok(pair, indicators.get(pair, {}).get('spread', 0)):
+                        continue
                     df = get_candles(pair)
                     signal, price, sl, tp, sl_pips, direction, reason = check_signal(df, pair)
                     if signal:
@@ -1067,6 +1013,7 @@ def main():
                         })
                         save_rejected_to_file()
 
+            # ★ Sauvegarde TOUJOURS (même si can_trade est False)
             save_status_json(pair_indicators)
 
             if not hasattr(main, "next_trade_save"):
