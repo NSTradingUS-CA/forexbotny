@@ -243,7 +243,6 @@ def save_status_json(pair_indicators):
         "pairs": pair_indicators,
         "active_trade": None,
         "closed_trades_today": closed_trades_today,
-        "rejected_signals": rejected_signals[-20:],
         "next_news_event": None
     }
 
