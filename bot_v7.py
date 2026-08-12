@@ -21,7 +21,9 @@ TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 FINNHUB_API_KEY = os.getenv("FINNHUB_API_KEY")
 GH_PAT = os.getenv("GH_PAT")
 PAIRS = ["EUR_USD", "GBP_USD"]
-RISK_PERCENT = 1.0
+RISK_PERCENT = 0.50
+RISK_PERCENT_BREAKOUT = 0.35
+DAILY_LOSS_LIMIT_PERCENT = 2.0
 TRADING_HOURS_START = 7
 TRADING_HOURS_END = 11
 BOT_SHUTDOWN_HOUR = 17
@@ -30,6 +32,16 @@ MAX_TRADES_PER_DAY = 3
 MIN_MINUTES_BETWEEN_TRADES = 15
 ATR_PERIOD = 14
 ADX_PERIOD = 10
+EXECUTION_GRANULARITY = "M15"
+REGIME_GRANULARITY = "H1"
+EXECUTION_CANDLES = 300
+REGIME_CANDLES = 300
+MIN_SETUP_SCORE = 7
+BREAKOUT_LOOKBACK = 12
+BREAKOUT_BUFFER_ATR = 0.10
+MAX_ENTRY_EXTENSION_ATR = 1.25
+MIN_SL_PIPS = 8
+MAX_SL_PIPS = 35
 NEWS_BLOCK_MINUTES = 15
 HIGH_IMPACT_EVENTS = ["NFP", "CPI", "FOMC", "Interest Rate", "GDP", "Retail Sales"]
 USE_MACD_FILTER = True
@@ -38,9 +50,9 @@ MACD_SLOW = 13
 MACD_SIGNAL = 9
 USE_VOLUME_FILTER = False
 
-BE_PIPS = 15
-TP_PARTIAL_RATIO = 0.5
-TRAILING_ATR_MULT = 2.0
+BE_R_MULT = 1.0
+TP_PARTIAL_RATIO = 0.33
+TRAILING_ATR_MULT = 1.8
 FIXED_TRAILING_PIPS = 20
 
 PAIR_CONFIG = {
@@ -69,6 +81,7 @@ rejected_signals = []
 # maintient le bot actif jusqu'à 17:05.
 late_shutdown_required = False
 trade_opened_during_window_today = False
+daily_start_balance = None
 
 CLOSED_TRADES_FILE = "closed_trades.json"
 REJECTED_FILE = "rejected_signals.json"
@@ -244,7 +257,10 @@ def save_status_json():
             "end": f"{TRADING_HOURS_END:02d}:00"
         },
         "active_trade": None,
-        "next_news_event": None
+        "next_news_event": None,
+        "strategy": "H1 regime + M15 pullback/breakout",
+        "max_risk_per_trade_percent": RISK_PERCENT,
+        "daily_loss_limit_percent": DAILY_LOSS_LIMIT_PERCENT
     }
 
     if active_trade:
@@ -329,14 +345,26 @@ def load_existing_open_position():
                 open_trades = resp_trades.body.get('trades', [])
                 if open_trades:
                     trade = open_trades[0]
+                    entry_price = float(trade.price)
+                    sl_price = float(trade.stopLossOrder.price) if trade.stopLossOrder else None
+                    tp_price = float(trade.takeProfitOrder.price) if trade.takeProfitOrder else None
+                    direction = 'buy' if int(trade.currentUnits) > 0 else 'sell'
+                    initial_risk = abs(entry_price - sl_price) if sl_price is not None else 0.0
                     active_trade = {
                         'trade_id': trade.id,
                         'pair': instrument,
                         'units': int(trade.currentUnits),
-                        'entry_price': float(trade.price),
-                        'sl': float(trade.stopLossOrder.price) if trade.stopLossOrder else None,
-                        'tp': float(trade.takeProfitOrder.price) if trade.takeProfitOrder else None,
-                        'direction': 'buy' if int(trade.currentUnits) > 0 else 'sell',
+                        'entry_price': entry_price,
+                        'sl': sl_price,
+                        'tp1': (entry_price + initial_risk) if direction == 'buy' else (entry_price - initial_risk),
+                        'tp2': tp_price,
+                        'tp': tp_price,
+                        'direction': direction,
+                        'setup_type': 'recovered',
+                        'risk_percent': RISK_PERCENT,
+                        'initial_risk': initial_risk,
+                        'be_triggered': False,
+                        'tp1_hit': False,
                         'opened_at': str(trade.openTime) if getattr(trade, 'openTime', None) else None
                     }
                     print(f"Existing open position loaded: {instrument} {active_trade['direction']}")
@@ -466,8 +494,8 @@ def compute_macd(df, fast=12, slow=26, signal=9):
     return df
 
 
-def get_candles(instrument, count=300):
-    params = {"count": count, "granularity": "H1", "price": "M"}
+def get_candles(instrument, count=300, granularity=EXECUTION_GRANULARITY):
+    params = {"count": count, "granularity": granularity, "price": "M"}
     response = retry_api_call(ctx.instrument.candles, instrument, **params)
     candles = response.body['candles']
     rows = []
@@ -482,6 +510,9 @@ def get_candles(instrument, count=300):
                 'volume': int(c.volume)
             })
     df = pd.DataFrame(rows)
+    if df.empty:
+        return df
+    df['ema20'] = df['c'].ewm(span=20, adjust=False).mean()
     df['ema50'] = df['c'].ewm(span=50, adjust=False).mean()
     df['ema200'] = df['c'].ewm(span=200, adjust=False).mean()
     df['atr'] = (df['h'] - df['l']).rolling(ATR_PERIOD).mean()
@@ -492,10 +523,61 @@ def get_candles(instrument, count=300):
     df['rsi'] = 100 - (100 / (1 + rs))
     df = compute_adx(df, ADX_PERIOD)
     df = compute_macd(df, MACD_FAST, MACD_SLOW, MACD_SIGNAL)
+    df['range'] = df['h'] - df['l']
+    df['body'] = (df['c'] - df['o']).abs()
+    df['body_ratio'] = df['body'] / df['range'].replace(0, pd.NA)
     if USE_VOLUME_FILTER:
-        df['volume_ma'] = df['volume'].rolling(window=VOLUME_MA_PERIOD).mean()
+        df['volume_ma'] = df['volume'].rolling(window=20).mean()
     return df
 
+
+def get_daily_loss_status(balance):
+    """Returns (loss_percent, blocked). Realized P/L is taken from today's closed trades.
+    A conservative unrealized component is also included when an active trade exists.
+    """
+    try:
+        realized = sum(float(t.get('pnl', 0)) for t in closed_trades_today)
+    except Exception:
+        realized = 0.0
+    unrealized = 0.0
+    if active_trade:
+        try:
+            pair = active_trade['pair']
+            resp = ctx.pricing.get(ACCOUNT_ID, instruments=pair)
+            pi = resp.body['prices'][0]
+            bid = float(pi.bids[0].price)
+            ask = float(pi.asks[0].price)
+            current = bid if active_trade['direction'] == 'sell' else ask
+            move = (current - active_trade['entry_price']) * abs(float(active_trade['units']))
+            unrealized = -move if active_trade['direction'] == 'sell' else move
+        except Exception:
+            unrealized = 0.0
+    total_loss = realized + unrealized
+    loss_pct = max(0.0, -total_loss / balance * 100) if balance > 0 else 0.0
+    return loss_pct, loss_pct >= DAILY_LOSS_LIMIT_PERCENT
+
+
+def setup_stop_and_target(df, direction, entry, pair_config, setup_type):
+    atr = float(df['atr'].iloc[-2])
+    swing = df.iloc[-4:-1]
+    if direction == 'buy':
+        structure_sl = float(swing['l'].min())
+        raw_sl = min(structure_sl, entry - pair_config['ATR_MULTIPLIER'] * atr)
+        if setup_type == 'breakout':
+            raw_sl = min(structure_sl, entry - 1.15 * atr)
+        risk = entry - raw_sl
+        tp = entry + 2.0 * risk
+    else:
+        structure_sl = float(swing['h'].max())
+        raw_sl = max(structure_sl, entry + pair_config['ATR_MULTIPLIER'] * atr)
+        if setup_type == 'breakout':
+            raw_sl = max(structure_sl, entry + 1.15 * atr)
+        risk = raw_sl - entry
+        tp = entry - 2.0 * risk
+    sl_pips = risk / 0.0001
+    if sl_pips < MIN_SL_PIPS or sl_pips > MAX_SL_PIPS:
+        return None
+    return raw_sl, tp, sl_pips, atr
 
 def get_spread(instrument):
     response = retry_api_call(ctx.pricing.get, ACCOUNT_ID, instruments=instrument)
@@ -519,11 +601,14 @@ def has_open_position(instrument):
         return False
 
 
-def calculate_units(balance, sl_price_distance, instrument):
-    risk_amount = balance * (RISK_PERCENT / 100)
-    units = int(risk_amount / sl_price_distance)
+def calculate_units(balance, sl_price_distance, instrument, risk_percent=RISK_PERCENT):
+    risk_amount = balance * (risk_percent / 100.0)
+    if sl_price_distance <= 0:
+        return 0
+    # EUR_USD and GBP_USD are USD-quoted pairs; for a USD account, units * price move
+    # is the approximate USD risk. A safety factor prevents oversizing on rounding/slippage.
+    units = int((risk_amount / sl_price_distance) * 0.98)
     return max(1000, units)
-
 
 def get_account_balance(response):
     try:
@@ -559,83 +644,84 @@ def manage_active_trade():
         bid = float(price_info.bids[0].price)
         ask = float(price_info.asks[0].price)
         current_price = bid if direction == 'sell' else ask
-    except:
+    except Exception:
         return
+
     entry = active_trade['entry_price']
-    units = abs(active_trade['units'])
-    sl = active_trade['sl']
-    tp2 = active_trade.get('tp2')
-    tp1 = active_trade.get('tp1')
-    move_pips = (current_price - entry) / 0.0001
-    if direction == 'sell':
-        move_pips = -move_pips
-    if not active_trade.get('be_triggered') and move_pips >= BE_PIPS:
+    initial_risk = active_trade.get('initial_risk', abs(entry - active_trade['sl']))
+    move = (current_price - entry) if direction == 'buy' else (entry - current_price)
+    r_multiple = move / initial_risk if initial_risk > 0 else 0
+
+    # Protect at +1R. This is volatility-normalized instead of a fixed pip threshold.
+    if not active_trade.get('be_triggered') and r_multiple >= BE_R_MULT:
         offset = 0.5 * 0.0001
         new_sl = entry + offset if direction == 'buy' else entry - offset
-        if (direction == 'buy' and new_sl > sl) or (direction == 'sell' and new_sl < sl):
+        old_sl = active_trade['sl']
+        if (direction == 'buy' and new_sl > old_sl) or (direction == 'sell' and new_sl < old_sl):
             try:
                 body = {"stopLoss": {"price": f"{new_sl:.5f}"}}
                 retry_api_call(ctx.position.close, ACCOUNT_ID, instrument=pair, data=body)
                 active_trade['sl'] = new_sl
                 active_trade['be_triggered'] = True
-                print(f"Break‑even triggered, SL moved to {new_sl:.5f}")
-                send_telegram_message(f"🛡️ Break‑even triggered on {pair}, SL moved to {new_sl:.5f}")
+                print(f"Break-even triggered on {pair} at +{r_multiple:.2f}R")
+                send_telegram_message(f"🛡️ BE déclenché sur {pair} à +{r_multiple:.2f}R.")
             except Exception as e:
-                print(f"Break‑even update failed: {e}")
+                print(f"Break-even update failed: {e}")
+
+    # Take only 1/3 at +1R, preserving most of the position for the 2R target.
+    tp1 = active_trade.get('tp1')
+    units = abs(int(active_trade['units']))
     if tp1 is not None and not active_trade.get('tp1_hit'):
         if (direction == 'buy' and current_price >= tp1) or (direction == 'sell' and current_price <= tp1):
-            partial_units = int(units * TP_PARTIAL_RATIO)
-            if close_partial_position(partial_units):
+            partial_units = max(1000, int(units * TP_PARTIAL_RATIO))
+            if partial_units < units and close_partial_position(partial_units):
                 active_trade['units'] = units - partial_units
                 active_trade['tp1_hit'] = True
                 active_trade['tp1'] = None
                 print(f"TP1 hit on {pair}, {partial_units} units closed")
-                send_telegram_message(f"🎯 TP1 atteint sur {pair} ! {partial_units} unités clôturées.")
+                send_telegram_message(f"🎯 TP1 atteint sur {pair}: {partial_units} unités clôturées, runner conservé.")
+
+    # Trail only after +1R, using M15 ATR. This protects winners without strangling early movement.
     if active_trade.get('be_triggered') or active_trade.get('tp1_hit'):
-        df = get_candles(pair, count=ATR_PERIOD+2)
-        atr_val = df['atr'].iloc[-2]
-        active_trade['atr'] = atr_val
-        trail_distance = atr_val * TRAILING_ATR_MULT
-        if direction == 'buy':
-            new_sl = current_price - trail_distance
-            if new_sl > active_trade['sl']:
-                try:
+        try:
+            df = get_candles(pair, count=ATR_PERIOD + 30, granularity=EXECUTION_GRANULARITY)
+            atr_val = float(df['atr'].iloc[-2])
+            active_trade['atr'] = atr_val
+            trail_distance = atr_val * TRAILING_ATR_MULT
+            if direction == 'buy':
+                new_sl = current_price - trail_distance
+                if new_sl > active_trade['sl']:
                     body = {"stopLoss": {"price": f"{new_sl:.5f}"}}
                     retry_api_call(ctx.position.close, ACCOUNT_ID, instrument=pair, data=body)
                     active_trade['sl'] = new_sl
-                    active_trade['trailing_distance'] = f"{TRAILING_ATR_MULT}x ATR"
-                    print(f"Trailing SL updated to {new_sl:.5f} (distance {trail_distance:.5f})")
-                except Exception as e:
-                    print(f"Trailing SL update failed: {e}")
-        else:
-            new_sl = current_price + trail_distance
-            if new_sl < active_trade['sl']:
-                try:
+                    active_trade['trailing_distance'] = f"{TRAILING_ATR_MULT}x M15 ATR"
+                    print(f"Trailing SL updated on {pair} to {new_sl:.5f}")
+            else:
+                new_sl = current_price + trail_distance
+                if new_sl < active_trade['sl']:
                     body = {"stopLoss": {"price": f"{new_sl:.5f}"}}
                     retry_api_call(ctx.position.close, ACCOUNT_ID, instrument=pair, data=body)
                     active_trade['sl'] = new_sl
-                    active_trade['trailing_distance'] = f"{TRAILING_ATR_MULT}x ATR"
-                    print(f"Trailing SL updated to {new_sl:.5f} (distance {trail_distance:.5f})")
-                except Exception as e:
-                    print(f"Trailing SL update failed: {e}")
+                    active_trade['trailing_distance'] = f"{TRAILING_ATR_MULT}x M15 ATR"
+                    print(f"Trailing SL updated on {pair} to {new_sl:.5f}")
+        except Exception as e:
+            print(f"Trailing update failed: {e}")
 
-
-def place_trade(instrument, entry, sl, tp, units, direction):
+def place_trade(instrument, entry, sl, tp, units, direction, setup_type, risk_percent):
     global active_trade, trades_today
     if active_trade is not None:
         print("A trade is already active, cannot open another.")
         return False
-    if direction == 'sell':
-        units = -units
+    signed_units = -abs(units) if direction == 'sell' else abs(units)
     sl_distance = abs(entry - sl)
-    tp_distance = sl_distance * 2
-    tp1 = entry + (tp_distance * 0.5) if direction == 'buy' else entry - (tp_distance * 0.5)
+    tp_distance = sl_distance * 2.0
+    tp1 = entry + sl_distance if direction == 'buy' else entry - sl_distance
     tp2 = tp
     trailing_distance = str(round(FIXED_TRAILING_PIPS * 0.0001, 5))
     order_body = {
         "type": "MARKET",
         "instrument": instrument,
-        "units": str(units),
+        "units": str(signed_units),
         "stopLossOnFill": {"price": f"{sl:.5f}"},
         "takeProfitOnFill": {"price": f"{tp2:.5f}"},
         "trailingStopLossOnFill": {"distance": trailing_distance}
@@ -651,7 +737,7 @@ def place_trade(instrument, entry, sl, tp, units, direction):
         trade_opened = fill_trans.tradeOpened
         trade_id = trade_opened.tradeID
         entry_price = float(trade_opened.price)
-        units_filled = trade_opened.units
+        units_filled = int(trade_opened.units)
         active_trade = {
             'trade_id': trade_id,
             'pair': instrument,
@@ -661,51 +747,50 @@ def place_trade(instrument, entry, sl, tp, units, direction):
             'tp1': tp1,
             'tp2': tp2,
             'direction': direction,
+            'setup_type': setup_type,
+            'risk_percent': risk_percent,
+            'initial_risk': sl_distance,
             'be_triggered': False,
             'tp1_hit': False,
-            'trailing_distance': f"{FIXED_TRAILING_PIPS} pips (fixed)",
+            'trailing_distance': f"{FIXED_TRAILING_PIPS} pips initial",
             'atr': 0.0,
             'opened_at': datetime.now(tz).isoformat()
         }
     except Exception as e:
         print(f"Failed to extract trade details: {e}")
         return False
+
     trades_today += 1
-    if direction == 'buy':
-        risk = entry - sl
-        reward = tp2 - entry
-    else:
-        risk = sl - entry
-        reward = entry - tp2
-    rr = round(reward / risk, 2) if risk > 0 else 0.0
+    rr = 2.0
     msg = (f"<b>✅ Trade opened ({trades_today}/{MAX_TRADES_PER_DAY})</b>\n"
            f"Pair: {instrument}\n"
+           f"Setup: {setup_type.upper()}\n"
            f"Type: {'Buy' if direction == 'buy' else 'Sell'}\n"
-           f"Volume: {abs(units)} units\n"
-           f"Entry: {entry:.5f}\n"
+           f"Risk: {risk_percent:.2f}%\n"
+           f"Volume: {abs(units_filled)} units\n"
+           f"Entry: {entry_price:.5f}\n"
            f"SL: {sl:.5f}\n"
-           f"TP1 (partial): {tp1:.5f}\n"
-           f"TP2 (final): {tp2:.5f}\n"
-           f"BE trigger: +{BE_PIPS} pips\n"
-           f"Trailing: {FIXED_TRAILING_PIPS} pips (fixed), then {TRAILING_ATR_MULT}x ATR\n"
-           f"R/R: 1:{rr}\n"
+           f"TP1: {tp1:.5f} (1R, {TP_PARTIAL_RATIO:.0%})\n"
+           f"TP2: {tp2:.5f} (2R)\n"
+           f"R/R: 1:2\n"
            f"Time: {datetime.now(tz).strftime('%Y-%m-%d %H:%M:%S')}")
     send_telegram_message(msg)
-    print(f"✅ Trade placed on {instrument} ({direction}) - {abs(units)} units")
+    print(f"✅ Trade placed on {instrument} ({direction}) [{setup_type}] - {abs(units_filled)} units")
     log_trade({
         "time": datetime.now(tz).isoformat(),
         "pair": instrument,
-        "entry": entry,
+        "setup": setup_type,
+        "entry": entry_price,
         "sl": sl,
         "tp1": tp1,
         "tp2": tp2,
-        "units": abs(units),
+        "units": abs(units_filled),
         "direction": direction,
+        "risk_percent": risk_percent,
         "rr": rr,
         "status": "OPEN"
     })
     return True
-
 
 def check_closed_trade():
     global active_trade, last_close_time
@@ -715,15 +800,26 @@ def check_closed_trade():
     if has_open_position(pair):
         return
     try:
-        resp = retry_api_call(ctx.trade.list, ACCOUNT_ID, instrument=pair, count=2, state='CLOSED')
+        resp = retry_api_call(ctx.trade.list, ACCOUNT_ID, instrument=pair, count=20, state='CLOSED')
         closed_trades = resp.body.get('trades', [])
-        total_pnl = sum(float(t.realizedPL) for t in closed_trades)
-        close_price = float(closed_trades[0].price) if closed_trades else 0
+        if not closed_trades:
+            raise RuntimeError("No closed trade returned by OANDA")
+
+        # Use the most recently closed trade, not the sum of arbitrary recent trades.
+        def close_key(t):
+            value = getattr(t, 'closeTime', '')
+            return str(value)
+        closed_trades = sorted(closed_trades, key=close_key, reverse=True)
+        latest = closed_trades[0]
+        total_pnl = float(latest.realizedPL)
+        close_price = float(latest.price)
         entry_price = active_trade['entry_price']
         units = active_trade['units']
         direction = active_trade.get('direction', 'buy')
+        setup_type = active_trade.get('setup_type', 'unknown')
         msg = (f"<b>🔴 Trade closed ({trades_today}/{MAX_TRADES_PER_DAY})</b>\n"
                f"Pair: {pair}\n"
+               f"Setup: {setup_type.upper()}\n"
                f"Type: {'Buy' if direction == 'buy' else 'Sell'}\n"
                f"Entry: {entry_price:.5f}\n"
                f"Exit: {close_price:.5f}\n"
@@ -734,6 +830,7 @@ def check_closed_trade():
         closed_trades_today.append({
             "pair": pair,
             "type": "Buy" if direction == 'buy' else "Sell",
+            "setup": setup_type,
             "pnl": total_pnl,
             "time": datetime.now(tz).strftime("%H:%M:%S")
         })
@@ -741,6 +838,7 @@ def check_closed_trade():
         log_trade({
             "time": datetime.now(tz).isoformat(),
             "pair": pair,
+            "setup": setup_type,
             "entry": entry_price,
             "exit": close_price,
             "units": abs(units),
@@ -755,119 +853,142 @@ def check_closed_trade():
         last_close_time = datetime.now(tz)
     active_trade = None
 
-
 def check_signal(df, instrument):
-    if len(df) < 200:
-        return False, 0, 0, 0, 0, None, "Not enough candles"
-    last_candle = df.iloc[-2]
-    price = last_candle['c']
-    ema50 = last_candle['ema50']
-    ema200 = last_candle['ema200']
-    atr = last_candle['atr']
-    rsi = last_candle['rsi']
-    adx = last_candle['adx']
-    plus_di = last_candle['plus_di']
-    minus_di = last_candle['minus_di']
-    if pd.isna(atr) or pd.isna(ema50) or pd.isna(adx):
-        return False, 0, 0, 0, 0, None, "Missing indicator values"
+    """M15 execution engine with two distinct setups:
+    1) Pullback/rejection in a confirmed H1 trend.
+    2) Breakout/retest of a recent M15 range in a confirmed H1 trend.
+    Returns signal, entry, SL, TP, SL pips, direction, reason, setup type, risk %.
+    """
+    if len(df) < 220:
+        return False, 0, 0, 0, 0, None, "Not enough M15 candles", None, 0
+
+    h1 = get_candles(instrument, count=REGIME_CANDLES, granularity=REGIME_GRANULARITY)
+    if len(h1) < 220:
+        return False, 0, 0, 0, 0, None, "Not enough H1 candles", None, 0
+
+    c = df.iloc[-2]
+    prev = df.iloc[-3]
+    h = h1.iloc[-2]
     config = PAIR_CONFIG[instrument]
-    adx_threshold = config["ADX_THRESHOLD"]
-    atr_multiplier = config["ATR_MULTIPLIER"]
-    sentiment = news_sentiment_filter.get(instrument, None)
+    atr = float(c['atr'])
+    if any(pd.isna(c[x]) for x in ['atr','ema20','ema50','rsi','adx','plus_di','minus_di']):
+        return False, 0, 0, 0, 0, None, "Missing M15 indicators", None, 0
+    if any(pd.isna(h[x]) for x in ['ema50','ema200','adx']):
+        return False, 0, 0, 0, 0, None, "Missing H1 regime", None, 0
 
-    buy_allowed = sentiment is None or sentiment == 'bullish'
-    buy_reasons = []
-    if not buy_allowed:
-        buy_reasons.append(f"blocked by sentiment ({sentiment})")
-    else:
-        if adx < adx_threshold:
-            buy_reasons.append(f"ADX too low ({adx:.1f} < {adx_threshold})")
-        if plus_di <= minus_di:
-            buy_reasons.append("+DI not above -DI")
-        macd_ok = True
-        if USE_MACD_FILTER:
-            macd_line = last_candle['macd_line']
-            macd_signal = last_candle['macd_signal']
-            if pd.isna(macd_line) or pd.isna(macd_signal) or macd_line <= macd_signal or macd_line <= 0:
-                macd_ok = False
-                buy_reasons.append("MACD not bullish")
-        vol_ok = True
-        if USE_VOLUME_FILTER:
-            volume = last_candle['volume']
-            vol_ma = last_candle['volume_ma']
-            if pd.isna(vol_ma) or volume < vol_ma:
-                vol_ok = False
-                buy_reasons.append("Volume too low")
-        trend_up = ema50 > ema200
-        touched_ema = (last_candle['l'] <= ema50 <= last_candle['h'])
-        bullish_rejection = (last_candle['c'] > last_candle['o']) and ((last_candle['o'] - last_candle['l']) > (last_candle['h'] - last_candle['c']))
-        rsi_ok = 30 < rsi < 70
-        if not trend_up: buy_reasons.append("EMA50 not above EMA200")
-        if not touched_ema: buy_reasons.append("No EMA50 touch")
-        if not bullish_rejection: buy_reasons.append("No bullish rejection")
-        if not rsi_ok: buy_reasons.append(f"RSI out of range ({rsi:.1f})")
-        if (adx >= adx_threshold and plus_di > minus_di and macd_ok and vol_ok and trend_up and touched_ema and bullish_rejection and rsi_ok):
-            sl = ema200 - (atr_multiplier * atr)
-            sl_distance = price - sl
-            if sl_distance > 0:
-                sl_pips = sl_distance / 0.0001
-                tp = price + 2 * sl_distance
-                return True, price, sl, tp, sl_pips, 'buy', ""
+    h1_up = h['ema50'] > h['ema200'] and h['c'] > h['ema50']
+    h1_down = h['ema50'] < h['ema200'] and h['c'] < h['ema50']
+    h1_trending = h['adx'] >= max(18, config['ADX_THRESHOLD'] - 2)
+    if not h1_trending:
+        return False, 0, 0, 0, 0, None, f"H1 regime too weak (ADX {h['adx']:.1f})", None, 0
 
-    sell_allowed = sentiment is None or sentiment == 'bearish'
-    sell_reasons = []
-    if not sell_allowed:
-        sell_reasons.append(f"blocked by sentiment ({sentiment})")
-    else:
-        if adx < adx_threshold:
-            sell_reasons.append(f"ADX too low ({adx:.1f} < {adx_threshold})")
-        if minus_di <= plus_di:
-            sell_reasons.append("-DI not above +DI")
-        macd_ok = True
-        if USE_MACD_FILTER:
-            macd_line = last_candle['macd_line']
-            macd_signal = last_candle['macd_signal']
-            if pd.isna(macd_line) or pd.isna(macd_signal) or macd_line >= macd_signal or macd_line >= 0:
-                macd_ok = False
-                sell_reasons.append("MACD not bearish")
-        vol_ok = True
-        if USE_VOLUME_FILTER:
-            volume = last_candle['volume']
-            vol_ma = last_candle['volume_ma']
-            if pd.isna(vol_ma) or volume < vol_ma:
-                vol_ok = False
-                sell_reasons.append("Volume too low")
-        trend_down = ema50 < ema200
-        touched_ema = (last_candle['h'] >= ema50 >= last_candle['l'])
-        bearish_rejection = (last_candle['c'] < last_candle['o']) and ((last_candle['h'] - last_candle['o']) < (last_candle['c'] - last_candle['l']))
-        rsi_ok = 30 < rsi < 70
-        if not trend_down: sell_reasons.append("EMA50 not below EMA200")
-        if not touched_ema: sell_reasons.append("No EMA50 touch")
-        if not bearish_rejection: sell_reasons.append("No bearish rejection")
-        if not rsi_ok: sell_reasons.append(f"RSI out of range ({rsi:.1f})")
-        if (adx >= adx_threshold and minus_di > plus_di and macd_ok and vol_ok and trend_down and touched_ema and bearish_rejection and rsi_ok):
-            sl = ema200 + (atr_multiplier * atr)
-            sl_distance = sl - price
-            if sl_distance > 0:
-                sl_pips = sl_distance / 0.0001
-                tp = price - 2 * sl_distance
-                return True, price, sl, tp, sl_pips, 'sell', ""
+    # Avoid buying/selling after excessive extension from M15 EMA50.
+    extension = abs(c['c'] - c['ema50']) / atr if atr > 0 else 99
+    if extension > MAX_ENTRY_EXTENSION_ATR:
+        return False, 0, 0, 0, 0, None, f"Entry too extended ({extension:.2f} ATR)", None, 0
 
-    buy_reason = ", ".join(buy_reasons) if buy_reasons else "conditions passed"
-    sell_reason = ", ".join(sell_reasons) if sell_reasons else "conditions passed"
-    combined_reason = f"BUY REJECTED: {buy_reason} | SELL REJECTED: {sell_reason}"
-    return False, 0, 0, 0, 0, None, combined_reason
+    sentiment = news_sentiment_filter.get(instrument, 'neutral')
+    reasons = []
 
+    # --- Setup A: pullback/rejection ---
+    bull_rejection = (
+        c['c'] > c['o'] and
+        c['l'] <= c['ema20'] * 1.0003 and
+        c['c'] > c['ema20'] and
+        c['body_ratio'] >= 0.45
+    )
+    bear_rejection = (
+        c['c'] < c['o'] and
+        c['h'] >= c['ema20'] * 0.9997 and
+        c['c'] < c['ema20'] and
+        c['body_ratio'] >= 0.45
+    )
+    momentum_buy = c['plus_di'] > c['minus_di'] and c['rsi'] >= 50 and c['rsi'] <= 75
+    momentum_sell = c['minus_di'] > c['plus_di'] and c['rsi'] <= 50 and c['rsi'] >= 25
+    adx_ok = c['adx'] >= config['ADX_THRESHOLD']
+    macd_buy = c['macd_line'] > c['macd_signal']
+    macd_sell = c['macd_line'] < c['macd_signal']
+
+    if h1_up and sentiment != 'bearish' and bull_rejection and momentum_buy and adx_ok:
+        score = 0
+        score += 2  # H1 trend
+        score += 2  # rejection at EMA20
+        score += 1 if c['adx'] >= config['ADX_THRESHOLD'] + 5 else 0
+        score += 1 if c['plus_di'] > c['minus_di'] else 0
+        score += 1 if 52 <= c['rsi'] <= 68 else 0
+        score += 1 if macd_buy else 0
+        score += 1 if c['c'] > prev['h'] else 0
+        if score >= MIN_SETUP_SCORE:
+            levels = setup_stop_and_target(df, 'buy', float(c['c']), config, 'pullback')
+            if levels:
+                sl, tp, sl_pips, atr_val = levels
+                return True, float(c['c']), sl, tp, sl_pips, 'buy', f"PULLBACK score {score}/9", 'pullback', RISK_PERCENT
+
+    if h1_down and sentiment != 'bullish' and bear_rejection and momentum_sell and adx_ok:
+        score = 0
+        score += 2
+        score += 2
+        score += 1 if c['adx'] >= config['ADX_THRESHOLD'] + 5 else 0
+        score += 1 if c['minus_di'] > c['plus_di'] else 0
+        score += 1 if 32 <= c['rsi'] <= 48 else 0
+        score += 1 if macd_sell else 0
+        score += 1 if c['c'] < prev['l'] else 0
+        if score >= MIN_SETUP_SCORE:
+            levels = setup_stop_and_target(df, 'sell', float(c['c']), config, 'pullback')
+            if levels:
+                sl, tp, sl_pips, atr_val = levels
+                return True, float(c['c']), sl, tp, sl_pips, 'sell', f"PULLBACK score {score}/9", 'pullback', RISK_PERCENT
+
+    # --- Setup B: breakout/retest ---
+    if len(df) >= BREAKOUT_LOOKBACK + 5:
+        box = df.iloc[-(BREAKOUT_LOOKBACK + 2):-2]
+        resistance = float(box['h'].max())
+        support = float(box['l'].min())
+        buffer = BREAKOUT_BUFFER_ATR * atr
+        buy_break = prev['c'] > resistance + buffer and c['l'] <= resistance + buffer and c['c'] > resistance
+        sell_break = prev['c'] < support - buffer and c['h'] >= support - buffer and c['c'] < support
+        breakout_quality_buy = c['body_ratio'] >= 0.55 and c['c'] > c['o'] and c['adx'] >= config['ADX_THRESHOLD']
+        breakout_quality_sell = c['body_ratio'] >= 0.55 and c['c'] < c['o'] and c['adx'] >= config['ADX_THRESHOLD']
+
+        if h1_up and sentiment != 'bearish' and buy_break and breakout_quality_buy and c['plus_di'] > c['minus_di']:
+            score = 2 + 2 + 1
+            score += 1 if c['adx'] >= config['ADX_THRESHOLD'] + 5 else 0
+            score += 1 if c['rsi'] < 72 else 0
+            score += 1 if macd_buy else 0
+            score += 1 if c['c'] > c['ema20'] else 0
+            if score >= MIN_SETUP_SCORE:
+                levels = setup_stop_and_target(df, 'buy', float(c['c']), config, 'breakout')
+                if levels:
+                    sl, tp, sl_pips, atr_val = levels
+                    return True, float(c['c']), sl, tp, sl_pips, 'buy', f"BREAKOUT score {score}/9", 'breakout', RISK_PERCENT_BREAKOUT
+
+        if h1_down and sentiment != 'bullish' and sell_break and breakout_quality_sell and c['minus_di'] > c['plus_di']:
+            score = 2 + 2 + 1
+            score += 1 if c['adx'] >= config['ADX_THRESHOLD'] + 5 else 0
+            score += 1 if c['rsi'] > 28 else 0
+            score += 1 if macd_sell else 0
+            score += 1 if c['c'] < c['ema20'] else 0
+            if score >= MIN_SETUP_SCORE:
+                levels = setup_stop_and_target(df, 'sell', float(c['c']), config, 'breakout')
+                if levels:
+                    sl, tp, sl_pips, atr_val = levels
+                    return True, float(c['c']), sl, tp, sl_pips, 'sell', f"BREAKOUT score {score}/9", 'breakout', RISK_PERCENT_BREAKOUT
+
+    return False, 0, 0, 0, 0, None, "No high-quality setup", None, 0
 
 def main():
     global trades_today, last_trade_date, last_close_time, active_trade
     global closed_trades_today, rejected_signals
-    global late_shutdown_required, trade_opened_during_window_today
+    global late_shutdown_required, trade_opened_during_window_today, daily_start_balance
 
     load_closed_trades_from_file()
     load_rejected_from_file()
 
     trades_today = count_all_trades_today()
+    try:
+        daily_start_balance = get_account_balance(retry_api_call(ctx.account.summary, ACCOUNT_ID))
+    except Exception:
+        daily_start_balance = None
     if active_trade is None:
         load_existing_open_position()
 
@@ -918,6 +1039,10 @@ def main():
                 load_rejected_from_file()
                 if active_trade is None:
                     load_existing_open_position()
+                try:
+                    daily_start_balance = get_account_balance(retry_api_call(ctx.account.summary, ACCOUNT_ID))
+                except Exception:
+                    daily_start_balance = None
 
                 # Si le bot redémarre alors qu'un trade du jour est encore ouvert,
                 # reconstitue l'état nécessaire à l'arrêt de 17:05.
@@ -999,61 +1124,48 @@ def main():
                 if elapsed < timedelta(minutes=MIN_MINUTES_BETWEEN_TRADES):
                     can_trade_time = False
 
+            balance = None
+            daily_loss_blocked = False
+            try:
+                balance = get_account_balance(retry_api_call(ctx.account.summary, ACCOUNT_ID))
+                _, daily_loss_blocked = get_daily_loss_status(balance)
+            except Exception as e:
+                print(f"Risk check failed: {e}")
+                daily_loss_blocked = True
+
             can_trade = (
                 active_trade is None
                 and trades_today < MAX_TRADES_PER_DAY
                 and in_trading_hours
                 and not news_blocked
                 and can_trade_time
+                and not daily_loss_blocked
             )
 
-            # Les indicateurs de dashboard sont maintenant gérés exclusivement
-            # par pair_indicators.py. Le bot ne les collecte plus ici.
+            # Dashboard indicators are handled exclusively by pair_indicators.py.
+            # The bot fetches trading data only when it is actually allowed to seek a trade.
             if can_trade:
+                candidates = []
                 for pair in PAIRS:
                     if has_open_position(pair):
                         continue
-
-                    # Le bot récupère uniquement les données nécessaires à la
-                    # validation/exécution d'un setup lorsqu'il peut réellement trader.
                     try:
                         spread = get_spread(pair)
-                    except Exception:
+                    except Exception as e:
+                        print(f"Spread check failed for {pair}: {e}")
                         continue
-
                     if not is_spread_ok(pair, spread):
+                        print(f" -> REJECTED {pair}: spread too wide")
                         continue
-
-                    df = get_candles(pair)
-                    signal, price, sl, tp, sl_pips, direction, reason = check_signal(
-                        df, pair
-                    )
-
+                    try:
+                        df = get_candles(pair, count=EXECUTION_CANDLES, granularity=EXECUTION_GRANULARITY)
+                        result = check_signal(df, pair)
+                    except Exception as e:
+                        print(f"Signal analysis failed for {pair}: {e}")
+                        continue
+                    signal, price, sl, tp, sl_pips, direction, reason, setup_type, risk_percent = result
                     if signal:
-                        print(f" -> SIGNAL {direction} {pair}")
-
-                        balance_response = retry_api_call(
-                            ctx.account.summary, ACCOUNT_ID
-                        )
-                        balance = get_account_balance(balance_response)
-
-                        sl_distance = (
-                            price - sl if direction == 'buy' else sl - price
-                        )
-                        units = calculate_units(
-                            balance, sl_distance, pair
-                        )
-
-                        success = place_trade(
-                            pair, price, sl, tp, units, direction
-                        )
-
-                        if success:
-                            # place_trade() renseigne opened_at; on mémorise
-                            # explicitement qu'un trade de la fenêtre a été ouvert.
-                            trade_opened_during_window_today = True
-                            break
-
+                        candidates.append((pair, price, sl, tp, sl_pips, direction, reason, setup_type, risk_percent))
                     elif reason:
                         print(f" -> REJECTED {pair}: {reason}")
                         rejected_signals.append({
@@ -1063,6 +1175,18 @@ def main():
                             "reason": reason
                         })
                         save_rejected_to_file()
+
+                # If both pairs qualify, prefer the highest-quality setup and then the lower-spread pair.
+                if candidates:
+                    candidates.sort(key=lambda x: (0 if x[7] == 'pullback' else -1, -x[4]))
+                    pair, price, sl, tp, sl_pips, direction, reason, setup_type, risk_percent = candidates[0]
+                    print(f" -> SIGNAL {direction} {pair} [{setup_type}] {reason}")
+                    sl_distance = abs(price - sl)
+                    units = calculate_units(balance, sl_distance, pair, risk_percent)
+                    if units >= 1000:
+                        success = place_trade(pair, price, sl, tp, units, direction, setup_type, risk_percent)
+                        if success:
+                            trade_opened_during_window_today = True
 
             # status.json ne contient plus les indicateurs de paires.
             save_status_json()
