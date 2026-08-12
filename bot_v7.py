@@ -64,6 +64,12 @@ SPREAD_WINDOW = 5
 closed_trades_today = []
 rejected_signals = []
 
+# État de la session pour la logique d'arrêt différé.
+# Un trade ouvert entre 07:00 et 11:00 et encore ouvert à 11:00
+# maintient le bot actif jusqu'à 17:05.
+late_shutdown_required = False
+trade_opened_during_window_today = False
+
 CLOSED_TRADES_FILE = "closed_trades.json"
 REJECTED_FILE = "rejected_signals.json"
 PAUSE_FILE = "pause_state.json"
@@ -226,7 +232,7 @@ def push_status_json(data_dict):
         print(f"Error pushing status.json: {e}")
 
 
-def save_status_json(pair_indicators):
+def save_status_json():
     now = datetime.now(tz)
     status = {
         "time": now.strftime("%Y-%m-%d %H:%M:%S"),
@@ -237,9 +243,7 @@ def save_status_json(pair_indicators):
             "start": f"{TRADING_HOURS_START:02d}:00",
             "end": f"{TRADING_HOURS_END:02d}:00"
         },
-        "pairs": pair_indicators,
         "active_trade": None,
-        "closed_trades_today": closed_trades_today,
         "next_news_event": None
     }
 
@@ -332,7 +336,8 @@ def load_existing_open_position():
                         'entry_price': float(trade.price),
                         'sl': float(trade.stopLossOrder.price) if trade.stopLossOrder else None,
                         'tp': float(trade.takeProfitOrder.price) if trade.takeProfitOrder else None,
-                        'direction': 'buy' if int(trade.currentUnits) > 0 else 'sell'
+                        'direction': 'buy' if int(trade.currentUnits) > 0 else 'sell',
+                        'opened_at': str(trade.openTime) if getattr(trade, 'openTime', None) else None
                     }
                     print(f"Existing open position loaded: {instrument} {active_trade['direction']}")
                     return
@@ -659,7 +664,8 @@ def place_trade(instrument, entry, sl, tp, units, direction):
             'be_triggered': False,
             'tp1_hit': False,
             'trailing_distance': f"{FIXED_TRAILING_PIPS} pips (fixed)",
-            'atr': 0.0
+            'atr': 0.0,
+            'opened_at': datetime.now(tz).isoformat()
         }
     except Exception as e:
         print(f"Failed to extract trade details: {e}")
@@ -853,48 +859,10 @@ def check_signal(df, instrument):
     return False, 0, 0, 0, 0, None, combined_reason
 
 
-def collect_indicators(pair):
-    try:
-        spread = get_spread(pair)
-    except:
-        return None
-    try:
-        df = get_candles(pair)
-        last_candle = df.iloc[-2]
-        return {
-            "price": last_candle['c'],
-            "spread": spread,
-            "adx": last_candle['adx'],
-            "plus_di": last_candle['plus_di'],
-            "minus_di": last_candle['minus_di'],
-            "ema50": last_candle['ema50'],
-            "ema200": last_candle['ema200'],
-            "rsi": last_candle['rsi'],
-            "atr": last_candle['atr'],
-            "ema_orientation": "bullish" if last_candle['ema50'] > last_candle['ema200'] else "bearish",
-            "macd_signal": "bullish" if last_candle['macd_line'] > last_candle['macd_signal'] else "bearish",
-            "last_signal": None
-        }
-    except Exception as e:
-        print(f"Erreur get_candles {pair} : {e}")
-        return {
-            "price": None,
-            "spread": spread,
-            "adx": None,
-            "plus_di": None,
-            "minus_di": None,
-            "ema50": None,
-            "ema200": None,
-            "rsi": None,
-            "atr": None,
-            "ema_orientation": "--",
-            "macd_signal": "--",
-            "last_signal": None
-        }
-
-
 def main():
-    global trades_today, last_trade_date, last_close_time, active_trade, closed_trades_today, rejected_signals
+    global trades_today, last_trade_date, last_close_time, active_trade
+    global closed_trades_today, rejected_signals
+    global late_shutdown_required, trade_opened_during_window_today
 
     load_closed_trades_from_file()
     load_rejected_from_file()
@@ -902,31 +870,40 @@ def main():
     trades_today = count_all_trades_today()
     if active_trade is None:
         load_existing_open_position()
-    print(f"Trades already taken today: {trades_today}, active trade: {active_trade is not None}")
 
-    start_msg = (f"🟢 Forex Sniper 7-12 started – max {MAX_TRADES_PER_DAY} trades/day, "
-                 f"buffer {MIN_MINUTES_BETWEEN_TRADES}min, Buy & Sell. "
-                 f"({trades_today} already taken)")
+    # Reconstitue l'état d'un éventuel trade ouvert pendant la fenêtre 07:00–11:00.
+    trade_opened_during_window_today = False
+    if active_trade is not None:
+        opened_at = active_trade.get("opened_at")
+        if opened_at:
+            try:
+                opened_dt = datetime.fromisoformat(
+                    opened_at.replace("Z", "+00:00")
+                ).astimezone(tz)
+                trade_opened_during_window_today = (
+                    opened_dt.date() == datetime.now(tz).date()
+                    and TRADING_HOURS_START <= opened_dt.hour < TRADING_HOURS_END
+                )
+            except (ValueError, TypeError):
+                trade_opened_during_window_today = False
+
+    late_shutdown_required = (
+        active_trade is not None
+        and trade_opened_during_window_today
+        and datetime.now(tz).hour >= TRADING_HOURS_END
+    )
+
+    start_msg = (
+        f"🟢 Forex Sniper 7-12 started – max {MAX_TRADES_PER_DAY} trades/day, "
+        f"buffer {MIN_MINUTES_BETWEEN_TRADES}min, Buy & Sell. "
+        f"({trades_today} already taken)"
+    )
     print(start_msg)
     send_telegram_message(start_msg)
 
     try:
         while True:
             now = datetime.now(tz)
-
-            # Arrêt complet du bot
-            if now.hour > BOT_SHUTDOWN_HOUR or (now.hour == BOT_SHUTDOWN_HOUR and now.minute >= 5):
-                stop_msg = (f"🔴 Forex Sniper 7-12 stopped – End of session ({now.strftime('%H:%M')}), "
-                            f"{trades_today} trade(s) taken today.")
-                print(stop_msg)
-                send_telegram_message(stop_msg)
-                pair_indicators = {}
-                for pair in PAIRS:
-                    indicators = collect_indicators(pair)
-                    if indicators:
-                        pair_indicators[pair] = indicators
-                save_status_json(pair_indicators)
-                break
 
             today = now.date()
             if last_trade_date != today:
@@ -935,16 +912,73 @@ def main():
                 last_close_time = None
                 closed_trades_today.clear()
                 rejected_signals.clear()
+                late_shutdown_required = False
+                trade_opened_during_window_today = False
                 load_closed_trades_from_file()
                 load_rejected_from_file()
                 if active_trade is None:
                     load_existing_open_position()
 
+                # Si le bot redémarre alors qu'un trade du jour est encore ouvert,
+                # reconstitue l'état nécessaire à l'arrêt de 17:05.
+                if active_trade is not None:
+                    opened_at = active_trade.get("opened_at")
+                    if opened_at:
+                        try:
+                            opened_dt = datetime.fromisoformat(
+                                opened_at.replace("Z", "+00:00")
+                            ).astimezone(tz)
+                            trade_opened_during_window_today = (
+                                opened_dt.date() == today
+                                and TRADING_HOURS_START <= opened_dt.hour < TRADING_HOURS_END
+                            )
+                        except (ValueError, TypeError):
+                            trade_opened_during_window_today = False
+
+            # Gestion et détection de clôture avant toute décision d'arrêt.
             manage_active_trade()
             check_closed_trade()
 
+            # Si un trade issu de la fenêtre 07:00–11:00 est encore ouvert
+            # au passage de 11:00, le bot doit rester actif jusqu'à 17:05.
+            if (
+                now.hour >= TRADING_HOURS_END
+                and trade_opened_during_window_today
+                and active_trade is not None
+            ):
+                late_shutdown_required = True
+
+            # Si aucun trade n'est encore ouvert à 11:00, la session peut
+            # se terminer à 12:05. Cela couvre aussi le cas où un trade a
+            # été ouvert puis clôturé avant 11:00.
+            shutdown_1205 = (
+                now.hour == 12
+                and now.minute >= 5
+                and not late_shutdown_required
+            )
+
+            # Arrêt à 17:05 pour un trade qui était encore ouvert à 11:00.
+            shutdown_1705 = (
+                now.hour > BOT_SHUTDOWN_HOUR
+                or (
+                    now.hour == BOT_SHUTDOWN_HOUR
+                    and now.minute >= 5
+                )
+            )
+
+            if shutdown_1205 or shutdown_1705:
+                stop_msg = (
+                    f"🔴 Forex Sniper 7-12 stopped – End of session "
+                    f"({now.strftime('%H:%M')}), {trades_today} trade(s) taken today."
+                )
+                print(stop_msg)
+                send_telegram_message(stop_msg)
+                save_status_json()
+                break
+
             if not hasattr(main, "next_news_check"):
                 main.next_news_check = now
+
             if now >= main.next_news_check:
                 for pair in PAIRS:
                     sentiment = get_finnhub_sentiment(pair)
@@ -954,54 +988,74 @@ def main():
 
             news_blocked = check_and_block_news(now)
 
-            in_trading_hours = (now.hour >= TRADING_HOURS_START and now.hour < TRADING_HOURS_END)
+            in_trading_hours = (
+                now.hour >= TRADING_HOURS_START
+                and now.hour < TRADING_HOURS_END
+            )
 
             can_trade_time = True
             if last_close_time is not None:
                 elapsed = now - last_close_time
                 if elapsed < timedelta(minutes=MIN_MINUTES_BETWEEN_TRADES):
                     can_trade_time = False
-                    remaining = MIN_MINUTES_BETWEEN_TRADES - int(elapsed.total_seconds()/60)
-                    print(f"⏳ Post-close cooldown – {remaining} min remaining")
 
-            can_trade = (active_trade is None
-                         and trades_today < MAX_TRADES_PER_DAY
-                         and in_trading_hours
-                         and not news_blocked
-                         and can_trade_time)
+            can_trade = (
+                active_trade is None
+                and trades_today < MAX_TRADES_PER_DAY
+                and in_trading_hours
+                and not news_blocked
+                and can_trade_time
+            )
 
-            # ★ Collecte TOUJOURS (même si can_trade est False)
-            pair_indicators = {}
-            for pair in PAIRS:
-                indicators = collect_indicators(pair)
-                if indicators:
-                    pair_indicators[pair] = indicators
-                    print(f"{now.strftime('%H:%M:%S')} {pair} spread: {indicators['spread']:.5f} | "
-                          f"ADX:{indicators.get('adx','--')} +DI:{indicators.get('plus_di','--')} -DI:{indicators.get('minus_di','--')} "
-                          f"EMA50:{indicators.get('ema50','--')} EMA200:{indicators.get('ema200','--')} "
-                          f"RSI:{indicators.get('rsi','--')} ATR:{indicators.get('atr','--')}")
-
-            # ★ Détection des signaux/rejets UNIQUEMENT si can_trade
+            # Les indicateurs de dashboard sont maintenant gérés exclusivement
+            # par pair_indicators.py. Le bot ne les collecte plus ici.
             if can_trade:
                 for pair in PAIRS:
                     if has_open_position(pair):
                         continue
-                    if not is_spread_ok(pair, indicators.get(pair, {}).get('spread', 0)):
+
+                    # Le bot récupère uniquement les données nécessaires à la
+                    # validation/exécution d'un setup lorsqu'il peut réellement trader.
+                    try:
+                        spread = get_spread(pair)
+                    except Exception:
                         continue
+
+                    if not is_spread_ok(pair, spread):
+                        continue
+
                     df = get_candles(pair)
-                    signal, price, sl, tp, sl_pips, direction, reason = check_signal(df, pair)
+                    signal, price, sl, tp, sl_pips, direction, reason = check_signal(
+                        df, pair
+                    )
+
                     if signal:
-                        print(f" -> SIGNAL {direction}")
-                        pair_indicators[pair]["last_signal"] = direction
-                        balance_response = retry_api_call(ctx.account.summary, ACCOUNT_ID)
+                        print(f" -> SIGNAL {direction} {pair}")
+
+                        balance_response = retry_api_call(
+                            ctx.account.summary, ACCOUNT_ID
+                        )
                         balance = get_account_balance(balance_response)
-                        sl_distance = price - sl if direction == 'buy' else sl - price
-                        units = calculate_units(balance, sl_distance, pair)
-                        success = place_trade(pair, price, sl, tp, units, direction)
+
+                        sl_distance = (
+                            price - sl if direction == 'buy' else sl - price
+                        )
+                        units = calculate_units(
+                            balance, sl_distance, pair
+                        )
+
+                        success = place_trade(
+                            pair, price, sl, tp, units, direction
+                        )
+
                         if success:
+                            # place_trade() renseigne opened_at; on mémorise
+                            # explicitement qu'un trade de la fenêtre a été ouvert.
+                            trade_opened_during_window_today = True
                             break
+
                     elif reason:
-                        print(f" -> REJECTED: {reason}")
+                        print(f" -> REJECTED {pair}: {reason}")
                         rejected_signals.append({
                             "time": now.strftime("%H:%M:%S"),
                             "pair": pair,
@@ -1010,11 +1064,12 @@ def main():
                         })
                         save_rejected_to_file()
 
-            # ★ Sauvegarde TOUJOURS (même si can_trade est False)
-            save_status_json(pair_indicators)
+            # status.json ne contient plus les indicateurs de paires.
+            save_status_json()
 
             if not hasattr(main, "next_trade_save"):
                 main.next_trade_save = now
+
             if now >= main.next_trade_save:
                 save_closed_trades_to_file()
                 save_rejected_to_file()
