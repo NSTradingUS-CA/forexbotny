@@ -101,7 +101,6 @@ MONTREAL_TZ = ZoneInfo("America/Toronto")
 
 @st.cache_data(ttl=5)
 def fetch_json(filename):
-    """Lit un fichier JSON depuis le dépôt GitHub, avec cache-buster pour éviter le cache navigateur."""
     repo = st.secrets["GITHUB_REPOSITORY"]
     cache_buster = int(time.time())
     url = f"https://raw.githubusercontent.com/{repo}/main/{filename}?t={cache_buster}"
@@ -115,6 +114,12 @@ def fetch_json(filename):
 
 def fetch_status():
     return fetch_json("status.json")
+
+def fetch_pair_indicators():
+    data = fetch_json("pair_indicators.json")
+    if data:
+        return data
+    return {}
 
 def fetch_closed_trades():
     data = fetch_json("closed_trades.json")
@@ -185,9 +190,10 @@ with col_signout:
         st.session_state.authenticated = False
         st.rerun()
 
-@st.fragment(run_every="30s")
+@st.fragment(run_every="10s")
 def render_dashboard():
     data = fetch_status()
+    pair_data = fetch_pair_indicators()
     closed_trades = fetch_closed_trades()
     rejected = fetch_rejected_signals()
     pause_until = fetch_pause_state()
@@ -196,7 +202,7 @@ def render_dashboard():
     bot_is_running = check_bot_running()
 
     if not data:
-        st.error("Status unavailable – retrying in 30s")
+        st.error("Status unavailable – retrying in 10s")
         return
 
     # ---------- Bannière de pause news ----------
@@ -218,7 +224,7 @@ def render_dashboard():
     col1.metric("", f"{trades}/{max_tr}")
 
     col2.markdown("#### Session")
-    col2.metric("", f"07:00–12:00")
+    col2.metric("", f"07:00–11:00")
 
     col3.markdown("#### Status")
     col3.metric("", "🟢" if bot_is_running else "🔴")
@@ -232,7 +238,7 @@ def render_dashboard():
     cols = st.columns(2)
     for i, pair in enumerate(["EUR_USD", "GBP_USD"]):
         with cols[i]:
-            p = data.get("pairs", {}).get(pair, {})
+            p = pair_data.get(pair, {})
             st.markdown(f"**{pair}**")
 
             price = p.get('price')
