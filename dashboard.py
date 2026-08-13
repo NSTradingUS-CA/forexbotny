@@ -364,7 +364,7 @@ def render_dashboard():
 
     # ---------- Historique + Rejets + Performance ----------
     st.markdown("---")
-    tab1, tab2, tab3 = st.tabs(["📜 Closed", "🚫 Rejected", "📊 Performance"])
+    tab1, tab2, tab3 = st.tabs(["📜 Closed", "🚫 Rejected", "📊 Setups Performance"])
 
     with tab1:
         if closed_trades:
@@ -420,7 +420,7 @@ def render_dashboard():
 
     with tab3:
         if not closed_trades:
-            st.write("No closed trade so far.")
+            st.write("No setups performance stats available yet.")
         else:
             # Création d'un DataFrame pour faciliter les calculs
             df_trades = pd.DataFrame(closed_trades)
