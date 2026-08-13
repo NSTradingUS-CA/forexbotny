@@ -2,20 +2,6 @@
   "signals": [
     {
       "time": "10:03:40",
-      "pair": "EUR_USD",
-      "direction": null,
-      "reason": "H1 regime too weak (ADX 13.3)",
-      "spread": 0.00016000000000016001,
-      "adx": 22.05049988362204,
-      "plus_di": 21.010333087902357,
-      "minus_di": 27.16156495669919,
-      "ema50": 1.153048565661077,
-      "ema200": 1.1533725420644718,
-      "rsi": 52.6849443243104,
-      "atr": 0.0004992857142857339
-    },
-    {
-      "time": "10:03:40",
       "pair": "GBP_USD",
       "direction": null,
       "reason": "No high-quality setup",
@@ -704,6 +690,21 @@
       "ema200": 1.1533701657933608,
       "rsi": 52.831957609845006,
       "atr": 0.0005135714285714466
+    },
+    {
+      "time": "10:21:30",
+      "pair": "GBP_USD",
+      "direction": null,
+      "buy_reason": "No bullish rejection at EMA20\nNo breakout BUY setup\nBreakout quality (body/ADX) insufficient for BUY",
+      "sell_reason": "H1 trend not down for SELL\nNo bearish rejection at EMA20\nMomentum not favorable for SELL\nH1 not down for breakout SELL\nNo breakout SELL setup\nBreakout quality (body/ADX) insufficient for SELL\n-DI not > +DI for SELL",
+      "spread": 0.00017000000000000348,
+      "adx": 19.14270043063801,
+      "plus_di": 23.843345909487702,
+      "minus_di": 20.779003363881163,
+      "ema50": 1.3493516863571708,
+      "ema200": 1.3499340477767712,
+      "rsi": 54.820188953226406,
+      "atr": 0.0007014285714285513
     }
   ],
   "last_cleanup": "2026-08-13"
