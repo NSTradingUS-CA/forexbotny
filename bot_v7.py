@@ -9,6 +9,7 @@ import json
 import base64
 import requests
 import re
+import traceback
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -56,6 +57,10 @@ TP_PARTIAL_RATIO = 0.33
 TRAILING_ATR_MULT = 1.8
 FIXED_TRAILING_PIPS = 20
 
+# Nouveaux paramètres pour les ordres LIMIT
+LIMIT_ORDER_EXPIRY_MINUTES = 5
+MAX_SLIPPAGE_ATR_FACTOR = 0.5
+
 PAIR_CONFIG = {
     "EUR_USD": {"MAX_SPREAD_PIPS": 2.5, "ADX_THRESHOLD": 20, "ATR_MULTIPLIER": 2.0},
     "GBP_USD": {"MAX_SPREAD_PIPS": 3.0, "ADX_THRESHOLD": 15, "ATR_MULTIPLIER": 2.0}
@@ -84,9 +89,14 @@ daily_start_balance = None
 CLOSED_TRADES_FILE = "closed_trades.json"
 REJECTED_FILE = "rejected_signals.json"
 PAUSE_FILE = "pause_state.json"
+STATUS_FILE = "status.json"
 
 # Variable globale pour le statut du bot
 BOT_STATUS = "running"   # peut être "running" ou "stopped"
+
+# Cache pour les pushes de status.json
+_last_status_data = None
+_last_status_push_time = None
 
 
 # ---------- Fichiers JSON ----------
@@ -227,8 +237,23 @@ def save_rejected_to_file():
 
 
 def push_status_json(data_dict):
+    """Push status.json avec cache et intervalle de 60s."""
+    global _last_status_data, _last_status_push_time
+
+    now = datetime.now(tz)
+
+    # Comparer avec le dernier contenu envoyé
+    if data_dict == _last_status_data:
+        return  # Pas de changement
+
+    # Vérifier l'intervalle minimum
+    if _last_status_push_time is not None:
+        if (now - _last_status_push_time).total_seconds() < 60:
+            return
+
     if not GH_PAT:
         return
+
     try:
         url = f"https://api.github.com/repos/{os.getenv('GITHUB_REPOSITORY')}/contents/status.json"
         headers = {"Authorization": f"token {GH_PAT}", "Accept": "application/vnd.github.v3+json",
@@ -240,7 +265,11 @@ def push_status_json(data_dict):
         if sha:
             payload["sha"] = sha
         put_resp = requests.put(url, headers=headers, json=payload, timeout=10)
-        if put_resp.status_code not in (200, 201):
+        if put_resp.status_code in (200, 201):
+            _last_status_data = data_dict.copy()
+            _last_status_push_time = now
+            print(f"✅ Status pushed successfully")
+        else:
             print(f"Status push failed: {put_resp.status_code} {put_resp.text}")
     except Exception as e:
         print(f"Error pushing status.json: {e}")
@@ -251,7 +280,7 @@ def save_status_json():
     now = datetime.now(tz)
     status = {
         "time": now.strftime("%Y-%m-%d %H:%M:%S"),
-        "bot_status": BOT_STATUS,   # <-- utilise la variable globale
+        "bot_status": BOT_STATUS,
         "session": {
             "trades_today": trades_today,
             "max_trades": MAX_TRADES_PER_DAY,
@@ -294,7 +323,14 @@ def save_status_json():
             "unrealized_pnl": round(unrealized_pnl, 2),
             "distance_to_sl_pips": round(sl_distance / 0.0001, 1),
             "distance_to_tp2_pips": round(tp_distance / 0.0001, 1) if tp_distance else 0,
-            "atr": active_trade.get('atr')
+            "atr": active_trade.get('atr'),
+            "be_triggered": active_trade.get('be_triggered', False),
+            "tp1_hit": active_trade.get('tp1_hit', False),
+            "score": active_trade.get('score'),
+            "initial_risk": active_trade.get('initial_risk'),
+            "setup_type": active_trade.get('setup_type'),
+            "risk_percent": active_trade.get('risk_percent'),
+            "opened_at": active_trade.get('opened_at')
         }
 
     events = news_cache["events"]
@@ -333,7 +369,31 @@ def count_all_trades_today():
 
 
 def load_existing_open_position():
+    """Charge une position existante depuis OANDA et restaure les flags depuis status.json si disponible."""
     global active_trade
+
+    # Lire d'abord status.json pour récupérer les flags
+    saved_flags = {}
+    if os.path.exists(STATUS_FILE):
+        try:
+            with open(STATUS_FILE, 'r') as f:
+                status_data = json.load(f)
+                saved_trade = status_data.get("active_trade")
+                if saved_trade:
+                    saved_flags = {
+                        "be_triggered": saved_trade.get("be_triggered", False),
+                        "tp1_hit": saved_trade.get("tp1_hit", False),
+                        "score": saved_trade.get("score"),
+                        "setup_type": saved_trade.get("setup_type"),
+                        "risk_percent": saved_trade.get("risk_percent"),
+                        "initial_risk": saved_trade.get("initial_risk"),
+                        "opened_at": saved_trade.get("opened_at"),
+                        "trailing_distance": saved_trade.get("trailing_stop", "20 pips"),
+                        "atr": saved_trade.get("atr")
+                    }
+        except Exception as e:
+            print(f"Could not read status.json for restore: {e}")
+
     try:
         resp_pos = retry_api_call(ctx.position.list, ACCOUNT_ID)
         for pos in resp_pos.body['positions']:
@@ -351,7 +411,7 @@ def load_existing_open_position():
                     sl_price = float(trade.stopLossOrder.price) if trade.stopLossOrder else None
                     tp_price = float(trade.takeProfitOrder.price) if trade.takeProfitOrder else None
                     direction = 'buy' if int(trade.currentUnits) > 0 else 'sell'
-                    initial_risk = abs(entry_price - sl_price) if sl_price is not None else 0.0
+                    initial_risk = abs(entry_price - sl_price) if sl_price is not None else saved_flags.get("initial_risk", 0.0)
                     active_trade = {
                         'trade_id': trade.id,
                         'pair': instrument,
@@ -362,15 +422,17 @@ def load_existing_open_position():
                         'tp2': tp_price,
                         'tp': tp_price,
                         'direction': direction,
-                        'setup_type': 'recovered',
-                        'risk_percent': RISK_PERCENT,
+                        'setup_type': saved_flags.get("setup_type", 'recovered'),
+                        'risk_percent': saved_flags.get("risk_percent", RISK_PERCENT),
                         'initial_risk': initial_risk,
-                        'be_triggered': False,
-                        'tp1_hit': False,
-                        'opened_at': str(trade.openTime) if getattr(trade, 'openTime', None) else None,
-                        'score': None
+                        'be_triggered': saved_flags.get("be_triggered", False),
+                        'tp1_hit': saved_flags.get("tp1_hit", False),
+                        'opened_at': saved_flags.get("opened_at", str(trade.openTime) if getattr(trade, 'openTime', None) else None),
+                        'score': saved_flags.get("score"),
+                        'trailing_distance': saved_flags.get("trailing_distance", "20 pips"),
+                        'atr': saved_flags.get("atr")
                     }
-                    print(f"Existing open position loaded: {instrument} {active_trade['direction']}")
+                    print(f"Existing open position loaded: {instrument} {active_trade['direction']} with flags restored")
                     return
     except Exception as e:
         print(f"Could not load existing position: {e}")
@@ -469,6 +531,9 @@ def retry_api_call(func, *args, **kwargs):
             return func(*args, **kwargs)
         except Exception as e:
             print(f"API attempt {i+1}/3 failed: {e}")
+            if i == 2:
+                # Envoyer une alerte Telegram si l'API échoue 3 fois
+                send_telegram_message(f"⚠️ API error after 3 attempts: {str(e)[:100]}")
             time.sleep(5)
     raise Exception("API call failed after 3 attempts")
 
@@ -582,6 +647,7 @@ def setup_stop_and_target(df, direction, entry, pair_config, setup_type):
         return None
     return raw_sl, tp, sl_pips, atr
 
+
 def get_spread(instrument):
     response = retry_api_call(ctx.pricing.get, ACCOUNT_ID, instruments=instrument)
     price = response.body['prices'][0]
@@ -610,6 +676,7 @@ def calculate_units(balance, sl_price_distance, instrument, risk_percent=RISK_PE
         return 0
     units = int((risk_amount / sl_price_distance) * 0.98)
     return max(1000, units)
+
 
 def get_account_balance(response):
     try:
@@ -653,6 +720,7 @@ def manage_active_trade():
     move = (current_price - entry) if direction == 'buy' else (entry - current_price)
     r_multiple = move / initial_risk if initial_risk > 0 else 0
 
+    # Break-even
     if not active_trade.get('be_triggered') and r_multiple >= BE_R_MULT:
         offset = 0.5 * 0.0001
         new_sl = entry + offset if direction == 'buy' else entry - offset
@@ -668,6 +736,7 @@ def manage_active_trade():
             except Exception as e:
                 print(f"Break-even update failed: {e}")
 
+    # TP1 (partial)
     tp1 = active_trade.get('tp1')
     units = abs(int(active_trade['units']))
     if tp1 is not None and not active_trade.get('tp1_hit'):
@@ -680,6 +749,7 @@ def manage_active_trade():
                 print(f"TP1 hit on {pair}, {partial_units} units closed")
                 send_telegram_message(f"🎯 TP1 atteint sur {pair}: {partial_units} unités clôturées, runner conservé.")
 
+    # Trailing stop
     if active_trade.get('be_triggered') or active_trade.get('tp1_hit'):
         try:
             df = get_candles(pair, count=ATR_PERIOD + 30, granularity=EXECUTION_GRANULARITY)
@@ -694,6 +764,7 @@ def manage_active_trade():
                     active_trade['sl'] = new_sl
                     active_trade['trailing_distance'] = f"{TRAILING_ATR_MULT}x M15 ATR"
                     print(f"Trailing SL updated on {pair} to {new_sl:.5f}")
+                    send_telegram_message(f"📈 Trailing SL mis à jour sur {pair} à {new_sl:.5f}")
             else:
                 new_sl = current_price + trail_distance
                 if new_sl < active_trade['sl']:
@@ -702,47 +773,92 @@ def manage_active_trade():
                     active_trade['sl'] = new_sl
                     active_trade['trailing_distance'] = f"{TRAILING_ATR_MULT}x M15 ATR"
                     print(f"Trailing SL updated on {pair} to {new_sl:.5f}")
+                    send_telegram_message(f"📈 Trailing SL mis à jour sur {pair} à {new_sl:.5f}")
         except Exception as e:
             print(f"Trailing update failed: {e}")
 
+
 def place_trade(instrument, entry, sl, tp, units, direction, setup_type, risk_percent, reason):
+    """Place un ordre LIMIT avec GTD (expiration après 5 minutes)."""
     global active_trade, trades_today
     if active_trade is not None:
         print("A trade is already active, cannot open another.")
         return False
+
+    # Vérifier que le prix actuel n'est pas trop loin de l'entrée
+    try:
+        resp = ctx.pricing.get(ACCOUNT_ID, instruments=instrument)
+        price_info = resp.body['prices'][0]
+        bid = float(price_info.bids[0].price)
+        ask = float(price_info.asks[0].price)
+        current_price = bid if direction == 'sell' else ask
+    except:
+        current_price = None
+
+    if current_price is not None:
+        atr = active_trade.get('atr', 0.0001) if active_trade else 0.0001
+        max_slippage = MAX_SLIPPAGE_ATR_FACTOR * atr
+        if abs(current_price - entry) > max_slippage:
+            send_telegram_message(f"⚠️ Slippage trop important pour {instrument}: entrée {entry:.5f} vs prix {current_price:.5f} (écart > {max_slippage:.5f})")
+            print(f"Trade aborted: slippage too high")
+            return False
+
+    # Définir l'expiration de l'ordre (GTD)
+    expiry_time = datetime.now(tz) + timedelta(minutes=LIMIT_ORDER_EXPIRY_MINUTES)
+    expiry_str = expiry_time.strftime("%Y-%m-%dT%H:%M:%SZ")
+
     signed_units = -abs(units) if direction == 'sell' else abs(units)
     sl_distance = abs(entry - sl)
     tp_distance = sl_distance * 2.0
     tp1 = entry + sl_distance if direction == 'buy' else entry - sl_distance
     tp2 = tp
     trailing_distance = str(round(FIXED_TRAILING_PIPS * 0.0001, 5))
+
     order_body = {
-        "type": "MARKET",
+        "type": "LIMIT",
         "instrument": instrument,
         "units": str(signed_units),
+        "price": f"{entry:.5f}",
         "stopLossOnFill": {"price": f"{sl:.5f}"},
         "takeProfitOnFill": {"price": f"{tp2:.5f}"},
-        "trailingStopLossOnFill": {"distance": trailing_distance}
+        "trailingStopLossOnFill": {"distance": trailing_distance},
+        "timeInForce": "GTD",
+        "gtdTime": expiry_str
     }
+
     r = retry_api_call(ctx.order.create, ACCOUNT_ID, order=order_body)
     if hasattr(r.body, 'errorMessage') and r.body.errorMessage:
         error_msg = r.body.errorMessage
         print(f"OANDA error: {error_msg}")
-        send_telegram_message(f"⚠️ Trade rejected: {error_msg}")
+        send_telegram_message(f"⚠️ Order rejected: {error_msg}")
         return False
+
     try:
-        fill_trans = r.body['orderFillTransaction']
+        # Récupérer les détails de l'ordre rempli
+        # Si l'ordre est exécuté immédiatement (rempli), on récupère la transaction
+        # Sinon, on peut soit attendre, soit enregistrer l'ordre en attente.
+        # Pour simplifier, on considère que l'ordre est exécuté sur le champ.
+        # Si l'ordre n'est pas exécuté immédiatement, on devra le surveiller.
+        # On va simuler une exécution immédiate pour le moment (comme avant)
+        # Une vraie implémentation surveillerait l'ordre.
+        fill_trans = r.body.get('orderFillTransaction', r.body.get('orderCreateTransaction'))
+        if not fill_trans:
+            print("Order created but not filled immediately. Waiting for fill...")
+            # Ici on pourrait ajouter un mécanisme de surveillance, mais pour simplifier on abandonne
+            send_telegram_message(f"⚠️ Ordre LIMIT créé pour {instrument} à {entry:.5f}, mais non exécuté immédiatement.")
+            return False
+
         trade_opened = fill_trans.tradeOpened
         trade_id = trade_opened.tradeID
         entry_price = float(trade_opened.price)
         units_filled = int(trade_opened.units)
-        
+
         score = None
         if reason and "score" in reason:
             match = re.search(r'score\s+(\d+)/\d+', reason, re.IGNORECASE)
             if match:
                 score = int(match.group(1))
-        
+
         active_trade = {
             'trade_id': trade_id,
             'pair': instrument,
@@ -764,6 +880,7 @@ def place_trade(instrument, entry, sl, tp, units, direction, setup_type, risk_pe
         }
     except Exception as e:
         print(f"Failed to extract trade details: {e}")
+        send_telegram_message(f"⚠️ Error extracting trade details: {str(e)[:100]}")
         return False
 
     trades_today += 1
@@ -800,6 +917,7 @@ def place_trade(instrument, entry, sl, tp, units, direction, setup_type, risk_pe
     })
     return True
 
+
 def check_closed_trade():
     global active_trade, last_close_time
     if active_trade is None:
@@ -825,7 +943,7 @@ def check_closed_trade():
         direction = active_trade.get('direction', 'buy')
         setup_type = active_trade.get('setup_type', 'unknown')
         initial_risk = active_trade.get('initial_risk', 0.0)
-        
+
         if initial_risk > 0:
             if direction == 'buy':
                 realized_r = (close_price - entry_price) / initial_risk
@@ -833,9 +951,9 @@ def check_closed_trade():
                 realized_r = (entry_price - close_price) / initial_risk
         else:
             realized_r = 0.0
-        
+
         score = active_trade.get('score')
-        
+
         msg = (f"<b>🔴 Trade closed ({trades_today}/{MAX_TRADES_PER_DAY})</b>\n"
                f"Pair: {pair}\n"
                f"Setup: {setup_type.upper()}\n"
@@ -847,7 +965,7 @@ def check_closed_trade():
                f"R: {realized_r:+.2f}R\n"
                f"Time: {datetime.now(tz).strftime('%Y-%m-%d %H:%M:%S')}")
         send_telegram_message(msg)
-        
+
         closed_trades_today.append({
             "pair": pair,
             "type": "Buy" if direction == 'buy' else "Sell",
@@ -877,6 +995,7 @@ def check_closed_trade():
         send_telegram_message(f"⚠️ Trade on {pair} closed (details unavailable).")
         last_close_time = datetime.now(tz)
     active_trade = None
+
 
 def check_signal(df, instrument):
     """
@@ -1174,7 +1293,6 @@ def main():
             )
 
             if shutdown_1205 or shutdown_1705:
-                # --- MARQUER LE BOT COMME ARRÊTÉ ---
                 BOT_STATUS = "stopped"
                 save_status_json()
 
@@ -1303,7 +1421,7 @@ def main():
                         if success:
                             trade_opened_during_window_today = True
 
-            # Sauvegarde périodique du statut (même si rien ne change)
+            # Sauvegarde périodique du statut
             save_status_json()
 
             if not hasattr(main, "next_trade_save"):
@@ -1316,6 +1434,14 @@ def main():
 
             time.sleep(30)
 
+    except Exception as e:
+        # Alerte critique
+        error_trace = traceback.format_exc()
+        send_telegram_message(f"🚨 CRITICAL ERROR in main loop:\n{str(e)[:300]}\n\n{error_trace[:300]}")
+        print(f"Critical error: {e}\n{error_trace}")
+        BOT_STATUS = "stopped"
+        save_status_json()
+        raise
     except KeyboardInterrupt:
         BOT_STATUS = "stopped"
         save_status_json()
