@@ -24,7 +24,7 @@ jobs:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: pip install v20 pandas python-dotenv requests pytz
+        run: pip install v20 pandas python-dotenv requests pytz PyYAML
 
       - name: Run Pair Indicators
         run: python pair_indicators.py
