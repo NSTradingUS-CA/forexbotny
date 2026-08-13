@@ -2,21 +2,6 @@
   "signals": [
     {
       "time": "10:31:32",
-      "pair": "EUR_USD",
-      "direction": null,
-      "buy_reason": "H1 regime too weak (ADX 13.3)",
-      "sell_reason": "H1 regime too weak (ADX 13.3)",
-      "spread": 0.00014999999999987246,
-      "adx": 20.097832012297026,
-      "plus_di": 24.793914314191163,
-      "minus_di": 20.06702005720401,
-      "ema50": 1.1531065082358234,
-      "ema200": 1.1533860519893069,
-      "rsi": 61.88671138356213,
-      "atr": 0.0005764285714285888
-    },
-    {
-      "time": "10:31:32",
       "pair": "GBP_USD",
       "direction": null,
       "buy_reason": "Entry too extended (1.63 ATR)",
@@ -749,6 +734,21 @@
       "ema200": 1.3499316202434863,
       "rsi": 59.2634403261187,
       "atr": 0.0007378571428571234
+    },
+    {
+      "time": "10:48:18",
+      "pair": "EUR_USD",
+      "direction": null,
+      "buy_reason": "H1 regime too weak (ADX 13.3)",
+      "sell_reason": "H1 regime too weak (ADX 13.3)",
+      "spread": 0.0001500000000000945,
+      "adx": 20.323712861716217,
+      "plus_di": 28.05713211909141,
+      "minus_di": 17.804101080842187,
+      "ema50": 1.1531368407145535,
+      "ema200": 1.1533869035690847,
+      "rsi": 57.37596031049532,
+      "atr": 0.0006071428571428696
     }
   ],
   "last_cleanup": "2026-08-13"
