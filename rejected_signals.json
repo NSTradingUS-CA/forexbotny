@@ -1,12 +1,6 @@
 {
   "signals": [
     {
-      "time": "09:03:25",
-      "pair": "GBP_USD",
-      "direction": null,
-      "reason": "H1 regime too weak (ADX 16.9)"
-    },
-    {
       "time": "09:03:58",
       "pair": "EUR_USD",
       "direction": null,
@@ -307,6 +301,20 @@
       "ema200": 1.1533912863220233,
       "rsi": 70.43298008924782,
       "atr": 0.0004207142857143139
+    },
+    {
+      "time": "09:18:54",
+      "pair": "GBP_USD",
+      "direction": null,
+      "reason": "H1 regime too weak (ADX 16.9)",
+      "spread": 0.00017999999999984695,
+      "adx": 17.60276729210865,
+      "plus_di": 36.33613221538216,
+      "minus_di": 16.580745874931903,
+      "ema50": 1.3492056839886404,
+      "ema200": 1.3499177258174913,
+      "rsi": 69.29019615392677,
+      "atr": 0.00062357142857139
     }
   ],
   "last_cleanup": "2026-08-13"
