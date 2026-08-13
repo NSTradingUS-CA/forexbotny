@@ -24,11 +24,16 @@ ADX_PERIOD = 10
 MACD_FAST = 5
 MACD_SLOW = 13
 MACD_SIGNAL = 9
-REFRESH_SECONDS = 10
+REFRESH_SECONDS = 10      # collecte toutes les 10s
+PUSH_INTERVAL = 30        # push au maximum toutes les 30s
 # ============================
 
 ctx = v20.Context(OANDA_URL, token=API_KEY)
 tz = pytz.timezone(TIMEZONE)
+
+# Cache pour éviter les pushes inutiles
+_last_pushed_data = {}
+_last_push_time = datetime.min
 
 
 def retry_api_call(func, *args, **kwargs):
@@ -129,28 +134,74 @@ def collect_indicators(pair):
         return None
 
 
-def push_indicators(pair_indicators):
+def push_indicators_with_retry(pair_indicators):
+    """Push avec gestion de conflit 409 et comparaison de contenu."""
+    global _last_pushed_data, _last_push_time
+
+    # 1. Vérifier si les données ont changé
+    if pair_indicators == _last_pushed_data:
+        return  # Pas de changement, on ne pousse pas
+
+    # 2. Vérifier le délai minimum entre deux pushes
+    now = datetime.now(tz)
+    if (now - _last_push_time).total_seconds() < PUSH_INTERVAL:
+        return  # On attend encore
+
     if not GH_PAT:
         return
-    try:
-        url = f"https://api.github.com/repos/{os.getenv('GITHUB_REPOSITORY')}/contents/pair_indicators.json"
-        headers = {"Authorization": f"token {GH_PAT}", "Accept": "application/vnd.github.v3+json",
-                   "Cache-Control": "no-cache"}
-        resp = requests.get(url, headers=headers, timeout=10)
-        sha = resp.json().get("sha") if resp.status_code == 200 else None
-        content = json.dumps(pair_indicators, indent=2, default=str).encode()
-        payload = {"message": "Update pair indicators", "content": base64.b64encode(content).decode(), "branch": "main"}
-        if sha:
-            payload["sha"] = sha
-        put_resp = requests.put(url, headers=headers, json=payload, timeout=10)
-        if put_resp.status_code not in (200, 201):
-            print(f"Push pair_indicators.json failed: {put_resp.status_code}")
-    except Exception as e:
-        print(f"Error pushing pair_indicators.json: {e}")
+
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            url = f"https://api.github.com/repos/{os.getenv('GITHUB_REPOSITORY')}/contents/pair_indicators.json"
+            headers = {"Authorization": f"token {GH_PAT}",
+                       "Accept": "application/vnd.github.v3+json",
+                       "Cache-Control": "no-cache"}
+
+            # Récupérer le SHA actuel
+            resp = requests.get(url, headers=headers, timeout=10)
+            if resp.status_code == 200:
+                sha = resp.json().get("sha")
+            else:
+                sha = None
+
+            content = json.dumps(pair_indicators, indent=2, default=str).encode()
+            payload = {
+                "message": "Update pair indicators",
+                "content": base64.b64encode(content).decode(),
+                "branch": "main"
+            }
+            if sha:
+                payload["sha"] = sha
+
+            put_resp = requests.put(url, headers=headers, json=payload, timeout=10)
+
+            if put_resp.status_code in (200, 201):
+                # Succès : on met à jour le cache
+                _last_pushed_data = pair_indicators.copy()
+                _last_push_time = now
+                print(f"✅ Push pair_indicators.json réussi (tentative {attempt+1})")
+                return
+
+            elif put_resp.status_code == 409:
+                # Conflit : le fichier a été modifié entre temps, on réessaye
+                print(f"⚠️ Conflit 409, nouvelle tentative {attempt+1}/{max_retries}...")
+                time.sleep(1)  # petit délai avant de récupérer le nouveau SHA
+                continue
+            else:
+                print(f"❌ Push échoué (status {put_resp.status_code}) : {put_resp.text}")
+                return
+
+        except Exception as e:
+            print(f"❌ Erreur lors du push (tentative {attempt+1}) : {e}")
+            time.sleep(1)
+
+    print("❌ Échec définitif du push après 3 tentatives.")
 
 
 def main():
-    print(f"🟢 Pair Indicators started – refresh every {REFRESH_SECONDS}s until {SHUTDOWN_HOUR}:05")
+    global _last_pushed_data, _last_push_time
+    print(f"🟢 Pair Indicators started – refresh every {REFRESH_SECONDS}s, push every {PUSH_INTERVAL}s until {SHUTDOWN_HOUR}:05")
     try:
         while True:
             now = datetime.now(tz)
@@ -166,7 +217,7 @@ def main():
                     print(f"{now.strftime('%H:%M:%S')} {pair} price={indicators['price']:.5f} spread={indicators['spread']:.5f}")
 
             if pair_indicators:
-                push_indicators(pair_indicators)
+                push_indicators_with_retry(pair_indicators)
 
             time.sleep(REFRESH_SECONDS)
 
