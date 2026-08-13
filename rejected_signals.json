@@ -1,12 +1,6 @@
 {
   "signals": [
     {
-      "time": "07:19:59",
-      "pair": "GBP_USD",
-      "direction": null,
-      "reason": "H1 regime too weak (ADX 17.6)"
-    },
-    {
       "time": "07:20:32",
       "pair": "EUR_USD",
       "direction": null,
@@ -299,6 +293,12 @@
       "pair": "EUR_USD",
       "direction": null,
       "reason": "BUY REJECTED: ADX too low (14.2 < 20) | SELL REJECTED: ADX too low (14.2 < 20), -DI not above +DI, MACD not bearish, EMA50 not below EMA200, No bearish rejection"
+    },
+    {
+      "time": "07:39:39",
+      "pair": "GBP_USD",
+      "direction": null,
+      "reason": "BUY REJECTED: +DI not above -DI, MACD not bullish, No EMA50 touch | SELL REJECTED: MACD not bearish, EMA50 not below EMA200, No EMA50 touch, No bearish rejection"
     }
   ],
   "last_cleanup": "2026-08-13"
