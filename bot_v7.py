@@ -8,6 +8,7 @@ import os
 import json
 import base64
 import requests
+import re  # <-- AJOUTÉ pour extraire le score
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -363,7 +364,8 @@ def load_existing_open_position():
                         'initial_risk': initial_risk,
                         'be_triggered': False,
                         'tp1_hit': False,
-                        'opened_at': str(trade.openTime) if getattr(trade, 'openTime', None) else None
+                        'opened_at': str(trade.openTime) if getattr(trade, 'openTime', None) else None,
+                        'score': None  # Pas de score pour les trades récupérés
                     }
                     print(f"Existing open position loaded: {instrument} {active_trade['direction']}")
                     return
@@ -700,7 +702,7 @@ def manage_active_trade():
         except Exception as e:
             print(f"Trailing update failed: {e}")
 
-def place_trade(instrument, entry, sl, tp, units, direction, setup_type, risk_percent):
+def place_trade(instrument, entry, sl, tp, units, direction, setup_type, risk_percent, reason):
     global active_trade, trades_today
     if active_trade is not None:
         print("A trade is already active, cannot open another.")
@@ -731,6 +733,14 @@ def place_trade(instrument, entry, sl, tp, units, direction, setup_type, risk_pe
         trade_id = trade_opened.tradeID
         entry_price = float(trade_opened.price)
         units_filled = int(trade_opened.units)
+        
+        # --- Extraction du score depuis le reason (ex: "PULLBACK score 8/9") ---
+        score = None
+        if reason and "score" in reason:
+            match = re.search(r'score\s+(\d+)/\d+', reason, re.IGNORECASE)
+            if match:
+                score = int(match.group(1))
+        
         active_trade = {
             'trade_id': trade_id,
             'pair': instrument,
@@ -747,7 +757,8 @@ def place_trade(instrument, entry, sl, tp, units, direction, setup_type, risk_pe
             'tp1_hit': False,
             'trailing_distance': f"{FIXED_TRAILING_PIPS} pips initial",
             'atr': 0.0,
-            'opened_at': datetime.now(tz).isoformat()
+            'opened_at': datetime.now(tz).isoformat(),
+            'score': score  # Stocké pour utilisation ultérieure
         }
     except Exception as e:
         print(f"Failed to extract trade details: {e}")
@@ -766,6 +777,7 @@ def place_trade(instrument, entry, sl, tp, units, direction, setup_type, risk_pe
            f"TP1: {tp1:.5f} (1R, {TP_PARTIAL_RATIO:.0%})\n"
            f"TP2: {tp2:.5f} (2R)\n"
            f"R/R: 1:2\n"
+           f"Score: {score if score is not None else 'N/A'}\n"
            f"Time: {datetime.now(tz).strftime('%Y-%m-%d %H:%M:%S')}")
     send_telegram_message(msg)
     print(f"✅ Trade placed on {instrument} ({direction}) [{setup_type}] - {abs(units_filled)} units")
@@ -781,7 +793,8 @@ def place_trade(instrument, entry, sl, tp, units, direction, setup_type, risk_pe
         "direction": direction,
         "risk_percent": risk_percent,
         "rr": rr,
-        "status": "OPEN"
+        "status": "OPEN",
+        "score": score
     })
     return True
 
@@ -809,6 +822,19 @@ def check_closed_trade():
         units = active_trade['units']
         direction = active_trade.get('direction', 'buy')
         setup_type = active_trade.get('setup_type', 'unknown')
+        initial_risk = active_trade.get('initial_risk', 0.0)
+        
+        # Calcul du R multiple réalisé
+        if initial_risk > 0:
+            if direction == 'buy':
+                realized_r = (close_price - entry_price) / initial_risk
+            else:
+                realized_r = (entry_price - close_price) / initial_risk
+        else:
+            realized_r = 0.0
+        
+        score = active_trade.get('score')  # Récupéré depuis l'ouverture
+        
         msg = (f"<b>🔴 Trade closed ({trades_today}/{MAX_TRADES_PER_DAY})</b>\n"
                f"Pair: {pair}\n"
                f"Setup: {setup_type.upper()}\n"
@@ -817,14 +843,19 @@ def check_closed_trade():
                f"Exit: {close_price:.5f}\n"
                f"Volume: {abs(units)}\n"
                f"P&L: {total_pnl:.2f} USD\n"
+               f"R: {realized_r:+.2f}R\n"
                f"Time: {datetime.now(tz).strftime('%Y-%m-%d %H:%M:%S')}")
         send_telegram_message(msg)
+        
+        # Ajout dans closed_trades_today avec les nouvelles clés
         closed_trades_today.append({
             "pair": pair,
             "type": "Buy" if direction == 'buy' else "Sell",
             "setup": setup_type,
             "pnl": total_pnl,
-            "time": datetime.now(tz).strftime("%H:%M:%S")
+            "time": datetime.now(tz).strftime("%H:%M:%S"),
+            "r_multiple": realized_r,
+            "score": score
         })
         save_closed_trades_to_file()
         log_trade({
@@ -836,7 +867,9 @@ def check_closed_trade():
             "units": abs(units),
             "pnl": total_pnl,
             "direction": direction,
-            "status": "CLOSED"
+            "status": "CLOSED",
+            "r_multiple": realized_r,
+            "score": score
         })
         last_close_time = datetime.now(tz)
     except Exception as e:
@@ -1135,7 +1168,6 @@ def main():
                         continue
                     if not is_spread_ok(pair, spread):
                         print(f" -> REJECTED {pair}: spread too wide")
-                        # On peut ajouter un rejet avec raison "spread too wide" mais sans indicateurs
                         rejected_entry = {
                             "time": now.strftime("%H:%M:%S"),
                             "pair": pair,
@@ -1165,8 +1197,7 @@ def main():
                     if signal:
                         candidates.append((pair, price, sl, tp, sl_pips, direction, reason, setup_type, risk_percent))
                     elif reason:
-                        # --- Enrichissement des rejets avec les indicateurs ---
-                        c = df.iloc[-2]   # dernière bougie complète
+                        c = df.iloc[-2]
                         rejected_entry = {
                             "time": now.strftime("%H:%M:%S"),
                             "pair": pair,
@@ -1184,7 +1215,6 @@ def main():
                         rejected_signals.append(rejected_entry)
                         save_rejected_to_file()
 
-                        # Log enrichi
                         print(f" -> REJECTED {pair}: {reason}  | Spread={spread:.5f} ADX={c['adx']:.1f} +DI={c['plus_di']:.1f} -DI={c['minus_di']:.1f} EMA50={c['ema50']:.5f} EMA200={c['ema200']:.5f} RSI={c['rsi']:.1f} ATR={c['atr']:.5f}")
 
                 if candidates:
@@ -1194,7 +1224,7 @@ def main():
                     sl_distance = abs(price - sl)
                     units = calculate_units(balance, sl_distance, pair, risk_percent)
                     if units >= 1000:
-                        success = place_trade(pair, price, sl, tp, units, direction, setup_type, risk_percent)
+                        success = place_trade(pair, price, sl, tp, units, direction, setup_type, risk_percent, reason)
                         if success:
                             trade_opened_during_window_today = True
 
