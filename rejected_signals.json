@@ -1,12 +1,6 @@
 {
   "signals": [
     {
-      "time": "08:51:37",
-      "pair": "GBP_USD",
-      "direction": null,
-      "reason": "H1 regime too weak (ADX 17.4)"
-    },
-    {
       "time": "08:52:12",
       "pair": "EUR_USD",
       "direction": null,
@@ -299,6 +293,12 @@
       "pair": "EUR_USD",
       "direction": null,
       "reason": "H1 regime too weak (ADX 13.2)"
+    },
+    {
+      "time": "09:05:38",
+      "pair": "GBP_USD",
+      "direction": null,
+      "reason": "H1 regime too weak (ADX 16.9)"
     }
   ],
   "last_cleanup": "2026-08-13"
