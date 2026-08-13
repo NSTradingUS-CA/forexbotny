@@ -2,21 +2,6 @@
   "signals": [
     {
       "time": "10:28:34",
-      "pair": "EUR_USD",
-      "direction": null,
-      "buy_reason": "H1 regime too weak (ADX 13.3)",
-      "sell_reason": "H1 regime too weak (ADX 13.3)",
-      "spread": 0.00015999999999993797,
-      "adx": 21.160172042134427,
-      "plus_di": 18.768174682848134,
-      "minus_di": 24.450188621694213,
-      "ema50": 1.1530639156285867,
-      "ema200": 1.1533701657933608,
-      "rsi": 52.831957609845006,
-      "atr": 0.0005135714285714466
-    },
-    {
-      "time": "10:28:34",
       "pair": "GBP_USD",
       "direction": null,
       "buy_reason": "No bullish rejection at EMA20\nNo breakout BUY setup\nBreakout quality (body/ADX) insufficient for BUY",
@@ -749,6 +734,21 @@
       "ema200": 1.3499416899985037,
       "rsi": 61.739688397320926,
       "atr": 0.0007342857142857032
+    },
+    {
+      "time": "10:45:19",
+      "pair": "EUR_USD",
+      "direction": null,
+      "buy_reason": "H1 regime too weak (ADX 13.3)",
+      "sell_reason": "H1 regime too weak (ADX 13.3)",
+      "spread": 0.00016000000000016001,
+      "adx": 20.323712861716217,
+      "plus_di": 28.05713211909141,
+      "minus_di": 17.804101080842187,
+      "ema50": 1.1531368407145535,
+      "ema200": 1.1533869035690847,
+      "rsi": 57.37596031049532,
+      "atr": 0.0006071428571428696
     }
   ],
   "last_cleanup": "2026-08-13"
