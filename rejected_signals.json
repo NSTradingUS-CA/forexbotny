@@ -71,6 +71,12 @@
       "pair": "GBP_USD",
       "direction": null,
       "reason": "H1 regime too weak (ADX 17.6)"
+    },
+    {
+      "time": "07:03:35",
+      "pair": "EUR_USD",
+      "direction": null,
+      "reason": "H1 regime too weak (ADX 14.2)"
     }
   ],
   "last_cleanup": "2026-08-13"
