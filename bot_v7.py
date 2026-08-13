@@ -77,8 +77,6 @@ closed_trades_today = []
 rejected_signals = []
 
 # État de la session pour la logique d'arrêt différé.
-# Un trade ouvert entre 07:00 et 11:00 et encore ouvert à 11:00
-# maintient le bot actif jusqu'à 17:05.
 late_shutdown_required = False
 trade_opened_during_window_today = False
 daily_start_balance = None
@@ -605,8 +603,6 @@ def calculate_units(balance, sl_price_distance, instrument, risk_percent=RISK_PE
     risk_amount = balance * (risk_percent / 100.0)
     if sl_price_distance <= 0:
         return 0
-    # EUR_USD and GBP_USD are USD-quoted pairs; for a USD account, units * price move
-    # is the approximate USD risk. A safety factor prevents oversizing on rounding/slippage.
     units = int((risk_amount / sl_price_distance) * 0.98)
     return max(1000, units)
 
@@ -652,7 +648,6 @@ def manage_active_trade():
     move = (current_price - entry) if direction == 'buy' else (entry - current_price)
     r_multiple = move / initial_risk if initial_risk > 0 else 0
 
-    # Protect at +1R. This is volatility-normalized instead of a fixed pip threshold.
     if not active_trade.get('be_triggered') and r_multiple >= BE_R_MULT:
         offset = 0.5 * 0.0001
         new_sl = entry + offset if direction == 'buy' else entry - offset
@@ -668,7 +663,6 @@ def manage_active_trade():
             except Exception as e:
                 print(f"Break-even update failed: {e}")
 
-    # Take only 1/3 at +1R, preserving most of the position for the 2R target.
     tp1 = active_trade.get('tp1')
     units = abs(int(active_trade['units']))
     if tp1 is not None and not active_trade.get('tp1_hit'):
@@ -681,7 +675,6 @@ def manage_active_trade():
                 print(f"TP1 hit on {pair}, {partial_units} units closed")
                 send_telegram_message(f"🎯 TP1 atteint sur {pair}: {partial_units} unités clôturées, runner conservé.")
 
-    # Trail only after +1R, using M15 ATR. This protects winners without strangling early movement.
     if active_trade.get('be_triggered') or active_trade.get('tp1_hit'):
         try:
             df = get_candles(pair, count=ATR_PERIOD + 30, granularity=EXECUTION_GRANULARITY)
@@ -805,7 +798,6 @@ def check_closed_trade():
         if not closed_trades:
             raise RuntimeError("No closed trade returned by OANDA")
 
-        # Use the most recently closed trade, not the sum of arbitrary recent trades.
         def close_key(t):
             value = getattr(t, 'closeTime', '')
             return str(value)
@@ -882,7 +874,6 @@ def check_signal(df, instrument):
     if not h1_trending:
         return False, 0, 0, 0, 0, None, f"H1 regime too weak (ADX {h['adx']:.1f})", None, 0
 
-    # Avoid buying/selling after excessive extension from M15 EMA50.
     extension = abs(c['c'] - c['ema50']) / atr if atr > 0 else 99
     if extension > MAX_ENTRY_EXTENSION_ATR:
         return False, 0, 0, 0, 0, None, f"Entry too extended ({extension:.2f} ATR)", None, 0
@@ -992,7 +983,6 @@ def main():
     if active_trade is None:
         load_existing_open_position()
 
-    # Reconstitue l'état d'un éventuel trade ouvert pendant la fenêtre 07:00–11:00.
     trade_opened_during_window_today = False
     if active_trade is not None:
         opened_at = active_trade.get("opened_at")
@@ -1044,8 +1034,6 @@ def main():
                 except Exception:
                     daily_start_balance = None
 
-                # Si le bot redémarre alors qu'un trade du jour est encore ouvert,
-                # reconstitue l'état nécessaire à l'arrêt de 17:05.
                 if active_trade is not None:
                     opened_at = active_trade.get("opened_at")
                     if opened_at:
@@ -1060,12 +1048,9 @@ def main():
                         except (ValueError, TypeError):
                             trade_opened_during_window_today = False
 
-            # Gestion et détection de clôture avant toute décision d'arrêt.
             manage_active_trade()
             check_closed_trade()
 
-            # Si un trade issu de la fenêtre 07:00–11:00 est encore ouvert
-            # au passage de 11:00, le bot doit rester actif jusqu'à 17:05.
             if (
                 now.hour >= TRADING_HOURS_END
                 and trade_opened_during_window_today
@@ -1073,16 +1058,12 @@ def main():
             ):
                 late_shutdown_required = True
 
-            # Si aucun trade n'est encore ouvert à 11:00, la session peut
-            # se terminer à 12:05. Cela couvre aussi le cas où un trade a
-            # été ouvert puis clôturé avant 11:00.
             shutdown_1205 = (
                 now.hour == 12
                 and now.minute >= 5
                 and not late_shutdown_required
             )
 
-            # Arrêt à 17:05 pour un trade qui était encore ouvert à 11:00.
             shutdown_1705 = (
                 now.hour > BOT_SHUTDOWN_HOUR
                 or (
@@ -1142,8 +1123,6 @@ def main():
                 and not daily_loss_blocked
             )
 
-            # Dashboard indicators are handled exclusively by pair_indicators.py.
-            # The bot fetches trading data only when it is actually allowed to seek a trade.
             if can_trade:
                 candidates = []
                 for pair in PAIRS:
@@ -1156,6 +1135,23 @@ def main():
                         continue
                     if not is_spread_ok(pair, spread):
                         print(f" -> REJECTED {pair}: spread too wide")
+                        # On peut ajouter un rejet avec raison "spread too wide" mais sans indicateurs
+                        rejected_entry = {
+                            "time": now.strftime("%H:%M:%S"),
+                            "pair": pair,
+                            "direction": None,
+                            "reason": "spread too wide",
+                            "spread": spread,
+                            "adx": None,
+                            "plus_di": None,
+                            "minus_di": None,
+                            "ema50": None,
+                            "ema200": None,
+                            "rsi": None,
+                            "atr": None
+                        }
+                        rejected_signals.append(rejected_entry)
+                        save_rejected_to_file()
                         continue
                     try:
                         df = get_candles(pair, count=EXECUTION_CANDLES, granularity=EXECUTION_GRANULARITY)
@@ -1163,20 +1159,34 @@ def main():
                     except Exception as e:
                         print(f"Signal analysis failed for {pair}: {e}")
                         continue
+
                     signal, price, sl, tp, sl_pips, direction, reason, setup_type, risk_percent = result
+
                     if signal:
                         candidates.append((pair, price, sl, tp, sl_pips, direction, reason, setup_type, risk_percent))
                     elif reason:
-                        print(f" -> REJECTED {pair}: {reason}")
-                        rejected_signals.append({
+                        # --- Enrichissement des rejets avec les indicateurs ---
+                        c = df.iloc[-2]   # dernière bougie complète
+                        rejected_entry = {
                             "time": now.strftime("%H:%M:%S"),
                             "pair": pair,
                             "direction": None,
-                            "reason": reason
-                        })
+                            "reason": reason,
+                            "spread": spread,
+                            "adx": c['adx'] if not pd.isna(c['adx']) else None,
+                            "plus_di": c['plus_di'] if not pd.isna(c['plus_di']) else None,
+                            "minus_di": c['minus_di'] if not pd.isna(c['minus_di']) else None,
+                            "ema50": c['ema50'] if not pd.isna(c['ema50']) else None,
+                            "ema200": c['ema200'] if not pd.isna(c['ema200']) else None,
+                            "rsi": c['rsi'] if not pd.isna(c['rsi']) else None,
+                            "atr": c['atr'] if not pd.isna(c['atr']) else None
+                        }
+                        rejected_signals.append(rejected_entry)
                         save_rejected_to_file()
 
-                # If both pairs qualify, prefer the highest-quality setup and then the lower-spread pair.
+                        # Log enrichi
+                        print(f" -> REJECTED {pair}: {reason}  | Spread={spread:.5f} ADX={c['adx']:.1f} +DI={c['plus_di']:.1f} -DI={c['minus_di']:.1f} EMA50={c['ema50']:.5f} EMA200={c['ema200']:.5f} RSI={c['rsi']:.1f} ATR={c['atr']:.5f}")
+
                 if candidates:
                     candidates.sort(key=lambda x: (0 if x[7] == 'pullback' else -1, -x[4]))
                     pair, price, sl, tp, sl_pips, direction, reason, setup_type, risk_percent = candidates[0]
@@ -1188,7 +1198,6 @@ def main():
                         if success:
                             trade_opened_during_window_today = True
 
-            # status.json ne contient plus les indicateurs de paires.
             save_status_json()
 
             if not hasattr(main, "next_trade_save"):
