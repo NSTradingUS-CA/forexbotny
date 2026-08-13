@@ -1,18 +1,6 @@
 {
   "signals": [
     {
-      "time": "07:47:06",
-      "pair": "GBP_USD",
-      "direction": null,
-      "reason": "BUY REJECTED: +DI not above -DI, MACD not bullish, No EMA50 touch | SELL REJECTED: MACD not bearish, EMA50 not below EMA200, No EMA50 touch, No bearish rejection"
-    },
-    {
-      "time": "07:47:43",
-      "pair": "EUR_USD",
-      "direction": null,
-      "reason": "BUY REJECTED: ADX too low (14.2 < 20) | SELL REJECTED: ADX too low (14.2 < 20), -DI not above +DI, MACD not bearish, EMA50 not below EMA200, No bearish rejection"
-    },
-    {
       "time": "07:47:43",
       "pair": "GBP_USD",
       "direction": null,
@@ -296,6 +284,18 @@
     },
     {
       "time": "08:01:31",
+      "pair": "EUR_USD",
+      "direction": null,
+      "reason": "BUY REJECTED: ADX too low (13.9 < 20), No EMA50 touch, No bullish rejection | SELL REJECTED: ADX too low (13.9 < 20), -DI not above +DI, MACD not bearish, EMA50 not below EMA200, No EMA50 touch, No bearish rejection"
+    },
+    {
+      "time": "08:01:31",
+      "pair": "GBP_USD",
+      "direction": null,
+      "reason": "BUY REJECTED: MACD not bullish, No bullish rejection | SELL REJECTED: -DI not above +DI, MACD not bearish, EMA50 not below EMA200, No bearish rejection"
+    },
+    {
+      "time": "08:02:05",
       "pair": "EUR_USD",
       "direction": null,
       "reason": "BUY REJECTED: ADX too low (13.9 < 20), No EMA50 touch, No bullish rejection | SELL REJECTED: ADX too low (13.9 < 20), -DI not above +DI, MACD not bearish, EMA50 not below EMA200, No EMA50 touch, No bearish rejection"
