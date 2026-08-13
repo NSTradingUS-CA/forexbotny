@@ -18,7 +18,8 @@ OANDA_URL = "api-fxpractice.oanda.com"
 GH_PAT = os.getenv("GH_PAT")
 PAIRS = ["EUR_USD", "GBP_USD"]
 TIMEZONE = 'America/Toronto'
-SHUTDOWN_HOUR = 17
+SHUTDOWN_HOUR = 17          # Arrêt normal à 17:05
+EARLY_SHUTDOWN_HOUR = 12    # Arrêt anticipé à 12:05 si aucun trade
 ATR_PERIOD = 14
 ADX_PERIOD = 10
 MACD_FAST = 5
@@ -200,14 +201,41 @@ def push_indicators_with_retry(pair_indicators):
     print("❌ Échec définitif du push après 3 tentatives.")
 
 
+def should_stop(now):
+    """Détermine si le script doit s'arrêter."""
+    # 1. Arrêt programmé à 17:05 (déjà existant)
+    if now.hour > SHUTDOWN_HOUR or (now.hour == SHUTDOWN_HOUR and now.minute >= 5):
+        return True
+
+    # 2. Arrêt anticipé à 12:05 si aucun trade actif
+    if now.hour >= EARLY_SHUTDOWN_HOUR and now.minute >= 5:
+        try:
+            if os.path.exists("status.json"):
+                with open("status.json", "r") as f:
+                    status = json.load(f)
+                    bot_status = status.get("bot_status")
+                    active_trade = status.get("active_trade")
+                    # Si le bot est explicitement arrêté ou qu'il n'y a pas de trade actif
+                    if bot_status == "stopped" or active_trade is None:
+                        return True
+        except Exception as e:
+            # En cas d'erreur de lecture, on ne s'arrête pas (prudence)
+            print(f"Erreur lecture status.json: {e}")
+
+    return False
+
+
 def main():
     global _last_pushed_data, _last_push_time
-    print(f"🟢 Pair Indicators started – refresh every {REFRESH_SECONDS}s, push every {PUSH_INTERVAL}s until {SHUTDOWN_HOUR}:05")
+    print(f"🟢 Pair Indicators started – refresh every {REFRESH_SECONDS}s, push every {PUSH_INTERVAL}s")
+    print(f"   Arrêt normal à {SHUTDOWN_HOUR}:05, ou à {EARLY_SHUTDOWN_HOUR}:05 si aucun trade actif.")
     try:
         while True:
             now = datetime.now(tz)
-            if now.hour > SHUTDOWN_HOUR or (now.hour == SHUTDOWN_HOUR and now.minute >= 5):
-                print("🔴 Pair Indicators stopped – shutdown time reached")
+
+            # Vérifier les conditions d'arrêt
+            if should_stop(now):
+                print(f"🔴 Pair Indicators stopped – shutdown condition met at {now.strftime('%H:%M')}")
                 break
 
             pair_indicators = {}
