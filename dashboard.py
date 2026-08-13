@@ -244,9 +244,8 @@ st.markdown(f"""
     <h2 style="color: #FF9100; margin: 0;">Forex Sniper 7‑12</h2>
 </div>
 <p style="text-align: center; color: #AAAAAA; font-size: 1.1rem; font-style: italic; margin-top: 10px; margin-bottom: 10px;">
-    Robot de trading 100 % autonome utilisant une grille de score multicritère pour prendre 1 à 3 trades par jour 
-    sur les paires EURUSD et GBPUSD, couvrant les sessions Londres et New York, 
-    avec gestion de risque intégrée, résilience, tableau de bord temps réel et envoyant des alertes Telegram.
+    Robot de trading 100 % autonome couvrant les sessions Londres et New York, utilisant une grille de score multicritères pour prendre 1 à 3 trades par jour 
+    sur les paires EURUSD et GBPUSD, avec gestion de risque intégrée, résilience, tableau de bord temps réel et envoyant des alertes Telegram.
 </p>
 """, unsafe_allow_html=True)
 
