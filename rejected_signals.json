@@ -1,18 +1,6 @@
 {
   "signals": [
     {
-      "time": "08:43:46",
-      "pair": "GBP_USD",
-      "direction": null,
-      "reason": "H1 regime too weak (ADX 17.4)"
-    },
-    {
-      "time": "08:44:19",
-      "pair": "EUR_USD",
-      "direction": null,
-      "reason": "H1 regime too weak (ADX 13.9)"
-    },
-    {
       "time": "08:44:19",
       "pair": "GBP_USD",
       "direction": null,
@@ -296,6 +284,18 @@
     },
     {
       "time": "08:57:46",
+      "pair": "EUR_USD",
+      "direction": null,
+      "reason": "H1 regime too weak (ADX 13.9)"
+    },
+    {
+      "time": "08:57:46",
+      "pair": "GBP_USD",
+      "direction": null,
+      "reason": "H1 regime too weak (ADX 17.4)"
+    },
+    {
+      "time": "08:58:20",
       "pair": "EUR_USD",
       "direction": null,
       "reason": "H1 regime too weak (ADX 13.9)"
