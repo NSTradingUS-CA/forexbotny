@@ -1,5 +1,5 @@
 {
-  "time": "2026-08-13 07:30:42",
+  "time": "2026-08-13 07:36:49",
   "bot_status": "running",
   "session": {
     "trades_today": 0,
@@ -8,8 +8,5 @@
     "end": "11:00"
   },
   "active_trade": null,
-  "next_news_event": null,
-  "strategy": "H1 regime + M15 pullback/breakout",
-  "max_risk_per_trade_percent": 0.5,
-  "daily_loss_limit_percent": 2.0
+  "next_news_event": null
 }
