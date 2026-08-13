@@ -262,7 +262,7 @@ def render_dashboard():
     col1.metric("", f"{trades}/{max_tr}")
 
     col2.markdown("#### Session")
-    col2.metric("", f"07:00–12:00")
+    col2.metric("", f"07:00–11:00")
 
     col3.markdown("#### Status")
     col3.metric("", "🟢" if bot_is_running else "🔴")
@@ -376,13 +376,45 @@ def render_dashboard():
                     unsafe_allow_html=True)
         else:
             st.write("No closed trades.")
+
     with tab2:
         if rejected:
             for r in rejected[::-1][:30]:
+                time_pair = f"{r.get('time','')} {r.get('pair','')}"
+                setup = display_setup(r)
+                score = display_score(r)
+                reason = r.get('reason','')
+
+                # Ligne d'indicateurs (si présents)
+                indicators = ""
+                if 'adx' in r:
+                    spread_val = r.get('spread')
+                    spread_str = f"{spread_val:.5f}" if spread_val is not None else "--"
+                    adx_val = r.get('adx')
+                    adx_str = f"{adx_val:.1f}" if adx_val is not None else "--"
+                    plus_di = r.get('plus_di')
+                    plus_str = f"{plus_di:.1f}" if plus_di is not None else "--"
+                    minus_di = r.get('minus_di')
+                    minus_str = f"{minus_di:.1f}" if minus_di is not None else "--"
+                    ema50 = r.get('ema50')
+                    ema50_str = f"{ema50:.5f}" if ema50 is not None else "--"
+                    ema200 = r.get('ema200')
+                    ema200_str = f"{ema200:.5f}" if ema200 is not None else "--"
+                    rsi = r.get('rsi')
+                    rsi_str = f"{rsi:.1f}" if rsi is not None else "--"
+                    atr = r.get('atr')
+                    atr_str = f"{atr:.5f}" if atr is not None else "--"
+                    indicators = (
+                        f"Spread: {spread_str} | ADX: {adx_str} | +DI: {plus_str} | -DI: {minus_str} | "
+                        f"EMA50: {ema50_str} | EMA200: {ema200_str} | RSI: {rsi_str} | ATR: {atr_str}"
+                    )
+
+                # Affichage
                 st.markdown(
-                    f"<span class='orange'>{r.get('time','')} {r.get('pair','')} – "
-                    f"{display_setup(r)} | Score: {display_score(r)} | {r.get('reason','')}</span>",
+                    f"<span class='orange'>{time_pair} – {setup} | Score: {score} | {reason}</span>",
                     unsafe_allow_html=True)
+                if indicators:
+                    st.caption(indicators)
         else:
             st.write("No rejected setups.")
 
