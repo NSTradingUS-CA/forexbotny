@@ -33,7 +33,7 @@ tz = pytz.timezone(TIMEZONE)
 
 # Cache pour éviter les pushes inutiles
 _last_pushed_data = {}
-_last_push_time = datetime.min
+_last_push_time = None   # sera initialisé au premier push
 
 
 def retry_api_call(func, *args, **kwargs):
@@ -144,8 +144,9 @@ def push_indicators_with_retry(pair_indicators):
 
     # 2. Vérifier le délai minimum entre deux pushes
     now = datetime.now(tz)
-    if (now - _last_push_time).total_seconds() < PUSH_INTERVAL:
-        return  # On attend encore
+    if _last_push_time is not None:
+        if (now - _last_push_time).total_seconds() < PUSH_INTERVAL:
+            return  # On attend encore
 
     if not GH_PAT:
         return
