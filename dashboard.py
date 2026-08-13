@@ -78,6 +78,25 @@ st.markdown("""
         background-color: #0D0D0D;
         z-index: 9999;
     }
+    .status-badge {
+        display: inline-block;
+        padding: 0.1rem 0.5rem;
+        border-radius: 12px;
+        font-weight: bold;
+        font-size: 0.9rem;
+    }
+    .badge-green {
+        background-color: #28a745;
+        color: white;
+    }
+    .badge-red {
+        background-color: #dc3545;
+        color: white;
+    }
+    .badge-gray {
+        background-color: #6c757d;
+        color: white;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -214,6 +233,9 @@ def display_trade_status(item):
     status = item.get("trade_status", item.get("status", item.get("management_status")))
     return str(status).upper() if status not in (None, "") else "--"
 
+def status_badge(condition, true_text="✅", false_text="❌"):
+    return true_text if condition else false_text
+
 # ---------- Logo + nom du bot ----------
 LOGO_URL = "https://raw.githubusercontent.com/NSTradingUS-CA/forexbotny/main/assets/logo.png"
 st.markdown(f"""
@@ -245,12 +267,10 @@ def render_dashboard():
         return
 
     # ---------- Déterminer si le bot est en cours d'exécution ----------
-    # Priorité au champ "bot_status" écrit par le bot lui-même
     bot_status = data.get("bot_status")
     if bot_status == "stopped":
         bot_is_running = False
     else:
-        # Fallback : si le champ est absent ou "running", on vérifie via GitHub
         bot_is_running = check_bot_running()
 
     # ---------- Bannière de pause news ----------
@@ -333,13 +353,17 @@ def render_dashboard():
         st.markdown("---")
         st.markdown("#### 🔥 Active Trade")
         st.markdown('<div class="active-trade-metrics">', unsafe_allow_html=True)
+        
+        # Métriques principales
         c1, c2, c3, c4 = st.columns(4)
         c1.metric("Pair", active.get("pair", ""))
         c2.metric("Type", active.get("type", ""))
         c3.metric("Entry", f"{active.get('entry',0):.5f}")
         c4.metric("Current", f"{active.get('current_price',0):.5f}")
+        
         pnl = active.get('unrealized_pnl',0)
         c1.metric("P&L", f"{pnl:.2f} USD", delta_color="normal" if pnl>=0 else "inverse")
+        
         tp1_val = active.get('tp1')
         tp2_val = active.get('tp2')
         if tp1_val is not None:
@@ -347,6 +371,8 @@ def render_dashboard():
         if tp2_val is not None:
             c3.metric("TP2 (final)", f"{tp2_val:.5f}")
         c4.metric("SL", f"{active.get('sl',0):.5f} ({active.get('distance_to_sl_pips',0)} pips)")
+        
+        # Informations de trailing
         trail_info = active.get('trailing_stop', '')
         atr_active = active.get('atr', None)
         if atr_active is not None:
@@ -354,18 +380,27 @@ def render_dashboard():
         if trail_info:
             st.caption(f"Trailing Stop: {trail_info}")
 
+        # Ligne de détails enrichie avec BE et TP1
         setup = display_setup(active)
         score = display_score(active)
         risk = display_risk(active)
         current_r = display_r(active)
         management = display_trade_status(active)
+        
+        be_triggered = active.get('be_triggered', False)
+        tp1_hit = active.get('tp1_hit', False)
+        be_str = "✅" if be_triggered else "❌"
+        tp1_str = "✅" if tp1_hit else "❌"
+        
         st.markdown(
             f"<div class='indicators-line'>"
             f"<span class='orange-label'>Setup:</span> {setup} | "
             f"<span class='orange-label'>Score:</span> {score} | "
             f"<span class='orange-label'>Risk:</span> {risk} | "
             f"<span class='orange-label'>R:</span> {current_r} | "
-            f"<span class='orange-label'>Status:</span> {management}"
+            f"<span class='orange-label'>Status:</span> {management} | "
+            f"<span class='orange-label'>BE:</span> {be_str} | "
+            f"<span class='orange-label'>TP1:</span> {tp1_str}"
             f"</div>",
             unsafe_allow_html=True
         )
