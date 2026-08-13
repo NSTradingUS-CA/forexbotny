@@ -1,34 +1,6 @@
 {
   "signals": [
     {
-      "time": "10:04:48",
-      "pair": "GBP_USD",
-      "direction": null,
-      "reason": "No high-quality setup",
-      "spread": 0.00017000000000000348,
-      "adx": 20.506635815299834,
-      "plus_di": 26.682738469977668,
-      "minus_di": 19.552177106407616,
-      "ema50": 1.349331345572321,
-      "ema200": 1.3499241190495257,
-      "rsi": 58.20896987032015,
-      "atr": 0.0006707142857142547
-    },
-    {
-      "time": "10:05:22",
-      "pair": "EUR_USD",
-      "direction": null,
-      "reason": "H1 regime too weak (ADX 13.3)",
-      "spread": 0.000140000000000029,
-      "adx": 22.05049988362204,
-      "plus_di": 21.010333087902357,
-      "minus_di": 27.16156495669919,
-      "ema50": 1.153048565661077,
-      "ema200": 1.1533725420644718,
-      "rsi": 52.6849443243104,
-      "atr": 0.0004992857142857339
-    },
-    {
       "time": "10:05:22",
       "pair": "GBP_USD",
       "direction": null,
@@ -697,6 +669,36 @@
     },
     {
       "time": "10:22:40",
+      "pair": "GBP_USD",
+      "direction": null,
+      "buy_reason": "No bullish rejection at EMA20\nNo breakout BUY setup\nBreakout quality (body/ADX) insufficient for BUY",
+      "sell_reason": "H1 trend not down for SELL\nNo bearish rejection at EMA20\nMomentum not favorable for SELL\nH1 not down for breakout SELL\nNo breakout SELL setup\nBreakout quality (body/ADX) insufficient for SELL\n-DI not > +DI for SELL",
+      "spread": 0.00017000000000000348,
+      "adx": 19.14270043063801,
+      "plus_di": 23.843345909487702,
+      "minus_di": 20.779003363881163,
+      "ema50": 1.3493516863571708,
+      "ema200": 1.3499340477767712,
+      "rsi": 54.820188953226406,
+      "atr": 0.0007014285714285513
+    },
+    {
+      "time": "10:23:16",
+      "pair": "EUR_USD",
+      "direction": null,
+      "buy_reason": "H1 regime too weak (ADX 13.3)",
+      "sell_reason": "H1 regime too weak (ADX 13.3)",
+      "spread": 0.00016000000000016001,
+      "adx": 21.160172042134427,
+      "plus_di": 18.768174682848134,
+      "minus_di": 24.450188621694213,
+      "ema50": 1.1530639156285867,
+      "ema200": 1.1533701657933608,
+      "rsi": 52.831957609845006,
+      "atr": 0.0005135714285714466
+    },
+    {
+      "time": "10:23:16",
       "pair": "GBP_USD",
       "direction": null,
       "buy_reason": "No bullish rejection at EMA20\nNo breakout BUY setup\nBreakout quality (body/ADX) insufficient for BUY",
