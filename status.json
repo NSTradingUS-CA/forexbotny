@@ -1,5 +1,5 @@
 {
-  "time": "2026-08-12 12:18:52",
+  "time": "2026-08-13 06:50:40",
   "bot_status": "running",
   "session": {
     "trades_today": 0,
@@ -7,41 +7,9 @@
     "start": "07:00",
     "end": "11:00"
   },
-  "pairs": {
-    "EUR_USD": {
-      "price": 1.15431,
-      "spread": 0.00015999999999993797,
-      "adx": 31.04706877968969,
-      "plus_di": 27.759056981151293,
-      "minus_di": 12.85938424270999,
-      "ema50": 1.1542003748495342,
-      "ema200": 1.1523886069404448,
-      "rsi": 51.337358808256724,
-      "atr": 0.0009249999999999854,
-      "ema_orientation": "bullish",
-      "macd_signal": "bullish",
-      "last_signal": null
-    },
-    "GBP_USD": {
-      "price": 1.35092,
-      "spread": 0.00017000000000000348,
-      "adx": 34.74254578448572,
-      "plus_di": 23.730061308680718,
-      "minus_di": 12.289601645049986,
-      "ema50": 1.3506480218045134,
-      "ema200": 1.3467917910156038,
-      "rsi": 48.08016877626059,
-      "atr": 0.0012664285714285414,
-      "ema_orientation": "bullish",
-      "macd_signal": "bearish",
-      "last_signal": null
-    }
-  },
   "active_trade": null,
-  "closed_trades_today": [],
-  "next_news_event": {
-    "title": "GDP m/m",
-    "time": "02:00",
-    "impact": "High"
-  }
+  "next_news_event": null,
+  "strategy": "H1 regime + M15 pullback/breakout",
+  "max_risk_per_trade_percent": 0.5,
+  "daily_loss_limit_percent": 2.0
 }
