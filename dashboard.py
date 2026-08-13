@@ -243,15 +243,15 @@ st.markdown(f"""
     <img src="{LOGO_URL}" class="logo-rounded" style="width: 80px; height: auto; margin-right: 20px;">
     <h2 style="color: #FF9100; margin: 0;">Forex Sniper 7‑12</h2>
 </div>
-<p style="text-align: center; color: #AAAAAA; font-size: 0.9rem; margin-top: -5px; margin-bottom: 10px;">
-    Robot de trading 100 % autonome, connecté à un compte OANDA, utilisant une grille de score multicritère pour prendre 1 à 3 trades par jour 
+<p style="text-align: center; color: #AAAAAA; font-size: 1.1rem; font-style: italic; margin-top: 10px; margin-bottom: 10px;">
+    Robot de trading 100 % autonome utilisant une grille de score multicritère pour prendre 1 à 3 trades par jour 
     sur les paires EURUSD et GBPUSD, couvrant les sessions Londres et New York, 
     avec gestion de risque intégrée, résilience, tableau de bord temps réel et envoyant des alertes Telegram.
 </p>
 """, unsafe_allow_html=True)
 
 # ---------- Bouton Sign out ----------
-col_empty, col_signout = st.columns([8, 1])  # Décalé vers la droite
+col_empty, col_signout = st.columns([8, 1])
 with col_signout:
     if st.button("Sign out"):
         st.session_state.authenticated = False
