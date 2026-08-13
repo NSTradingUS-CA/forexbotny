@@ -3,6 +3,7 @@ import requests
 import time
 from datetime import datetime
 from zoneinfo import ZoneInfo
+import pandas as pd  # <-- AJOUTÉ pour les calculs
 
 st.set_page_config(page_title="Forex Sniper 7-12", layout="wide")
 
@@ -361,9 +362,10 @@ def render_dashboard():
         )
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # ---------- Historique + Rejets ----------
+    # ---------- Historique + Rejets + Performance ----------
     st.markdown("---")
-    tab1, tab2 = st.tabs(["📜 Closed", "🚫 Rejected"])
+    tab1, tab2, tab3 = st.tabs(["📜 Closed", "🚫 Rejected", "📊 Performance"])
+
     with tab1:
         if closed_trades:
             for t in closed_trades[::-1]:
@@ -385,7 +387,6 @@ def render_dashboard():
                 score = display_score(r)
                 reason = r.get('reason','')
 
-                # Ligne d'indicateurs (si présents)
                 indicators = ""
                 if 'adx' in r:
                     spread_val = r.get('spread')
@@ -409,7 +410,6 @@ def render_dashboard():
                         f"EMA50: {ema50_str} | EMA200: {ema200_str} | RSI: {rsi_str} | ATR: {atr_str}"
                     )
 
-                # Affichage
                 st.markdown(
                     f"<span class='orange'>{time_pair} – {setup} | Score: {score} | {reason}</span>",
                     unsafe_allow_html=True)
@@ -418,6 +418,124 @@ def render_dashboard():
         else:
             st.write("No rejected setups.")
 
+    with tab3:
+        st.markdown("#### Performance par setup")
+        if not closed_trades:
+            st.write("Aucun trade fermé pour le moment.")
+        else:
+            # Création d'un DataFrame pour faciliter les calculs
+            df_trades = pd.DataFrame(closed_trades)
+            # Normaliser le setup en majuscule
+            df_trades['setup'] = df_trades['setup'].str.upper()
+            # Remplacer les valeurs None par NaN
+            df_trades['r_multiple'] = pd.to_numeric(df_trades['r_multiple'], errors='coerce')
+            df_trades['score'] = pd.to_numeric(df_trades['score'], errors='coerce')
+
+            # Séparer par setup
+            pullback = df_trades[df_trades['setup'] == 'PULLBACK']
+            breakout = df_trades[df_trades['setup'] == 'BREAKOUT']
+            global_df = df_trades
+
+            def compute_metrics(df):
+                if df.empty:
+                    return {
+                        'count': 0,
+                        'win_rate': 0.0,
+                        'avg_r': 0.0,
+                        'expectancy': 0.0,
+                        'profit_factor': 0.0,
+                        'max_drawdown': 0.0,
+                        'avg_gain': 0.0,
+                        'avg_loss': 0.0
+                    }
+                # Nombre de trades
+                count = len(df)
+                # Win rate
+                wins = df[df['pnl'] > 0]
+                losses = df[df['pnl'] <= 0]
+                win_rate = len(wins) / count * 100 if count > 0 else 0.0
+                # Avg R
+                avg_r = df['r_multiple'].mean() if not df['r_multiple'].isna().all() else 0.0
+                # Avg win/loss R
+                avg_win_r = wins['r_multiple'].mean() if not wins.empty and not wins['r_multiple'].isna().all() else 0.0
+                avg_loss_r = losses['r_multiple'].abs().mean() if not losses.empty and not losses['r_multiple'].isna().all() else 0.0
+                # Expectancy (en R)
+                expectancy = (win_rate/100 * avg_win_r) - ((100-win_rate)/100 * avg_loss_r) if count > 0 else 0.0
+                # Profit factor (somme des gains / somme des pertes en R)
+                sum_gain_r = wins['r_multiple'].sum() if not wins.empty else 0.0
+                sum_loss_r = losses['r_multiple'].abs().sum() if not losses.empty else 0.0
+                profit_factor = sum_gain_r / sum_loss_r if sum_loss_r != 0 else 0.0
+                # Max drawdown (en R cumulé)
+                # On calcule la courbe de R cumulé
+                cum_r = df['r_multiple'].cumsum()
+                peak = cum_r.expanding().max()
+                drawdown = peak - cum_r
+                max_drawdown = drawdown.max() if not drawdown.empty else 0.0
+                # Gain moyen (USD)
+                avg_gain = wins['pnl'].mean() if not wins.empty else 0.0
+                # Perte moyenne (USD) - en valeur absolue
+                avg_loss = losses['pnl'].abs().mean() if not losses.empty else 0.0
+                return {
+                    'count': count,
+                    'win_rate': win_rate,
+                    'avg_r': avg_r,
+                    'expectancy': expectancy,
+                    'profit_factor': profit_factor,
+                    'max_drawdown': max_drawdown,
+                    'avg_gain': avg_gain,
+                    'avg_loss': avg_loss
+                }
+
+            metrics_pullback = compute_metrics(pullback)
+            metrics_breakout = compute_metrics(breakout)
+            metrics_global = compute_metrics(global_df)
+
+            # Construction du tableau
+            data = {
+                'Métrique': [
+                    'Nombre de trades',
+                    'Win rate',
+                    'Avg R',
+                    'Expectancy',
+                    'Profit factor',
+                    'Max drawdown (R)',
+                    'Gain moyen (USD)',
+                    'Perte moyenne (USD)'
+                ],
+                'PULLBACK': [
+                    f"{metrics_pullback['count']}",
+                    f"{metrics_pullback['win_rate']:.1f}%",
+                    f"{metrics_pullback['avg_r']:.2f}R",
+                    f"{metrics_pullback['expectancy']:.2f}R",
+                    f"{metrics_pullback['profit_factor']:.2f}",
+                    f"-{metrics_pullback['max_drawdown']:.2f}R",
+                    f"{metrics_pullback['avg_gain']:.2f} USD",
+                    f"{metrics_pullback['avg_loss']:.2f} USD"
+                ],
+                'BREAKOUT': [
+                    f"{metrics_breakout['count']}",
+                    f"{metrics_breakout['win_rate']:.1f}%",
+                    f"{metrics_breakout['avg_r']:.2f}R",
+                    f"{metrics_breakout['expectancy']:.2f}R",
+                    f"{metrics_breakout['profit_factor']:.2f}",
+                    f"-{metrics_breakout['max_drawdown']:.2f}R",
+                    f"{metrics_breakout['avg_gain']:.2f} USD",
+                    f"{metrics_breakout['avg_loss']:.2f} USD"
+                ],
+                'Global': [
+                    f"{metrics_global['count']}",
+                    f"{metrics_global['win_rate']:.1f}%",
+                    f"{metrics_global['avg_r']:.2f}R",
+                    f"{metrics_global['expectancy']:.2f}R",
+                    f"{metrics_global['profit_factor']:.2f}",
+                    f"-{metrics_global['max_drawdown']:.2f}R",
+                    f"{metrics_global['avg_gain']:.2f} USD",
+                    f"{metrics_global['avg_loss']:.2f} USD"
+                ]
+            }
+
+            df_table = pd.DataFrame(data)
+            st.table(df_table)
 
 render_dashboard()
 
