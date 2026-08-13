@@ -8,7 +8,7 @@ import os
 import json
 import base64
 import requests
-import re  # <-- AJOUTÉ pour extraire le score
+import re
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -77,7 +77,6 @@ SPREAD_WINDOW = 5
 closed_trades_today = []
 rejected_signals = []
 
-# État de la session pour la logique d'arrêt différé.
 late_shutdown_required = False
 trade_opened_during_window_today = False
 daily_start_balance = None
@@ -365,7 +364,7 @@ def load_existing_open_position():
                         'be_triggered': False,
                         'tp1_hit': False,
                         'opened_at': str(trade.openTime) if getattr(trade, 'openTime', None) else None,
-                        'score': None  # Pas de score pour les trades récupérés
+                        'score': None
                     }
                     print(f"Existing open position loaded: {instrument} {active_trade['direction']}")
                     return
@@ -734,7 +733,6 @@ def place_trade(instrument, entry, sl, tp, units, direction, setup_type, risk_pe
         entry_price = float(trade_opened.price)
         units_filled = int(trade_opened.units)
         
-        # --- Extraction du score depuis le reason (ex: "PULLBACK score 8/9") ---
         score = None
         if reason and "score" in reason:
             match = re.search(r'score\s+(\d+)/\d+', reason, re.IGNORECASE)
@@ -758,7 +756,7 @@ def place_trade(instrument, entry, sl, tp, units, direction, setup_type, risk_pe
             'trailing_distance': f"{FIXED_TRAILING_PIPS} pips initial",
             'atr': 0.0,
             'opened_at': datetime.now(tz).isoformat(),
-            'score': score  # Stocké pour utilisation ultérieure
+            'score': score
         }
     except Exception as e:
         print(f"Failed to extract trade details: {e}")
@@ -824,7 +822,6 @@ def check_closed_trade():
         setup_type = active_trade.get('setup_type', 'unknown')
         initial_risk = active_trade.get('initial_risk', 0.0)
         
-        # Calcul du R multiple réalisé
         if initial_risk > 0:
             if direction == 'buy':
                 realized_r = (close_price - entry_price) / initial_risk
@@ -833,7 +830,7 @@ def check_closed_trade():
         else:
             realized_r = 0.0
         
-        score = active_trade.get('score')  # Récupéré depuis l'ouverture
+        score = active_trade.get('score')
         
         msg = (f"<b>🔴 Trade closed ({trades_today}/{MAX_TRADES_PER_DAY})</b>\n"
                f"Pair: {pair}\n"
@@ -847,7 +844,6 @@ def check_closed_trade():
                f"Time: {datetime.now(tz).strftime('%Y-%m-%d %H:%M:%S')}")
         send_telegram_message(msg)
         
-        # Ajout dans closed_trades_today avec les nouvelles clés
         closed_trades_today.append({
             "pair": pair,
             "type": "Buy" if direction == 'buy' else "Sell",
@@ -878,18 +874,27 @@ def check_closed_trade():
         last_close_time = datetime.now(tz)
     active_trade = None
 
+# *************** FONCTION CHECK_SIGNAL MODIFIÉE ***************
 def check_signal(df, instrument):
-    """M15 execution engine with two distinct setups:
-    1) Pullback/rejection in a confirmed H1 trend.
-    2) Breakout/retest of a recent M15 range in a confirmed H1 trend.
-    Returns signal, entry, SL, TP, SL pips, direction, reason, setup type, risk %.
+    """
+    Retourne:
+        signal (bool),
+        entry (float),
+        sl (float),
+        tp (float),
+        sl_pips (float),
+        direction (str or None),
+        buy_reason (str),     # raisons détaillées pour BUY
+        sell_reason (str),    # raisons détaillées pour SELL
+        setup_type (str or None),
+        risk_percent (float)
     """
     if len(df) < 220:
-        return False, 0, 0, 0, 0, None, "Not enough M15 candles", None, 0
+        return False, 0, 0, 0, 0, None, "Not enough M15 candles", "Not enough M15 candles", None, 0
 
     h1 = get_candles(instrument, count=REGIME_CANDLES, granularity=REGIME_GRANULARITY)
     if len(h1) < 220:
-        return False, 0, 0, 0, 0, None, "Not enough H1 candles", None, 0
+        return False, 0, 0, 0, 0, None, "Not enough H1 candles", "Not enough H1 candles", None, 0
 
     c = df.iloc[-2]
     prev = df.iloc[-3]
@@ -897,46 +902,48 @@ def check_signal(df, instrument):
     config = PAIR_CONFIG[instrument]
     atr = float(c['atr'])
     if any(pd.isna(c[x]) for x in ['atr','ema20','ema50','rsi','adx','plus_di','minus_di']):
-        return False, 0, 0, 0, 0, None, "Missing M15 indicators", None, 0
+        return False, 0, 0, 0, 0, None, "Missing M15 indicators", "Missing M15 indicators", None, 0
     if any(pd.isna(h[x]) for x in ['ema50','ema200','adx']):
-        return False, 0, 0, 0, 0, None, "Missing H1 regime", None, 0
+        return False, 0, 0, 0, 0, None, "Missing H1 regime", "Missing H1 regime", None, 0
 
     h1_up = h['ema50'] > h['ema200'] and h['c'] > h['ema50']
     h1_down = h['ema50'] < h['ema200'] and h['c'] < h['ema50']
     h1_trending = h['adx'] >= max(18, config['ADX_THRESHOLD'] - 2)
+
+    buy_reasons = []
+    sell_reasons = []
+
+    # --- Vérifications globales ---
     if not h1_trending:
-        return False, 0, 0, 0, 0, None, f"H1 regime too weak (ADX {h['adx']:.1f})", None, 0
+        reason = f"H1 regime too weak (ADX {h['adx']:.1f})"
+        buy_reasons.append(reason)
+        sell_reasons.append(reason)
+        return False, 0, 0, 0, 0, None, "\n".join(buy_reasons), "\n".join(sell_reasons), None, 0
 
     extension = abs(c['c'] - c['ema50']) / atr if atr > 0 else 99
     if extension > MAX_ENTRY_EXTENSION_ATR:
-        return False, 0, 0, 0, 0, None, f"Entry too extended ({extension:.2f} ATR)", None, 0
+        reason = f"Entry too extended ({extension:.2f} ATR)"
+        buy_reasons.append(reason)
+        sell_reasons.append(reason)
+        return False, 0, 0, 0, 0, None, "\n".join(buy_reasons), "\n".join(sell_reasons), None, 0
 
     sentiment = news_sentiment_filter.get(instrument, 'neutral')
-    reasons = []
 
-    # --- Setup A: pullback/rejection ---
-    bull_rejection = (
-        c['c'] > c['o'] and
-        c['l'] <= c['ema20'] * 1.0003 and
-        c['c'] > c['ema20'] and
-        c['body_ratio'] >= 0.45
-    )
-    bear_rejection = (
-        c['c'] < c['o'] and
-        c['h'] >= c['ema20'] * 0.9997 and
-        c['c'] < c['ema20'] and
-        c['body_ratio'] >= 0.45
-    )
+    # --- Conditions communes ---
+    bull_rejection = (c['c'] > c['o'] and c['l'] <= c['ema20'] * 1.0003 and c['c'] > c['ema20'] and c['body_ratio'] >= 0.45)
+    bear_rejection = (c['c'] < c['o'] and c['h'] >= c['ema20'] * 0.9997 and c['c'] < c['ema20'] and c['body_ratio'] >= 0.45)
     momentum_buy = c['plus_di'] > c['minus_di'] and c['rsi'] >= 50 and c['rsi'] <= 75
     momentum_sell = c['minus_di'] > c['plus_di'] and c['rsi'] <= 50 and c['rsi'] >= 25
     adx_ok = c['adx'] >= config['ADX_THRESHOLD']
     macd_buy = c['macd_line'] > c['macd_signal']
     macd_sell = c['macd_line'] < c['macd_signal']
 
+    # --- Setup A: Pullback ---
+    # BUY
     if h1_up and sentiment != 'bearish' and bull_rejection and momentum_buy and adx_ok:
         score = 0
-        score += 2  # H1 trend
-        score += 2  # rejection at EMA20
+        score += 2
+        score += 2
         score += 1 if c['adx'] >= config['ADX_THRESHOLD'] + 5 else 0
         score += 1 if c['plus_di'] > c['minus_di'] else 0
         score += 1 if 52 <= c['rsi'] <= 68 else 0
@@ -946,8 +953,22 @@ def check_signal(df, instrument):
             levels = setup_stop_and_target(df, 'buy', float(c['c']), config, 'pullback')
             if levels:
                 sl, tp, sl_pips, atr_val = levels
-                return True, float(c['c']), sl, tp, sl_pips, 'buy', f"PULLBACK score {score}/9", 'pullback', RISK_PERCENT
+                return True, float(c['c']), sl, tp, sl_pips, 'buy', "", "", 'pullback', RISK_PERCENT
+        else:
+            buy_reasons.append(f"Pullback BUY score {score}/{MIN_SETUP_SCORE} too low")
+    else:
+        if not h1_up:
+            buy_reasons.append("H1 trend not up for BUY")
+        if sentiment == 'bearish':
+            buy_reasons.append("Sentiment bearish blocks BUY")
+        if not bull_rejection:
+            buy_reasons.append("No bullish rejection at EMA20")
+        if not momentum_buy:
+            buy_reasons.append("Momentum not favorable for BUY")
+        if not adx_ok:
+            buy_reasons.append(f"ADX too low ({c['adx']:.1f} < {config['ADX_THRESHOLD']})")
 
+    # SELL
     if h1_down and sentiment != 'bullish' and bear_rejection and momentum_sell and adx_ok:
         score = 0
         score += 2
@@ -961,9 +982,22 @@ def check_signal(df, instrument):
             levels = setup_stop_and_target(df, 'sell', float(c['c']), config, 'pullback')
             if levels:
                 sl, tp, sl_pips, atr_val = levels
-                return True, float(c['c']), sl, tp, sl_pips, 'sell', f"PULLBACK score {score}/9", 'pullback', RISK_PERCENT
+                return True, float(c['c']), sl, tp, sl_pips, 'sell', "", "", 'pullback', RISK_PERCENT
+        else:
+            sell_reasons.append(f"Pullback SELL score {score}/{MIN_SETUP_SCORE} too low")
+    else:
+        if not h1_down:
+            sell_reasons.append("H1 trend not down for SELL")
+        if sentiment == 'bullish':
+            sell_reasons.append("Sentiment bullish blocks SELL")
+        if not bear_rejection:
+            sell_reasons.append("No bearish rejection at EMA20")
+        if not momentum_sell:
+            sell_reasons.append("Momentum not favorable for SELL")
+        if not adx_ok:
+            sell_reasons.append(f"ADX too low ({c['adx']:.1f} < {config['ADX_THRESHOLD']})")
 
-    # --- Setup B: breakout/retest ---
+    # --- Setup B: Breakout ---
     if len(df) >= BREAKOUT_LOOKBACK + 5:
         box = df.iloc[-(BREAKOUT_LOOKBACK + 2):-2]
         resistance = float(box['h'].max())
@@ -974,6 +1008,7 @@ def check_signal(df, instrument):
         breakout_quality_buy = c['body_ratio'] >= 0.55 and c['c'] > c['o'] and c['adx'] >= config['ADX_THRESHOLD']
         breakout_quality_sell = c['body_ratio'] >= 0.55 and c['c'] < c['o'] and c['adx'] >= config['ADX_THRESHOLD']
 
+        # BUY breakout
         if h1_up and sentiment != 'bearish' and buy_break and breakout_quality_buy and c['plus_di'] > c['minus_di']:
             score = 2 + 2 + 1
             score += 1 if c['adx'] >= config['ADX_THRESHOLD'] + 5 else 0
@@ -984,8 +1019,20 @@ def check_signal(df, instrument):
                 levels = setup_stop_and_target(df, 'buy', float(c['c']), config, 'breakout')
                 if levels:
                     sl, tp, sl_pips, atr_val = levels
-                    return True, float(c['c']), sl, tp, sl_pips, 'buy', f"BREAKOUT score {score}/9", 'breakout', RISK_PERCENT_BREAKOUT
+                    return True, float(c['c']), sl, tp, sl_pips, 'buy', "", "", 'breakout', RISK_PERCENT_BREAKOUT
+            else:
+                buy_reasons.append(f"Breakout BUY score {score}/{MIN_SETUP_SCORE} too low")
+        else:
+            if not h1_up:
+                buy_reasons.append("H1 not up for breakout BUY")
+            if not buy_break:
+                buy_reasons.append("No breakout BUY setup")
+            if not breakout_quality_buy:
+                buy_reasons.append("Breakout quality (body/ADX) insufficient for BUY")
+            if not (c['plus_di'] > c['minus_di']):
+                buy_reasons.append("+DI not > -DI for BUY")
 
+        # SELL breakout
         if h1_down and sentiment != 'bullish' and sell_break and breakout_quality_sell and c['minus_di'] > c['plus_di']:
             score = 2 + 2 + 1
             score += 1 if c['adx'] >= config['ADX_THRESHOLD'] + 5 else 0
@@ -996,9 +1043,26 @@ def check_signal(df, instrument):
                 levels = setup_stop_and_target(df, 'sell', float(c['c']), config, 'breakout')
                 if levels:
                     sl, tp, sl_pips, atr_val = levels
-                    return True, float(c['c']), sl, tp, sl_pips, 'sell', f"BREAKOUT score {score}/9", 'breakout', RISK_PERCENT_BREAKOUT
+                    return True, float(c['c']), sl, tp, sl_pips, 'sell', "", "", 'breakout', RISK_PERCENT_BREAKOUT
+            else:
+                sell_reasons.append(f"Breakout SELL score {score}/{MIN_SETUP_SCORE} too low")
+        else:
+            if not h1_down:
+                sell_reasons.append("H1 not down for breakout SELL")
+            if not sell_break:
+                sell_reasons.append("No breakout SELL setup")
+            if not breakout_quality_sell:
+                sell_reasons.append("Breakout quality (body/ADX) insufficient for SELL")
+            if not (c['minus_di'] > c['plus_di']):
+                sell_reasons.append("-DI not > +DI for SELL")
 
-    return False, 0, 0, 0, 0, None, "No high-quality setup", None, 0
+    # Aucun signal
+    if not buy_reasons:
+        buy_reasons.append("No BUY setup triggered")
+    if not sell_reasons:
+        sell_reasons.append("No SELL setup triggered")
+    return False, 0, 0, 0, 0, None, "\n".join(buy_reasons), "\n".join(sell_reasons), None, 0
+# *************** FIN CHECK_SIGNAL MODIFIÉE ***************
 
 def main():
     global trades_today, last_trade_date, last_close_time, active_trade
@@ -1156,6 +1220,7 @@ def main():
                 and not daily_loss_blocked
             )
 
+            # *************** BOUCLE DE SCAN MODIFIÉE ***************
             if can_trade:
                 candidates = []
                 for pair in PAIRS:
@@ -1172,7 +1237,8 @@ def main():
                             "time": now.strftime("%H:%M:%S"),
                             "pair": pair,
                             "direction": None,
-                            "reason": "spread too wide",
+                            "buy_reason": "Spread too wide",
+                            "sell_reason": "Spread too wide",
                             "spread": spread,
                             "adx": None,
                             "plus_di": None,
@@ -1192,17 +1258,18 @@ def main():
                         print(f"Signal analysis failed for {pair}: {e}")
                         continue
 
-                    signal, price, sl, tp, sl_pips, direction, reason, setup_type, risk_percent = result
+                    signal, price, sl, tp, sl_pips, direction, buy_reason, sell_reason, setup_type, risk_percent = result
 
                     if signal:
-                        candidates.append((pair, price, sl, tp, sl_pips, direction, reason, setup_type, risk_percent))
-                    elif reason:
+                        candidates.append((pair, price, sl, tp, sl_pips, direction, buy_reason, setup_type, risk_percent))
+                    else:
                         c = df.iloc[-2]
                         rejected_entry = {
                             "time": now.strftime("%H:%M:%S"),
                             "pair": pair,
                             "direction": None,
-                            "reason": reason,
+                            "buy_reason": buy_reason,
+                            "sell_reason": sell_reason,
                             "spread": spread,
                             "adx": c['adx'] if not pd.isna(c['adx']) else None,
                             "plus_di": c['plus_di'] if not pd.isna(c['plus_di']) else None,
@@ -1215,16 +1282,19 @@ def main():
                         rejected_signals.append(rejected_entry)
                         save_rejected_to_file()
 
-                        print(f" -> REJECTED {pair}: {reason}  | Spread={spread:.5f} ADX={c['adx']:.1f} +DI={c['plus_di']:.1f} -DI={c['minus_di']:.1f} EMA50={c['ema50']:.5f} EMA200={c['ema200']:.5f} RSI={c['rsi']:.1f} ATR={c['atr']:.5f}")
+                        # Log enrichi avec les raisons
+                        buy_short = buy_reason[:60] + "..." if len(buy_reason) > 60 else buy_reason
+                        sell_short = sell_reason[:60] + "..." if len(sell_reason) > 60 else sell_reason
+                        print(f" -> REJECTED {pair}: BUY: {buy_short} | SELL: {sell_short}")
 
                 if candidates:
-                    candidates.sort(key=lambda x: (0 if x[7] == 'pullback' else -1, -x[4]))
-                    pair, price, sl, tp, sl_pips, direction, reason, setup_type, risk_percent = candidates[0]
-                    print(f" -> SIGNAL {direction} {pair} [{setup_type}] {reason}")
+                    candidates.sort(key=lambda x: (0 if x[6] == 'pullback' else -1, -x[4]))
+                    pair, price, sl, tp, sl_pips, direction, buy_reason, setup_type, risk_percent = candidates[0]
+                    print(f" -> SIGNAL {direction} {pair} [{setup_type}] {buy_reason}")
                     sl_distance = abs(price - sl)
                     units = calculate_units(balance, sl_distance, pair, risk_percent)
                     if units >= 1000:
-                        success = place_trade(pair, price, sl, tp, units, direction, setup_type, risk_percent, reason)
+                        success = place_trade(pair, price, sl, tp, units, direction, setup_type, risk_percent, buy_reason)
                         if success:
                             trade_opened_during_window_today = True
 
