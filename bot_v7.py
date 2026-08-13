@@ -85,6 +85,9 @@ CLOSED_TRADES_FILE = "closed_trades.json"
 REJECTED_FILE = "rejected_signals.json"
 PAUSE_FILE = "pause_state.json"
 
+# Variable globale pour le statut du bot
+BOT_STATUS = "running"   # peut être "running" ou "stopped"
+
 
 # ---------- Fichiers JSON ----------
 def get_pause_until():
@@ -244,10 +247,11 @@ def push_status_json(data_dict):
 
 
 def save_status_json():
+    global BOT_STATUS
     now = datetime.now(tz)
     status = {
         "time": now.strftime("%Y-%m-%d %H:%M:%S"),
-        "bot_status": "running",
+        "bot_status": BOT_STATUS,   # <-- utilise la variable globale
         "session": {
             "trades_today": trades_today,
             "max_trades": MAX_TRADES_PER_DAY,
@@ -874,7 +878,6 @@ def check_closed_trade():
         last_close_time = datetime.now(tz)
     active_trade = None
 
-# *************** FONCTION CHECK_SIGNAL MODIFIÉE ***************
 def check_signal(df, instrument):
     """
     Retourne:
@@ -884,8 +887,8 @@ def check_signal(df, instrument):
         tp (float),
         sl_pips (float),
         direction (str or None),
-        buy_reason (str),     # raisons détaillées pour BUY
-        sell_reason (str),    # raisons détaillées pour SELL
+        buy_reason (str),
+        sell_reason (str),
         setup_type (str or None),
         risk_percent (float)
     """
@@ -1062,12 +1065,13 @@ def check_signal(df, instrument):
     if not sell_reasons:
         sell_reasons.append("No SELL setup triggered")
     return False, 0, 0, 0, 0, None, "\n".join(buy_reasons), "\n".join(sell_reasons), None, 0
-# *************** FIN CHECK_SIGNAL MODIFIÉE ***************
+
 
 def main():
     global trades_today, last_trade_date, last_close_time, active_trade
     global closed_trades_today, rejected_signals
     global late_shutdown_required, trade_opened_during_window_today, daily_start_balance
+    global BOT_STATUS
 
     load_closed_trades_from_file()
     load_rejected_from_file()
@@ -1170,13 +1174,16 @@ def main():
             )
 
             if shutdown_1205 or shutdown_1705:
+                # --- MARQUER LE BOT COMME ARRÊTÉ ---
+                BOT_STATUS = "stopped"
+                save_status_json()
+
                 stop_msg = (
                     f"🔴 Forex Sniper 7-12 stopped – End of session "
                     f"({now.strftime('%H:%M')}), {trades_today} trade(s) taken today."
                 )
                 print(stop_msg)
                 send_telegram_message(stop_msg)
-                save_status_json()
                 break
 
             if not hasattr(main, "next_news_check"):
@@ -1220,7 +1227,6 @@ def main():
                 and not daily_loss_blocked
             )
 
-            # *************** BOUCLE DE SCAN MODIFIÉE ***************
             if can_trade:
                 candidates = []
                 for pair in PAIRS:
@@ -1282,7 +1288,6 @@ def main():
                         rejected_signals.append(rejected_entry)
                         save_rejected_to_file()
 
-                        # Log enrichi avec les raisons
                         buy_short = buy_reason[:60] + "..." if len(buy_reason) > 60 else buy_reason
                         sell_short = sell_reason[:60] + "..." if len(sell_reason) > 60 else sell_reason
                         print(f" -> REJECTED {pair}: BUY: {buy_short} | SELL: {sell_short}")
@@ -1298,6 +1303,7 @@ def main():
                         if success:
                             trade_opened_during_window_today = True
 
+            # Sauvegarde périodique du statut (même si rien ne change)
             save_status_json()
 
             if not hasattr(main, "next_trade_save"):
@@ -1311,6 +1317,8 @@ def main():
             time.sleep(30)
 
     except KeyboardInterrupt:
+        BOT_STATUS = "stopped"
+        save_status_json()
         stop_msg = "🔴 Bot stopped manually (Ctrl+C)"
         print(stop_msg)
         send_telegram_message(stop_msg)
