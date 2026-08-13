@@ -1,21 +1,6 @@
 {
   "signals": [
     {
-      "time": "10:27:59",
-      "pair": "GBP_USD",
-      "direction": null,
-      "buy_reason": "No bullish rejection at EMA20\nNo breakout BUY setup\nBreakout quality (body/ADX) insufficient for BUY",
-      "sell_reason": "H1 trend not down for SELL\nNo bearish rejection at EMA20\nMomentum not favorable for SELL\nH1 not down for breakout SELL\nNo breakout SELL setup\nBreakout quality (body/ADX) insufficient for SELL\n-DI not > +DI for SELL",
-      "spread": 0.00017000000000000348,
-      "adx": 19.14270043063801,
-      "plus_di": 23.843345909487702,
-      "minus_di": 20.779003363881163,
-      "ema50": 1.3493516863571708,
-      "ema200": 1.3499340477767712,
-      "rsi": 54.820188953226406,
-      "atr": 0.0007014285714285513
-    },
-    {
       "time": "10:28:34",
       "pair": "EUR_USD",
       "direction": null,
@@ -749,6 +734,21 @@
       "ema200": 1.1533860519893069,
       "rsi": 61.88671138356213,
       "atr": 0.0005764285714285888
+    },
+    {
+      "time": "10:44:44",
+      "pair": "GBP_USD",
+      "direction": null,
+      "buy_reason": "Entry too extended (1.63 ATR)",
+      "sell_reason": "Entry too extended (1.63 ATR)",
+      "spread": 0.00017000000000000348,
+      "adx": 19.35328520459843,
+      "plus_di": 28.00909899514079,
+      "minus_di": 18.19202987243923,
+      "ema50": 1.3494006399662672,
+      "ema200": 1.3499416899985037,
+      "rsi": 61.739688397320926,
+      "atr": 0.0007342857142857032
     }
   ],
   "last_cleanup": "2026-08-13"
