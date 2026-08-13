@@ -419,9 +419,9 @@ def render_dashboard():
             st.write("No rejected setups.")
 
     with tab3:
-        st.markdown("#### Performance par setup")
+        st.markdown("#### Setups performance")
         if not closed_trades:
-            st.write("Aucun trade fermé pour le moment.")
+            st.write("No closed trade so far.")
         else:
             # Création d'un DataFrame pour faciliter les calculs
             df_trades = pd.DataFrame(closed_trades)
