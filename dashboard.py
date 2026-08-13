@@ -145,6 +145,7 @@ def fetch_pause_state():
     return 0
 
 def check_bot_running():
+    """Fallback : vérifie via l'API GitHub si un workflow est en cours."""
     token = st.secrets.get("GH_PAT")
     repo = st.secrets["GITHUB_REPOSITORY"]
     headers = {"Accept": "application/vnd.github.v3+json"}
@@ -238,11 +239,19 @@ def render_dashboard():
     pause_until = fetch_pause_state()
     now_mtl = datetime.now(MONTREAL_TZ)
     now_str = now_mtl.strftime('%H:%M:%S')
-    bot_is_running = check_bot_running()
 
     if not data:
         st.error("Status unavailable – retrying in 10s")
         return
+
+    # ---------- Déterminer si le bot est en cours d'exécution ----------
+    # Priorité au champ "bot_status" écrit par le bot lui-même
+    bot_status = data.get("bot_status")
+    if bot_status == "stopped":
+        bot_is_running = False
+    else:
+        # Fallback : si le champ est absent ou "running", on vérifie via GitHub
+        bot_is_running = check_bot_running()
 
     # ---------- Bannière de pause news ----------
     if pause_until > now_mtl.timestamp():
@@ -379,7 +388,7 @@ def render_dashboard():
         else:
             st.write("No closed trades.")
 
-    # *************** ONGLET REJECTED MODIFIÉ ***************
+    # *************** ONGLET REJECTED ***************
     with tab2:
         if rejected:
             for r in rejected[::-1][:30]:
@@ -417,8 +426,8 @@ def render_dashboard():
                 st.markdown("---")
         else:
             st.write("No rejected setups.")
-    # *************** FIN ONGLET REJECTED MODIFIÉ ***************
 
+    # *************** ONGLET PERFORMANCE ***************
     with tab3:
         if not closed_trades:
             st.write("No setups performance stats available yet.")
