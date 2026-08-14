@@ -1,12 +1,12 @@
 {
   "signals": [
     {
-      "time": "07:00:14",
+      "time": "07:00:20",
       "pair": "EUR_USD",
       "direction": null,
       "buy_reason": "Entry too extended (3.22 ATR)",
       "sell_reason": "Entry too extended (3.22 ATR)",
-      "spread": 0.00014999999999987246,
+      "spread": 0.00013999999999980695,
       "adx": 55.16761518930664,
       "plus_di": 22.790212650702376,
       "minus_di": 9.282024652216938,
