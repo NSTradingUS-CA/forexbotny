@@ -1,36 +1,6 @@
 {
   "signals": [
     {
-      "time": "08:40:33",
-      "pair": "GBP_USD",
-      "direction": null,
-      "buy_reason": "Entry too extended (4.88 ATR)",
-      "sell_reason": "Entry too extended (4.88 ATR)",
-      "spread": 0.00017000000000000348,
-      "adx": 79.67984538138073,
-      "plus_di": 35.23228174960953,
-      "minus_di": 4.9762296717034395,
-      "ema50": 1.3512172232647208,
-      "ema200": 1.350122535324081,
-      "rsi": 74.1313289584731,
-      "atr": 0.0004864285714285702
-    },
-    {
-      "time": "08:41:06",
-      "pair": "EUR_USD",
-      "direction": null,
-      "buy_reason": "Entry too extended (3.96 ATR)",
-      "sell_reason": "Entry too extended (3.96 ATR)",
-      "spread": 0.0001500000000000945,
-      "adx": 61.46736253076672,
-      "plus_di": 36.18562472166747,
-      "minus_di": 8.774636088676377,
-      "ema50": 1.154772773213596,
-      "ema200": 1.1537725971350121,
-      "rsi": 69.83601376950512,
-      "atr": 0.0004157142857142653
-    },
-    {
       "time": "08:41:06",
       "pair": "GBP_USD",
       "direction": null,
@@ -737,6 +707,36 @@
     },
     {
       "time": "08:54:23",
+      "pair": "EUR_USD",
+      "direction": null,
+      "buy_reason": "Entry too extended (4.85 ATR)",
+      "sell_reason": "Entry too extended (4.85 ATR)",
+      "spread": 0.00015999999999993797,
+      "adx": 61.520350586027426,
+      "plus_di": 31.493661820547015,
+      "minus_di": 7.388063844738121,
+      "ema50": 1.154860506799931,
+      "ema200": 1.153798715110142,
+      "rsi": 75.26754532299803,
+      "atr": 0.00044357142857140035
+    },
+    {
+      "time": "08:54:23",
+      "pair": "GBP_USD",
+      "direction": null,
+      "buy_reason": "Entry too extended (5.86 ATR)",
+      "sell_reason": "Entry too extended (5.86 ATR)",
+      "spread": 0.00014999999999987246,
+      "adx": 79.58907149169875,
+      "plus_di": 35.15987754206114,
+      "minus_di": 4.174980935996144,
+      "ema50": 1.3513404673511364,
+      "ema200": 1.350148953764226,
+      "rsi": 79.25586524945003,
+      "atr": 0.0005149999999999956
+    },
+    {
+      "time": "08:54:56",
       "pair": "EUR_USD",
       "direction": null,
       "buy_reason": "Entry too extended (4.85 ATR)",
