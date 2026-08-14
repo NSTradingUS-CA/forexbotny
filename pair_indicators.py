@@ -251,7 +251,7 @@ def main():
     # ----- Message de démarrage -----
     start_msg = (
         f"🟢 Pair Indicators started – refresh every {REFRESH_SECONDS}s, push every {PUSH_INTERVAL}s\n"
-        f"   Arrêt normal à {SHUTDOWN_HOUR}:05, ou à {EARLY_SHUTDOWN_HOUR}:05 si aucun trade actif."
+        f"   Normal shutdown at {SHUTDOWN_HOUR}:05, or at {EARLY_SHUTDOWN_HOUR}:05 if no active trade."
     )
     print(start_msg)
     send_telegram_message(start_msg)   # <--- notification Telegram
