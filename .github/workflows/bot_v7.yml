@@ -1,4 +1,4 @@
-name: 💹 Forex Bot NY Session
+name: 💹 Forex Sniper 7-12
 
 on:
   workflow_dispatch:          # permet le test manuel
@@ -33,5 +33,5 @@ jobs:
       - name: Install dependencies
         run: pip install v20 pandas python-dotenv requests pytz pyyaml
 
-      - name: Run bot
+      - name: Run Forex Sniper 7-12
         run: python bot_v7.py
