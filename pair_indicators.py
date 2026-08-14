@@ -27,6 +27,10 @@ MACD_SLOW = 13
 MACD_SIGNAL = 9
 REFRESH_SECONDS = 10      # collecte toutes les 10s
 PUSH_INTERVAL = 30        # push au maximum toutes les 30s
+
+# Variables Telegram (les mêmes que pour le bot)
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 # ============================
 
 ctx = v20.Context(OANDA_URL, token=API_KEY)
@@ -37,6 +41,22 @@ _last_pushed_data = {}
 _last_push_time = None   # sera initialisé au premier push
 
 
+# ---------- Fonction Telegram ----------
+def send_telegram_message(text):
+    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
+        print("Telegram not configured. Skipping notification.")
+        return
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+    payload = {"chat_id": TELEGRAM_CHAT_ID, "text": text, "parse_mode": "HTML"}
+    try:
+        resp = requests.post(url, json=payload, timeout=10)
+        if resp.status_code != 200:
+            print(f"Telegram send failed: {resp.text}")
+    except Exception as e:
+        print(f"Telegram error: {e}")
+
+
+# ---------- Fonctions existantes ----------
 def retry_api_call(func, *args, **kwargs):
     for i in range(3):
         try:
@@ -227,15 +247,24 @@ def should_stop(now):
 
 def main():
     global _last_pushed_data, _last_push_time
-    print(f"🟢 Pair Indicators started – refresh every {REFRESH_SECONDS}s, push every {PUSH_INTERVAL}s")
-    print(f"   Arrêt normal à {SHUTDOWN_HOUR}:05, ou à {EARLY_SHUTDOWN_HOUR}:05 si aucun trade actif.")
+
+    # ----- Message de démarrage -----
+    start_msg = (
+        f"🟢 Pair Indicators started – refresh every {REFRESH_SECONDS}s, push every {PUSH_INTERVAL}s\n"
+        f"   Arrêt normal à {SHUTDOWN_HOUR}:05, ou à {EARLY_SHUTDOWN_HOUR}:05 si aucun trade actif."
+    )
+    print(start_msg)
+    send_telegram_message(start_msg)   # <--- notification Telegram
+
     try:
         while True:
             now = datetime.now(tz)
 
             # Vérifier les conditions d'arrêt
             if should_stop(now):
-                print(f"🔴 Pair Indicators stopped – shutdown condition met at {now.strftime('%H:%M')}")
+                stop_msg = f"🔴 Pair Indicators stopped – shutdown condition met at {now.strftime('%H:%M')}"
+                print(stop_msg)
+                send_telegram_message(stop_msg)   # <--- notification d'arrêt
                 break
 
             pair_indicators = {}
@@ -252,6 +281,7 @@ def main():
 
     except KeyboardInterrupt:
         print("\nPair Indicators stopped manually.")
+        send_telegram_message("🔴 Pair Indicators stopped manually (Ctrl+C)")
 
 
 if __name__ == "__main__":
