@@ -13,6 +13,8 @@ jobs:
       OANDA_API_KEY: ${{ secrets.OANDA_API_KEY }}
       OANDA_ACCOUNT_ID: ${{ secrets.OANDA_ACCOUNT_ID }}
       GH_PAT: ${{ secrets.GH_PAT }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}   # <--- AJOUT
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}       # <--- AJOUT
 
     steps:
       - name: Checkout repository
