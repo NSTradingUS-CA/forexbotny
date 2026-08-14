@@ -1,4 +1,20 @@
 {
-  "signals": [],
+  "signals": [
+    {
+      "time": "07:00:14",
+      "pair": "EUR_USD",
+      "direction": null,
+      "buy_reason": "Entry too extended (3.22 ATR)",
+      "sell_reason": "Entry too extended (3.22 ATR)",
+      "spread": 0.00014999999999987246,
+      "adx": 55.16761518930664,
+      "plus_di": 22.790212650702376,
+      "minus_di": 9.282024652216938,
+      "ema50": 1.1543613692666748,
+      "ema200": 1.1536021258507332,
+      "rsi": 68.82818746542343,
+      "atr": 0.00035999999999997937
+    }
+  ],
   "last_cleanup": "2026-08-14"
 }
