@@ -57,7 +57,6 @@ TP_PARTIAL_RATIO = 0.33
 TRAILING_ATR_MULT = 1.8
 FIXED_TRAILING_PIPS = 20
 
-# Nouveaux paramètres pour les ordres LIMIT
 LIMIT_ORDER_EXPIRY_MINUTES = 5
 MAX_SLIPPAGE_ATR_FACTOR = 0.5
 
@@ -91,10 +90,7 @@ REJECTED_FILE = "rejected_signals.json"
 PAUSE_FILE = "pause_state.json"
 STATUS_FILE = "status.json"
 
-# Variable globale pour le statut du bot
-BOT_STATUS = "running"   # peut être "running" ou "stopped"
-
-# Cache pour les pushes de status.json
+BOT_STATUS = "running"
 _last_status_data = None
 _last_status_push_time = None
 
@@ -237,16 +233,13 @@ def save_rejected_to_file():
 
 
 def push_status_json(data_dict):
-    """Push status.json avec cache et intervalle de 60s."""
     global _last_status_data, _last_status_push_time
 
     now = datetime.now(tz)
 
-    # Comparer avec le dernier contenu envoyé
     if data_dict == _last_status_data:
-        return  # Pas de changement
+        return
 
-    # Vérifier l'intervalle minimum
     if _last_status_push_time is not None:
         if (now - _last_status_push_time).total_seconds() < 60:
             return
@@ -330,7 +323,8 @@ def save_status_json():
             "initial_risk": active_trade.get('initial_risk'),
             "setup_type": active_trade.get('setup_type'),
             "risk_percent": active_trade.get('risk_percent'),
-            "opened_at": active_trade.get('opened_at')
+            "opened_at": active_trade.get('opened_at'),
+            "units": active_trade.get('units')   # <--- AJOUT pour le volume
         }
 
     events = news_cache["events"]
@@ -369,10 +363,8 @@ def count_all_trades_today():
 
 
 def load_existing_open_position():
-    """Charge une position existante depuis OANDA et restaure les flags depuis status.json si disponible."""
     global active_trade
 
-    # Lire d'abord status.json pour récupérer les flags
     saved_flags = {}
     if os.path.exists(STATUS_FILE):
         try:
@@ -389,7 +381,8 @@ def load_existing_open_position():
                         "initial_risk": saved_trade.get("initial_risk"),
                         "opened_at": saved_trade.get("opened_at"),
                         "trailing_distance": saved_trade.get("trailing_stop", "20 pips"),
-                        "atr": saved_trade.get("atr")
+                        "atr": saved_trade.get("atr"),
+                        "units": saved_trade.get("units")
                     }
         except Exception as e:
             print(f"Could not read status.json for restore: {e}")
@@ -415,7 +408,7 @@ def load_existing_open_position():
                     active_trade = {
                         'trade_id': trade.id,
                         'pair': instrument,
-                        'units': int(trade.currentUnits),
+                        'units': saved_flags.get("units", int(trade.currentUnits)),
                         'entry_price': entry_price,
                         'sl': sl_price,
                         'tp1': (entry_price + initial_risk) if direction == 'buy' else (entry_price - initial_risk),
@@ -532,7 +525,6 @@ def retry_api_call(func, *args, **kwargs):
         except Exception as e:
             print(f"API attempt {i+1}/3 failed: {e}")
             if i == 2:
-                # Envoyer une alerte Telegram si l'API échoue 3 fois
                 send_telegram_message(f"⚠️ API error after 3 attempts: {str(e)[:100]}")
             time.sleep(5)
     raise Exception("API call failed after 3 attempts")
@@ -600,9 +592,6 @@ def get_candles(instrument, count=300, granularity=EXECUTION_GRANULARITY):
 
 
 def get_daily_loss_status(balance):
-    """Returns (loss_percent, blocked). Realized P/L is taken from today's closed trades.
-    A conservative unrealized component is also included when an active trade exists.
-    """
     try:
         realized = sum(float(t.get('pnl', 0)) for t in closed_trades_today)
     except Exception:
@@ -720,7 +709,6 @@ def manage_active_trade():
     move = (current_price - entry) if direction == 'buy' else (entry - current_price)
     r_multiple = move / initial_risk if initial_risk > 0 else 0
 
-    # Break-even
     if not active_trade.get('be_triggered') and r_multiple >= BE_R_MULT:
         offset = 0.5 * 0.0001
         new_sl = entry + offset if direction == 'buy' else entry - offset
@@ -736,7 +724,6 @@ def manage_active_trade():
             except Exception as e:
                 print(f"Break-even update failed: {e}")
 
-    # TP1 (partial)
     tp1 = active_trade.get('tp1')
     units = abs(int(active_trade['units']))
     if tp1 is not None and not active_trade.get('tp1_hit'):
@@ -749,7 +736,6 @@ def manage_active_trade():
                 print(f"TP1 hit on {pair}, {partial_units} units closed")
                 send_telegram_message(f"🎯 TP1 atteint sur {pair}: {partial_units} unités clôturées, runner conservé.")
 
-    # Trailing stop
     if active_trade.get('be_triggered') or active_trade.get('tp1_hit'):
         try:
             df = get_candles(pair, count=ATR_PERIOD + 30, granularity=EXECUTION_GRANULARITY)
@@ -779,13 +765,11 @@ def manage_active_trade():
 
 
 def place_trade(instrument, entry, sl, tp, units, direction, setup_type, risk_percent, reason):
-    """Place un ordre LIMIT avec GTD (expiration après 5 minutes)."""
     global active_trade, trades_today
     if active_trade is not None:
         print("A trade is already active, cannot open another.")
         return False
 
-    # Vérifier que le prix actuel n'est pas trop loin de l'entrée
     try:
         resp = ctx.pricing.get(ACCOUNT_ID, instruments=instrument)
         price_info = resp.body['prices'][0]
@@ -803,7 +787,6 @@ def place_trade(instrument, entry, sl, tp, units, direction, setup_type, risk_pe
             print(f"Trade aborted: slippage too high")
             return False
 
-    # Définir l'expiration de l'ordre (GTD)
     expiry_time = datetime.now(tz) + timedelta(minutes=LIMIT_ORDER_EXPIRY_MINUTES)
     expiry_str = expiry_time.strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -834,17 +817,9 @@ def place_trade(instrument, entry, sl, tp, units, direction, setup_type, risk_pe
         return False
 
     try:
-        # Récupérer les détails de l'ordre rempli
-        # Si l'ordre est exécuté immédiatement (rempli), on récupère la transaction
-        # Sinon, on peut soit attendre, soit enregistrer l'ordre en attente.
-        # Pour simplifier, on considère que l'ordre est exécuté sur le champ.
-        # Si l'ordre n'est pas exécuté immédiatement, on devra le surveiller.
-        # On va simuler une exécution immédiate pour le moment (comme avant)
-        # Une vraie implémentation surveillerait l'ordre.
         fill_trans = r.body.get('orderFillTransaction', r.body.get('orderCreateTransaction'))
         if not fill_trans:
             print("Order created but not filled immediately. Waiting for fill...")
-            # Ici on pourrait ajouter un mécanisme de surveillance, mais pour simplifier on abandonne
             send_telegram_message(f"⚠️ Ordre LIMIT créé pour {instrument} à {entry:.5f}, mais non exécuté immédiatement.")
             return False
 
@@ -973,7 +948,8 @@ def check_closed_trade():
             "pnl": total_pnl,
             "time": datetime.now(tz).strftime("%H:%M:%S"),
             "r_multiple": realized_r,
-            "score": score
+            "score": score,
+            "units": abs(units)   # <--- AJOUT pour le volume dans closed_trades.json
         })
         save_closed_trades_to_file()
         log_trade({
@@ -998,19 +974,6 @@ def check_closed_trade():
 
 
 def check_signal(df, instrument):
-    """
-    Retourne:
-        signal (bool),
-        entry (float),
-        sl (float),
-        tp (float),
-        sl_pips (float),
-        direction (str or None),
-        buy_reason (str),
-        sell_reason (str),
-        setup_type (str or None),
-        risk_percent (float)
-    """
     if len(df) < 220:
         return False, 0, 0, 0, 0, None, "Not enough M15 candles", "Not enough M15 candles", None, 0
 
@@ -1035,7 +998,6 @@ def check_signal(df, instrument):
     buy_reasons = []
     sell_reasons = []
 
-    # --- Vérifications globales ---
     if not h1_trending:
         reason = f"H1 regime too weak (ADX {h['adx']:.1f})"
         buy_reasons.append(reason)
@@ -1051,7 +1013,6 @@ def check_signal(df, instrument):
 
     sentiment = news_sentiment_filter.get(instrument, 'neutral')
 
-    # --- Conditions communes ---
     bull_rejection = (c['c'] > c['o'] and c['l'] <= c['ema20'] * 1.0003 and c['c'] > c['ema20'] and c['body_ratio'] >= 0.45)
     bear_rejection = (c['c'] < c['o'] and c['h'] >= c['ema20'] * 0.9997 and c['c'] < c['ema20'] and c['body_ratio'] >= 0.45)
     momentum_buy = c['plus_di'] > c['minus_di'] and c['rsi'] >= 50 and c['rsi'] <= 75
@@ -1060,8 +1021,7 @@ def check_signal(df, instrument):
     macd_buy = c['macd_line'] > c['macd_signal']
     macd_sell = c['macd_line'] < c['macd_signal']
 
-    # --- Setup A: Pullback ---
-    # BUY
+    # Setup A: Pullback - BUY
     if h1_up and sentiment != 'bearish' and bull_rejection and momentum_buy and adx_ok:
         score = 0
         score += 2
@@ -1090,7 +1050,7 @@ def check_signal(df, instrument):
         if not adx_ok:
             buy_reasons.append(f"ADX too low ({c['adx']:.1f} < {config['ADX_THRESHOLD']})")
 
-    # SELL
+    # Setup A: Pullback - SELL
     if h1_down and sentiment != 'bullish' and bear_rejection and momentum_sell and adx_ok:
         score = 0
         score += 2
@@ -1119,7 +1079,7 @@ def check_signal(df, instrument):
         if not adx_ok:
             sell_reasons.append(f"ADX too low ({c['adx']:.1f} < {config['ADX_THRESHOLD']})")
 
-    # --- Setup B: Breakout ---
+    # Setup B: Breakout
     if len(df) >= BREAKOUT_LOOKBACK + 5:
         box = df.iloc[-(BREAKOUT_LOOKBACK + 2):-2]
         resistance = float(box['h'].max())
@@ -1130,7 +1090,6 @@ def check_signal(df, instrument):
         breakout_quality_buy = c['body_ratio'] >= 0.55 and c['c'] > c['o'] and c['adx'] >= config['ADX_THRESHOLD']
         breakout_quality_sell = c['body_ratio'] >= 0.55 and c['c'] < c['o'] and c['adx'] >= config['ADX_THRESHOLD']
 
-        # BUY breakout
         if h1_up and sentiment != 'bearish' and buy_break and breakout_quality_buy and c['plus_di'] > c['minus_di']:
             score = 2 + 2 + 1
             score += 1 if c['adx'] >= config['ADX_THRESHOLD'] + 5 else 0
@@ -1154,7 +1113,6 @@ def check_signal(df, instrument):
             if not (c['plus_di'] > c['minus_di']):
                 buy_reasons.append("+DI not > -DI for BUY")
 
-        # SELL breakout
         if h1_down and sentiment != 'bullish' and sell_break and breakout_quality_sell and c['minus_di'] > c['plus_di']:
             score = 2 + 2 + 1
             score += 1 if c['adx'] >= config['ADX_THRESHOLD'] + 5 else 0
@@ -1178,7 +1136,6 @@ def check_signal(df, instrument):
             if not (c['minus_di'] > c['plus_di']):
                 sell_reasons.append("-DI not > +DI for SELL")
 
-    # Aucun signal
     if not buy_reasons:
         buy_reasons.append("No BUY setup triggered")
     if not sell_reasons:
@@ -1421,7 +1378,6 @@ def main():
                         if success:
                             trade_opened_during_window_today = True
 
-            # Sauvegarde périodique du statut
             save_status_json()
 
             if not hasattr(main, "next_trade_save"):
@@ -1435,7 +1391,6 @@ def main():
             time.sleep(30)
 
     except Exception as e:
-        # Alerte critique
         error_trace = traceback.format_exc()
         send_telegram_message(f"🚨 CRITICAL ERROR in main loop:\n{str(e)[:300]}\n\n{error_trace[:300]}")
         print(f"Critical error: {e}\n{error_trace}")
