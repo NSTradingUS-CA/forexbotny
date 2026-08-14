@@ -41,7 +41,7 @@ REGIME_CANDLES = 300
 MIN_SETUP_SCORE = 7
 BREAKOUT_LOOKBACK = 12
 BREAKOUT_BUFFER_ATR = 0.10
-MAX_ENTRY_EXTENSION_ATR = 1.25
+MAX_ENTRY_EXTENSION_ATR = 2.5   # <--- MODIFIÉ : 1.25 → 2.5
 MIN_SL_PIPS = 8
 MAX_SL_PIPS = 35
 NEWS_BLOCK_MINUTES = 15
@@ -93,6 +93,10 @@ STATUS_FILE = "status.json"
 BOT_STATUS = "running"
 _last_status_data = None
 _last_status_push_time = None
+
+# Caches pour rejected_signals.json
+_last_rejected_data = None
+_last_rejected_push_time = None
 
 
 # ---------- Fichiers JSON ----------
@@ -220,14 +224,35 @@ def load_rejected_from_file():
 
 
 def save_rejected_to_file():
+    """Push rejected_signals.json avec cache et intervalle de 60s."""
+    global _last_rejected_data, _last_rejected_push_time
+
+    now = datetime.now(tz)
+
+    # Construire le dictionnaire à sauvegarder
+    data = {
+        "signals": rejected_signals[-50:],
+        "last_cleanup": datetime.now(tz).strftime("%Y-%m-%d")
+    }
+
+    # Comparer avec le dernier contenu envoyé
+    if data == _last_rejected_data:
+        return
+
+    # Vérifier l'intervalle minimum
+    if _last_rejected_push_time is not None:
+        if (now - _last_rejected_push_time).total_seconds() < 60:
+            return
+
+    if not GH_PAT:
+        return
+
     try:
-        data = {
-            "signals": rejected_signals[-50:],
-            "last_cleanup": datetime.now(tz).strftime("%Y-%m-%d")
-        }
         with open(REJECTED_FILE, 'w') as f:
             json.dump(data, f, indent=2)
         push_file_to_github(REJECTED_FILE, REJECTED_FILE)
+        _last_rejected_data = data.copy()
+        _last_rejected_push_time = now
     except Exception as e:
         print(f"Error saving rejected signals file: {e}")
 
@@ -324,7 +349,7 @@ def save_status_json():
             "setup_type": active_trade.get('setup_type'),
             "risk_percent": active_trade.get('risk_percent'),
             "opened_at": active_trade.get('opened_at'),
-            "units": active_trade.get('units')   # <--- AJOUT pour le volume
+            "units": active_trade.get('units')
         }
 
     events = news_cache["events"]
@@ -949,7 +974,7 @@ def check_closed_trade():
             "time": datetime.now(tz).strftime("%H:%M:%S"),
             "r_multiple": realized_r,
             "score": score,
-            "units": abs(units)   # <--- AJOUT pour le volume dans closed_trades.json
+            "units": abs(units)
         })
         save_closed_trades_to_file()
         log_trade({
