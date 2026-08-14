@@ -244,7 +244,7 @@ st.markdown(f"""
     <h2 style="color: #FF9100; margin: 0;">Forex Sniper 7‑12</h2>
 </div>
 <p style="text-align: center; color: #AAAAAA; font-size: 1.1rem; font-style: italic; margin-top: 10px; margin-bottom: 10px;">
-    A 100% hands-free trading robot powered by a multi-criteria scoring engine. Executes 1-3 high-conviction trades per day on EURUSD and GBPUSD during the London & New York sessions.  
+    A 100% hands-free trading robot powered by a multi-criteria scoring engine. Executes up to 3 high-conviction trades per day on EURUSD and GBPUSD during the London & New York sessions.  
     Built-in risk management, crash-resilient performance, real-time dashboard, and instant Telegram alerts.
 </p>
 """, unsafe_allow_html=True)
