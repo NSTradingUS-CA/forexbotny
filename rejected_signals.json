@@ -2,21 +2,6 @@
   "signals": [
     {
       "time": "08:37:13",
-      "pair": "EUR_USD",
-      "direction": null,
-      "buy_reason": "Entry too extended (3.96 ATR)",
-      "sell_reason": "Entry too extended (3.96 ATR)",
-      "spread": 0.00015999999999993797,
-      "adx": 61.46736253076672,
-      "plus_di": 36.18562472166747,
-      "minus_di": 8.774636088676377,
-      "ema50": 1.154772773213596,
-      "ema200": 1.1537725971350121,
-      "rsi": 69.83601376950512,
-      "atr": 0.0004157142857142653
-    },
-    {
-      "time": "08:37:13",
       "pair": "GBP_USD",
       "direction": null,
       "buy_reason": "Entry too extended (4.88 ATR)",
@@ -749,6 +734,21 @@
       "ema200": 1.350148953764226,
       "rsi": 79.25586524945003,
       "atr": 0.0005149999999999956
+    },
+    {
+      "time": "08:51:06",
+      "pair": "EUR_USD",
+      "direction": null,
+      "buy_reason": "Entry too extended (4.85 ATR)",
+      "sell_reason": "Entry too extended (4.85 ATR)",
+      "spread": 0.00015999999999993797,
+      "adx": 61.520350586027426,
+      "plus_di": 31.493661820547015,
+      "minus_di": 7.388063844738121,
+      "ema50": 1.154860506799931,
+      "ema200": 1.153798715110142,
+      "rsi": 75.26754532299803,
+      "atr": 0.00044357142857140035
     }
   ],
   "last_cleanup": "2026-08-14"
