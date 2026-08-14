@@ -244,8 +244,9 @@ st.markdown(f"""
     <h2 style="color: #FF9100; margin: 0;">Forex Sniper 7‑12</h2>
 </div>
 <p style="text-align: center; color: #AAAAAA; font-size: 1.1rem; font-style: italic; margin-top: 10px; margin-bottom: 10px;">
-    Robot de trading 100 % autonome couvrant les sessions Londres et New York, utilisant une grille de score multicritères pour prendre 1 à 3 trades par jour 
-    sur les paires EURUSD et GBPUSD, avec gestion de risque intégrée, résilience, tableau de bord temps réel et envoyant des alertes Telegram.
+    Robot de trading 100 % autonome utilisant une grille de score multicritère pour prendre 1 à 3 trades par jour 
+    sur les paires EURUSD et GBPUSD, couvrant les sessions Londres et New York, 
+    avec gestion de risque intégrée, résilience, tableau de bord temps réel et envoyant des alertes Telegram.
 </p>
 """, unsafe_allow_html=True)
 
@@ -384,6 +385,9 @@ def render_dashboard():
         if trail_info:
             st.caption(f"Trailing Stop: {trail_info}")
 
+        # --- AJOUT : Volume ---
+        st.caption(f"Volume: {abs(active.get('units', 0))} units")
+
         # Ligne de détails enrichie avec BE et TP1
         setup = display_setup(active)
         score = display_score(active)
@@ -419,9 +423,11 @@ def render_dashboard():
             for t in closed_trades[::-1]:
                 pnl = t.get('pnl',0)
                 color = "green" if pnl >= 0 else "red"
+                # --- AJOUT : Volume dans Closed ---
                 st.markdown(
                     f"<span class='{color}'>{t.get('pair','')} {t.get('type','')} – "
                     f"{display_setup(t)} | R: {display_r(t)} | Score: {display_score(t)} | "
+                    f"Vol: {abs(t.get('units', 0))} units | "
                     f"{pnl:.2f} USD ({t.get('time','')})</span>",
                     unsafe_allow_html=True)
         else:
