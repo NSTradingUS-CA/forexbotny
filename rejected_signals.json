@@ -1,12 +1,12 @@
 {
   "signals": [
     {
-      "time": "07:00:20",
+      "time": "07:00:29",
       "pair": "EUR_USD",
       "direction": null,
       "buy_reason": "Entry too extended (3.22 ATR)",
       "sell_reason": "Entry too extended (3.22 ATR)",
-      "spread": 0.00013999999999980695,
+      "spread": 0.00015999999999993797,
       "adx": 55.16761518930664,
       "plus_di": 22.790212650702376,
       "minus_di": 9.282024652216938,
@@ -16,12 +16,12 @@
       "atr": 0.00035999999999997937
     },
     {
-      "time": "07:00:20",
+      "time": "07:00:29",
       "pair": "GBP_USD",
       "direction": null,
       "buy_reason": "Entry too extended (4.51 ATR)",
       "sell_reason": "Entry too extended (4.51 ATR)",
-      "spread": 0.000180000000000069,
+      "spread": 0.00017000000000000348,
       "adx": 72.86478174094044,
       "plus_di": 37.85468913358683,
       "minus_di": 2.8820964964920694,
