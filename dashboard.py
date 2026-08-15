@@ -466,7 +466,7 @@ def render_dashboard():
 
                 # Première ligne : heure/pair + BUY + SELL
                 st.markdown(
-                    f"**{time_pair}** – 🔵 **BUY:** {buy_reason}  |  🔴 **SELL:** {sell_reason}",
+                    f"**{time_pair}** – 🔵 **BUY:** {buy_reason}    |    🔴 **SELL:** {sell_reason}",
                     unsafe_allow_html=True
                 )
                 # Deuxième ligne : indicateurs (en caption)
