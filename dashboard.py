@@ -432,13 +432,15 @@ def render_dashboard():
         else:
             st.write("No closed trades.")
 
-    # *************** ONGLET REJECTED ***************
+    # *************** ONGLET REJECTED (MODIFIÉ) ***************
     with tab2:
         if rejected:
             for r in rejected[::-1][:30]:
                 time_pair = f"{r.get('time','')} {r.get('pair','')}"
                 buy_reason = r.get('buy_reason', '')
                 sell_reason = r.get('sell_reason', '')
+                
+                # Construction de la ligne des indicateurs
                 indicators = ""
                 if 'adx' in r:
                     spread_val = r.get('spread')
@@ -462,9 +464,12 @@ def render_dashboard():
                         f"EMA50: {ema50_str} | EMA200: {ema200_str} | RSI: {rsi_str} | ATR: {atr_str}"
                     )
 
-                st.markdown(f"**{time_pair}**")
-                st.markdown(f"🔵 **BUY:** {buy_reason}")
-                st.markdown(f"🔴 **SELL:** {sell_reason}")
+                # Première ligne : heure/pair + BUY + SELL
+                st.markdown(
+                    f"**{time_pair}** – 🔵 **BUY:** {buy_reason}  |  🔴 **SELL:** {sell_reason}",
+                    unsafe_allow_html=True
+                )
+                # Deuxième ligne : indicateurs (en caption)
                 if indicators:
                     st.caption(indicators)
                 st.markdown("---")
