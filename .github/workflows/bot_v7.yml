@@ -33,5 +33,5 @@ jobs:
       - name: Install dependencies
         run: pip install v20 pandas python-dotenv requests pytz pyyaml
 
-      - name: Run Forex Sniper 7-12
+      - name: Run Forex Bot
         run: python bot_v7.py
