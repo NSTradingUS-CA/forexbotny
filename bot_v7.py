@@ -41,7 +41,7 @@ REGIME_CANDLES = 300
 MIN_SETUP_SCORE = 7
 BREAKOUT_LOOKBACK = 12
 BREAKOUT_BUFFER_ATR = 0.10
-MAX_ENTRY_EXTENSION_ATR = 2.5   # <--- MODIFIÉ : 1.25 → 2.5
+MAX_ENTRY_EXTENSION_ATR = 2.5
 MIN_SL_PIPS = 8
 MAX_SL_PIPS = 35
 NEWS_BLOCK_MINUTES = 15
@@ -59,6 +59,11 @@ FIXED_TRAILING_PIPS = 20
 
 LIMIT_ORDER_EXPIRY_MINUTES = 5
 MAX_SLIPPAGE_ATR_FACTOR = 0.5
+
+# Nouveaux paramètres pour la gestion des news
+NEWS_CLOSE_BEFORE_MINUTES = 5        # Fermeture/protection 5 min avant
+NEWS_WARNING_MINUTES = 15            # Alerte préventive 15 min avant
+NEWS_CHECK_FUTURE_HOURS = 24         # Vérifier les news des prochaines 24h
 
 PAIR_CONFIG = {
     "EUR_USD": {"MAX_SPREAD_PIPS": 2.5, "ADX_THRESHOLD": 20, "ATR_MULTIPLIER": 2.0},
@@ -113,7 +118,23 @@ def set_pause_until(timestamp):
     push_file_to_github(PAUSE_FILE, PAUSE_FILE)
 
 
+def get_next_high_impact_news(now):
+    """Retourne le prochain événement à fort impact (dict) ou None."""
+    events = get_high_impact_news()
+    future_events = [e for e in events if e["time"] > now]
+    if future_events:
+        return min(future_events, key=lambda x: x["time"])
+    return None
+
+
 def check_and_block_news(now):
+    """
+    Vérifie si on est dans la fenêtre de blocage.
+    Retourne:
+        blocked (bool),
+        event (dict or None),
+        time_until_news (timedelta or None)
+    """
     events = get_high_impact_news()
     for event in events:
         block_start = event["time"] - timedelta(minutes=NEWS_BLOCK_MINUTES)
@@ -127,12 +148,12 @@ def check_and_block_news(now):
                        f"{block_start.strftime('%H:%M')} to {block_end.strftime('%H:%M')}")
                 send_telegram_message(msg)
                 print(msg)
-            return True
+            return True, event, event["time"] - now
     if get_pause_until() > 0 and now.timestamp() >= get_pause_until():
         set_pause_until(0)
         send_telegram_message("🟢 News pause lifted – trading resumed")
         print("News pause lifted.")
-    return False
+    return False, None, None
 
 
 def push_file_to_github(local_path, remote_path):
@@ -229,17 +250,14 @@ def save_rejected_to_file():
 
     now = datetime.now(tz)
 
-    # Construire le dictionnaire à sauvegarder
     data = {
         "signals": rejected_signals[-50:],
         "last_cleanup": datetime.now(tz).strftime("%Y-%m-%d")
     }
 
-    # Comparer avec le dernier contenu envoyé
     if data == _last_rejected_data:
         return
 
-    # Vérifier l'intervalle minimum
     if _last_rejected_push_time is not None:
         if (now - _last_rejected_push_time).total_seconds() < 60:
             return
@@ -714,6 +732,73 @@ def close_partial_position(units_to_close):
     return False
 
 
+def close_full_position_market():
+    """Ferme complètement le trade actuel au marché."""
+    global active_trade
+    if active_trade is None:
+        return False
+    pair = active_trade['pair']
+    units = -active_trade['units']  # sens opposé pour clôturer
+    body = {"units": str(units)}
+    try:
+        r = retry_api_call(ctx.position.close, ACCOUNT_ID, instrument=pair, data=body)
+        if r.status_code == 200:
+            print(f"Full position closed on {pair}")
+            return True
+    except Exception as e:
+        print(f"Full close failed: {e}")
+        return False
+    return False
+
+
+def move_sl_to_entry():
+    """Déplace le stop-loss à l'entrée (break-even) si possible."""
+    global active_trade
+    if active_trade is None:
+        return False
+    pair = active_trade['pair']
+    entry = active_trade['entry_price']
+    current_sl = active_trade['sl']
+    direction = active_trade['direction']
+    # Vérifier que le nouveau SL est valide par rapport au prix actuel
+    try:
+        resp = ctx.pricing.get(ACCOUNT_ID, instruments=pair)
+        price_info = resp.body['prices'][0]
+        bid = float(price_info.bids[0].price)
+        ask = float(price_info.asks[0].price)
+        current_price = bid if direction == 'sell' else ask
+    except:
+        current_price = None
+    if current_price is None:
+        return False
+    # On ne déplace le SL que si l'entrée est entre le prix actuel et le SL actuel
+    # Pour un buy: SL < entry < current_price, on veut SL = entry (moins un petit offset)
+    # Pour un sell: current_price < entry < SL, on veut SL = entry (plus un petit offset)
+    offset = 0.2 * 0.0001  # léger décalage pour éviter l'execution immédiate
+    if direction == 'buy' and current_price > entry and current_sl < entry:
+        new_sl = entry - offset
+    elif direction == 'sell' and current_price < entry and current_sl > entry:
+        new_sl = entry + offset
+    else:
+        # Ne convient pas, on ne fait rien
+        return False
+    # Vérifier que le nouveau SL est meilleur (plus proche du prix)
+    if direction == 'buy' and new_sl > current_sl:
+        body = {"stopLoss": {"price": f"{new_sl:.5f}"}}
+    elif direction == 'sell' and new_sl < current_sl:
+        body = {"stopLoss": {"price": f"{new_sl:.5f}"}}
+    else:
+        return False
+    try:
+        retry_api_call(ctx.position.close, ACCOUNT_ID, instrument=pair, data=body)
+        active_trade['sl'] = new_sl
+        print(f"SL moved to entry ({new_sl:.5f}) on {pair}")
+        return True
+    except Exception as e:
+        print(f"Failed to move SL to entry: {e}")
+        return False
+
+
 def manage_active_trade():
     global active_trade
     if active_trade is None:
@@ -745,7 +830,7 @@ def manage_active_trade():
                 active_trade['sl'] = new_sl
                 active_trade['be_triggered'] = True
                 print(f"Break-even triggered on {pair} at +{r_multiple:.2f}R")
-                send_telegram_message(f"🛡️ BE déclenché sur {pair} à +{r_multiple:.2f}R.")
+                send_telegram_message(f"🛡️ BE triggered on {pair} at +{r_multiple:.2f}R.")
             except Exception as e:
                 print(f"Break-even update failed: {e}")
 
@@ -759,7 +844,7 @@ def manage_active_trade():
                 active_trade['tp1_hit'] = True
                 active_trade['tp1'] = None
                 print(f"TP1 hit on {pair}, {partial_units} units closed")
-                send_telegram_message(f"🎯 TP1 atteint sur {pair}: {partial_units} unités clôturées, runner conservé.")
+                send_telegram_message(f"🎯 TP1 reached on {pair}: {partial_units} units closed, runner kept.")
 
     if active_trade.get('be_triggered') or active_trade.get('tp1_hit'):
         try:
@@ -775,7 +860,7 @@ def manage_active_trade():
                     active_trade['sl'] = new_sl
                     active_trade['trailing_distance'] = f"{TRAILING_ATR_MULT}x M15 ATR"
                     print(f"Trailing SL updated on {pair} to {new_sl:.5f}")
-                    send_telegram_message(f"📈 Trailing SL mis à jour sur {pair} à {new_sl:.5f}")
+                    send_telegram_message(f"📈 Trailing SL updated on {pair} to {new_sl:.5f}")
             else:
                 new_sl = current_price + trail_distance
                 if new_sl < active_trade['sl']:
@@ -784,7 +869,7 @@ def manage_active_trade():
                     active_trade['sl'] = new_sl
                     active_trade['trailing_distance'] = f"{TRAILING_ATR_MULT}x M15 ATR"
                     print(f"Trailing SL updated on {pair} to {new_sl:.5f}")
-                    send_telegram_message(f"📈 Trailing SL mis à jour sur {pair} à {new_sl:.5f}")
+                    send_telegram_message(f"📈 Trailing SL updated on {pair} to {new_sl:.5f}")
         except Exception as e:
             print(f"Trailing update failed: {e}")
 
@@ -808,7 +893,7 @@ def place_trade(instrument, entry, sl, tp, units, direction, setup_type, risk_pe
         atr = active_trade.get('atr', 0.0001) if active_trade else 0.0001
         max_slippage = MAX_SLIPPAGE_ATR_FACTOR * atr
         if abs(current_price - entry) > max_slippage:
-            send_telegram_message(f"⚠️ Slippage trop important pour {instrument}: entrée {entry:.5f} vs prix {current_price:.5f} (écart > {max_slippage:.5f})")
+            send_telegram_message(f"⚠️ Slippage too high for {instrument}: entry {entry:.5f} vs current {current_price:.5f} (diff > {max_slippage:.5f})")
             print(f"Trade aborted: slippage too high")
             return False
 
@@ -845,7 +930,7 @@ def place_trade(instrument, entry, sl, tp, units, direction, setup_type, risk_pe
         fill_trans = r.body.get('orderFillTransaction', r.body.get('orderCreateTransaction'))
         if not fill_trans:
             print("Order created but not filled immediately. Waiting for fill...")
-            send_telegram_message(f"⚠️ Ordre LIMIT créé pour {instrument} à {entry:.5f}, mais non exécuté immédiatement.")
+            send_telegram_message(f"⚠️ LIMIT order created for {instrument} at {entry:.5f}, but not executed immediately.")
             return False
 
         trade_opened = fill_trans.tradeOpened
@@ -1168,6 +1253,21 @@ def check_signal(df, instrument):
     return False, 0, 0, 0, 0, None, "\n".join(buy_reasons), "\n".join(sell_reasons), None, 0
 
 
+def check_future_news_and_alert():
+    """Vérifie les news à venir dans les prochaines 24h et envoie une alerte si nécessaire."""
+    now = datetime.now(tz)
+    # Récupérer les news des prochaines 24h
+    events = get_high_impact_news()
+    future_events = [e for e in events if e["time"] > now and e["time"] - now < timedelta(hours=NEWS_CHECK_FUTURE_HOURS)]
+    if future_events:
+        msg = "⚠️ <b>Upcoming high-impact news before next session:</b>\n"
+        for e in future_events:
+            msg += f"• {e['title']} at {e['time'].strftime('%H:%M')} ({e['time'].strftime('%a %d %b')})\n"
+        msg += "\nPlease close any open positions manually before market close."
+        send_telegram_message(msg)
+        print("Future news alert sent.")
+
+
 def main():
     global trades_today, last_trade_date, last_close_time, active_trade
     global closed_trades_today, rejected_signals
@@ -1213,6 +1313,9 @@ def main():
     )
     print(start_msg)
     send_telegram_message(start_msg)
+
+    # Envoyer une alerte si des news sont prévues dans les prochaines 24h
+    check_future_news_and_alert()
 
     try:
         while True:
@@ -1260,6 +1363,58 @@ def main():
             ):
                 late_shutdown_required = True
 
+            # Gestion des news avec trade ouvert
+            if active_trade is not None:
+                blocked, event, time_until = check_and_block_news(now)
+                if event is not None and time_until is not None:
+                    minutes_until = time_until.total_seconds() / 60.0
+                    # Alerte préventive 15 min avant
+                    if minutes_until <= NEWS_WARNING_MINUTES and minutes_until > NEWS_CLOSE_BEFORE_MINUTES:
+                        send_telegram_message(
+                            f"📰 <b>High-impact news in {int(minutes_until)} minutes:</b> {event['title']} at {event['time'].strftime('%H:%M')}\n"
+                            f"Trade on {active_trade['pair']} is open. Action will be taken at {NEWS_CLOSE_BEFORE_MINUTES} min before."
+                        )
+                    # Action à 5 minutes avant
+                    if minutes_until <= NEWS_CLOSE_BEFORE_MINUTES:
+                        # Calculer le P&L actuel du trade
+                        try:
+                            resp = ctx.pricing.get(ACCOUNT_ID, instruments=active_trade['pair'])
+                            price_info = resp.body['prices'][0]
+                            bid = float(price_info.bids[0].price)
+                            ask = float(price_info.asks[0].price)
+                            current_price = bid if active_trade['direction'] == 'sell' else ask
+                            unrealized_pnl = (current_price - active_trade['entry_price']) * active_trade['units']
+                            if active_trade['direction'] == 'sell':
+                                unrealized_pnl = -unrealized_pnl
+                        except:
+                            unrealized_pnl = 0
+
+                        if unrealized_pnl > 0:
+                            # Trade gagnant : fermer
+                            if close_full_position_market():
+                                send_telegram_message(
+                                    f"🔒 <b>Trade closed automatically before news</b>\n"
+                                    f"Pair: {active_trade['pair']}\n"
+                                    f"P&L: {unrealized_pnl:.2f} USD\n"
+                                    f"Reason: High-impact news '{event['title']}' in <5 min."
+                                )
+                                # Attendre que la clôture soit traitée
+                                time.sleep(2)
+                                # active_trade sera mis à None par check_closed_trade plus tard
+                            else:
+                                send_telegram_message("⚠️ Failed to close trade automatically. Please monitor.")
+                        else:
+                            # Trade perdant ou à BE : protéger le SL
+                            if move_sl_to_entry():
+                                send_telegram_message(
+                                    f"🛡️ <b>Stop-loss moved to entry before news</b>\n"
+                                    f"Pair: {active_trade['pair']}\n"
+                                    f"New SL: {active_trade['sl']:.5f}\n"
+                                    f"Reason: High-impact news '{event['title']}' in <5 min."
+                                )
+                            else:
+                                send_telegram_message("⚠️ Could not move SL to entry. Please monitor manually.")
+
             shutdown_1205 = (
                 now.hour == 12
                 and now.minute >= 5
@@ -1275,6 +1430,8 @@ def main():
             )
 
             if shutdown_1205 or shutdown_1705:
+                # Vérifier les news à venir avant l'envoi du message d'arrêt
+                check_future_news_and_alert()
                 BOT_STATUS = "stopped"
                 save_status_json()
 
@@ -1296,7 +1453,9 @@ def main():
                         news_sentiment_filter[pair] = sentiment
                 main.next_news_check = now + timedelta(seconds=60)
 
-            news_blocked = check_and_block_news(now)
+            # On récupère le blocage pour les nouvelles entrées
+            blocked, _, _ = check_and_block_news(now)
+            news_blocked = blocked
 
             in_trading_hours = (
                 now.hour >= TRADING_HOURS_START
