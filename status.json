@@ -1,5 +1,5 @@
 {
-  "time": "2026-08-17 08:59:42",
+  "time": "2026-08-17 09:00:46",
   "bot_status": "running",
   "session": {
     "trades_today": 0,
@@ -9,8 +9,8 @@
   },
   "active_trade": null,
   "next_news_event": {
-    "title": "CPI m/m",
-    "time": "08:30",
+    "title": "CPI y/y",
+    "time": "02:00",
     "impact": "High"
   },
   "strategy": "H1 regime + M15 pullback/breakout",
