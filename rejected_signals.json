@@ -1,51 +1,6 @@
 {
   "signals": [
     {
-      "time": "10:45:06",
-      "pair": "GBP_USD",
-      "direction": null,
-      "buy_reason": "No bullish rejection at EMA20\nADX too low (12.5 < 15)\nNo breakout BUY setup\nBreakout quality (body/ADX) insufficient for BUY",
-      "sell_reason": "H1 trend not down for SELL\nNo bearish rejection at EMA20\nMomentum not favorable for SELL\nADX too low (12.5 < 15)\nH1 not down for breakout SELL\nNo breakout SELL setup\nBreakout quality (body/ADX) insufficient for SELL\n-DI not > +DI for SELL",
-      "spread": 0.00017000000000000348,
-      "adx": 12.541475746726036,
-      "plus_di": 24.3339521928006,
-      "minus_di": 18.63597680531302,
-      "ema50": 1.355613778174193,
-      "ema200": 1.3535168612490234,
-      "rsi": 52.47610162051169,
-      "atr": 0.0007071428571428269
-    },
-    {
-      "time": "10:45:37",
-      "pair": "EUR_USD",
-      "direction": null,
-      "buy_reason": "No bullish rejection at EMA20\nMomentum not favorable for BUY\nADX too low (14.8 < 20)\nNo breakout BUY setup\nBreakout quality (body/ADX) insufficient for BUY\n+DI not > -DI for BUY",
-      "sell_reason": "H1 trend not down for SELL\nNo bearish rejection at EMA20\nADX too low (14.8 < 20)\nH1 not down for breakout SELL\nNo breakout SELL setup\nBreakout quality (body/ADX) insufficient for SELL",
-      "spread": 0.00015999999999993797,
-      "adx": 14.778410771107463,
-      "plus_di": 19.190966690902826,
-      "minus_di": 20.09421140590499,
-      "ema50": 1.1590935271215999,
-      "ema200": 1.1568845523854987,
-      "rsi": 48.8938863171803,
-      "atr": 0.0005742857142857335
-    },
-    {
-      "time": "10:45:37",
-      "pair": "GBP_USD",
-      "direction": null,
-      "buy_reason": "No bullish rejection at EMA20\nADX too low (12.5 < 15)\nNo breakout BUY setup\nBreakout quality (body/ADX) insufficient for BUY",
-      "sell_reason": "H1 trend not down for SELL\nNo bearish rejection at EMA20\nMomentum not favorable for SELL\nADX too low (12.5 < 15)\nH1 not down for breakout SELL\nNo breakout SELL setup\nBreakout quality (body/ADX) insufficient for SELL\n-DI not > +DI for SELL",
-      "spread": 0.00015999999999993797,
-      "adx": 12.541475746726036,
-      "plus_di": 24.3339521928006,
-      "minus_di": 18.63597680531302,
-      "ema50": 1.355613778174193,
-      "ema200": 1.3535168612490234,
-      "rsi": 52.47610162051169,
-      "atr": 0.0007071428571428269
-    },
-    {
       "time": "10:46:14",
       "pair": "EUR_USD",
       "direction": null,
@@ -749,6 +704,51 @@
       "ema200": 1.1568845523854987,
       "rsi": 48.8938863171803,
       "atr": 0.0005742857142857335
+    },
+    {
+      "time": "10:59:24",
+      "pair": "GBP_USD",
+      "direction": null,
+      "buy_reason": "No bullish rejection at EMA20\nADX too low (12.5 < 15)\nNo breakout BUY setup\nBreakout quality (body/ADX) insufficient for BUY",
+      "sell_reason": "H1 trend not down for SELL\nNo bearish rejection at EMA20\nMomentum not favorable for SELL\nADX too low (12.5 < 15)\nH1 not down for breakout SELL\nNo breakout SELL setup\nBreakout quality (body/ADX) insufficient for SELL\n-DI not > +DI for SELL",
+      "spread": 0.00017000000000000348,
+      "adx": 12.541475746726036,
+      "plus_di": 24.3339521928006,
+      "minus_di": 18.63597680531302,
+      "ema50": 1.355613778174193,
+      "ema200": 1.3535168612490234,
+      "rsi": 52.47610162051169,
+      "atr": 0.0007071428571428269
+    },
+    {
+      "time": "10:59:58",
+      "pair": "EUR_USD",
+      "direction": null,
+      "buy_reason": "No bullish rejection at EMA20\nMomentum not favorable for BUY\nADX too low (14.8 < 20)\nNo breakout BUY setup\nBreakout quality (body/ADX) insufficient for BUY\n+DI not > -DI for BUY",
+      "sell_reason": "H1 trend not down for SELL\nNo bearish rejection at EMA20\nADX too low (14.8 < 20)\nH1 not down for breakout SELL\nNo breakout SELL setup\nBreakout quality (body/ADX) insufficient for SELL",
+      "spread": 0.00015999999999993797,
+      "adx": 14.778410771107463,
+      "plus_di": 19.190966690902826,
+      "minus_di": 20.09421140590499,
+      "ema50": 1.1590935271215999,
+      "ema200": 1.1568845523854987,
+      "rsi": 48.8938863171803,
+      "atr": 0.0005742857142857335
+    },
+    {
+      "time": "10:59:58",
+      "pair": "GBP_USD",
+      "direction": null,
+      "buy_reason": "No bullish rejection at EMA20\nADX too low (12.5 < 15)\nNo breakout BUY setup\nBreakout quality (body/ADX) insufficient for BUY",
+      "sell_reason": "H1 trend not down for SELL\nNo bearish rejection at EMA20\nMomentum not favorable for SELL\nADX too low (12.5 < 15)\nH1 not down for breakout SELL\nNo breakout SELL setup\nBreakout quality (body/ADX) insufficient for SELL\n-DI not > +DI for SELL",
+      "spread": 0.00017000000000000348,
+      "adx": 12.541475746726036,
+      "plus_di": 24.3339521928006,
+      "minus_di": 18.63597680531302,
+      "ema50": 1.355613778174193,
+      "ema200": 1.3535168612490234,
+      "rsi": 52.47610162051169,
+      "atr": 0.0007071428571428269
     }
   ],
   "last_cleanup": "2026-08-17"
