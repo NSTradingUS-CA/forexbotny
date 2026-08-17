@@ -2,21 +2,6 @@
   "signals": [
     {
       "time": "08:01:50",
-      "pair": "EUR_USD",
-      "direction": null,
-      "buy_reason": "No bullish rejection at EMA20\nMomentum not favorable for BUY\nNo breakout BUY setup\nBreakout quality (body/ADX) insufficient for BUY\n+DI not > -DI for BUY",
-      "sell_reason": "H1 trend not down for SELL\nNo bearish rejection at EMA20\nH1 not down for breakout SELL\nNo breakout SELL setup\nBreakout quality (body/ADX) insufficient for SELL",
-      "spread": 0.00015999999999993797,
-      "adx": 24.07911000318242,
-      "plus_di": 19.091841125561714,
-      "minus_di": 26.100204822869593,
-      "ema50": 1.1589220237136453,
-      "ema200": 1.1565771523127852,
-      "rsi": 42.59318173168893,
-      "atr": 0.0005492857142856966
-    },
-    {
-      "time": "08:01:50",
       "pair": "GBP_USD",
       "direction": null,
       "buy_reason": "No bullish rejection at EMA20\nMomentum not favorable for BUY\nNo breakout BUY setup\nBreakout quality (body/ADX) insufficient for BUY\n+DI not > -DI for BUY",
@@ -749,6 +734,21 @@
       "ema200": 1.3531827794675158,
       "rsi": 46.14562305949106,
       "atr": 0.0006628571428571396
+    },
+    {
+      "time": "08:45:02",
+      "pair": "EUR_USD",
+      "direction": null,
+      "buy_reason": "No bullish rejection at EMA20\nMomentum not favorable for BUY\nNo breakout BUY setup\nBreakout quality (body/ADX) insufficient for BUY\n+DI not > -DI for BUY",
+      "sell_reason": "H1 trend not down for SELL\nNo bearish rejection at EMA20\nH1 not down for breakout SELL\nNo breakout SELL setup\nBreakout quality (body/ADX) insufficient for SELL",
+      "spread": 0.00014999999999987246,
+      "adx": 20.219093937730584,
+      "plus_di": 20.457398716264127,
+      "minus_di": 26.039713890534365,
+      "ema50": 1.1589520830061735,
+      "ema200": 1.1566213797440386,
+      "rsi": 45.883338146557264,
+      "atr": 0.000479285714285698
     }
   ],
   "last_cleanup": "2026-08-17"
