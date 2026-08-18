@@ -1,4 +1,20 @@
 {
-  "signals": [],
+  "signals": [
+    {
+      "time": "07:00:03",
+      "pair": "EUR_USD",
+      "direction": null,
+      "buy_reason": "H1 regime too weak (ADX 17.5)",
+      "sell_reason": "H1 regime too weak (ADX 17.5)",
+      "spread": 0.00014999999999987246,
+      "adx": 19.08986831143189,
+      "plus_di": 18.941154561370837,
+      "minus_di": 14.558287155921981,
+      "ema50": 1.1576278889125722,
+      "ema200": 1.1573057572286432,
+      "rsi": 50.277083488646014,
+      "atr": 0.00039071428571429187
+    }
+  ],
   "last_cleanup": "2026-08-18"
 }
