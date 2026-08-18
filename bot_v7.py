@@ -568,7 +568,11 @@ def retry_api_call(func, *args, **kwargs):
         except Exception as e:
             print(f"API attempt {i+1}/3 failed: {e}")
             if i == 2:
-                send_telegram_message(f"⚠️ API error after 3 attempts: {str(e)[:100]}")
+                error_str = str(e).lower()
+                if "timed out" not in error_str:
+                    send_telegram_message(f"⚠️ API error after 3 attempts: {str(e)[:100]}")
+                else:
+                    print("Network timeout detected - skipping Telegram alert.")
             time.sleep(5)
     raise Exception("API call failed after 3 attempts")
 
