@@ -38,10 +38,10 @@ EXECUTION_GRANULARITY = "M15"
 REGIME_GRANULARITY = "H1"
 EXECUTION_CANDLES = 300
 REGIME_CANDLES = 300
-MIN_SETUP_SCORE = 7
+MIN_SETUP_SCORE = 6               # MODIFIÉ : 7 → 6
 BREAKOUT_LOOKBACK = 12
 BREAKOUT_BUFFER_ATR = 0.10
-MAX_ENTRY_EXTENSION_ATR = 2.5
+MAX_ENTRY_EXTENSION_ATR = 3.5      # MODIFIÉ : 2.5 → 3.5
 MIN_SL_PIPS = 8
 MAX_SL_PIPS = 35
 NEWS_BLOCK_MINUTES = 15
@@ -61,12 +61,12 @@ LIMIT_ORDER_EXPIRY_MINUTES = 5
 MAX_SLIPPAGE_ATR_FACTOR = 0.5
 
 # Nouveaux paramètres pour la gestion des news
-NEWS_CLOSE_BEFORE_MINUTES = 5        # Fermeture/protection 5 min avant
-NEWS_WARNING_MINUTES = 15            # Alerte préventive 15 min avant
-NEWS_CHECK_FUTURE_HOURS = 24         # Vérifier les news des prochaines 24h
+NEWS_CLOSE_BEFORE_MINUTES = 5
+NEWS_WARNING_MINUTES = 15
+NEWS_CHECK_FUTURE_HOURS = 24
 
 PAIR_CONFIG = {
-    "EUR_USD": {"MAX_SPREAD_PIPS": 2.5, "ADX_THRESHOLD": 20, "ATR_MULTIPLIER": 2.0},
+    "EUR_USD": {"MAX_SPREAD_PIPS": 2.5, "ADX_THRESHOLD": 18, "ATR_MULTIPLIER": 2.0},  # MODIFIÉ : 20 → 18
     "GBP_USD": {"MAX_SPREAD_PIPS": 3.0, "ADX_THRESHOLD": 15, "ATR_MULTIPLIER": 2.0}
 }
 # ============================
@@ -119,7 +119,6 @@ def set_pause_until(timestamp):
 
 
 def get_next_high_impact_news(now):
-    """Retourne le prochain événement à fort impact (dict) ou None."""
     events = get_high_impact_news()
     future_events = [e for e in events if e["time"] > now]
     if future_events:
@@ -128,13 +127,6 @@ def get_next_high_impact_news(now):
 
 
 def check_and_block_news(now):
-    """
-    Vérifie si on est dans la fenêtre de blocage.
-    Retourne:
-        blocked (bool),
-        event (dict or None),
-        time_until_news (timedelta or None)
-    """
     events = get_high_impact_news()
     for event in events:
         block_start = event["time"] - timedelta(minutes=NEWS_BLOCK_MINUTES)
@@ -245,7 +237,6 @@ def load_rejected_from_file():
 
 
 def save_rejected_to_file():
-    """Push rejected_signals.json avec cache et intervalle de 60s."""
     global _last_rejected_data, _last_rejected_push_time
 
     now = datetime.now(tz)
@@ -737,12 +728,11 @@ def close_partial_position(units_to_close):
 
 
 def close_full_position_market():
-    """Ferme complètement le trade actuel au marché."""
     global active_trade
     if active_trade is None:
         return False
     pair = active_trade['pair']
-    units = -active_trade['units']  # sens opposé pour clôturer
+    units = -active_trade['units']
     body = {"units": str(units)}
     try:
         r = retry_api_call(ctx.position.close, ACCOUNT_ID, instrument=pair, data=body)
@@ -756,7 +746,6 @@ def close_full_position_market():
 
 
 def move_sl_to_entry():
-    """Déplace le stop-loss à l'entrée (break-even) si possible."""
     global active_trade
     if active_trade is None:
         return False
@@ -764,7 +753,6 @@ def move_sl_to_entry():
     entry = active_trade['entry_price']
     current_sl = active_trade['sl']
     direction = active_trade['direction']
-    # Vérifier que le nouveau SL est valide par rapport au prix actuel
     try:
         resp = ctx.pricing.get(ACCOUNT_ID, instruments=pair)
         price_info = resp.body['prices'][0]
@@ -775,18 +763,13 @@ def move_sl_to_entry():
         current_price = None
     if current_price is None:
         return False
-    # On ne déplace le SL que si l'entrée est entre le prix actuel et le SL actuel
-    # Pour un buy: SL < entry < current_price, on veut SL = entry (moins un petit offset)
-    # Pour un sell: current_price < entry < SL, on veut SL = entry (plus un petit offset)
-    offset = 0.2 * 0.0001  # léger décalage pour éviter l'execution immédiate
+    offset = 0.2 * 0.0001
     if direction == 'buy' and current_price > entry and current_sl < entry:
         new_sl = entry - offset
     elif direction == 'sell' and current_price < entry and current_sl > entry:
         new_sl = entry + offset
     else:
-        # Ne convient pas, on ne fait rien
         return False
-    # Vérifier que le nouveau SL est meilleur (plus proche du prix)
     if direction == 'buy' and new_sl > current_sl:
         body = {"stopLoss": {"price": f"{new_sl:.5f}"}}
     elif direction == 'sell' and new_sl < current_sl:
@@ -1127,10 +1110,11 @@ def check_signal(df, instrument):
 
     sentiment = news_sentiment_filter.get(instrument, 'neutral')
 
-    bull_rejection = (c['c'] > c['o'] and c['l'] <= c['ema20'] * 1.0003 and c['c'] > c['ema20'] and c['body_ratio'] >= 0.45)
-    bear_rejection = (c['c'] < c['o'] and c['h'] >= c['ema20'] * 0.9997 and c['c'] < c['ema20'] and c['body_ratio'] >= 0.45)
-    momentum_buy = c['plus_di'] > c['minus_di'] and c['rsi'] >= 50 and c['rsi'] <= 75
-    momentum_sell = c['minus_di'] > c['plus_di'] and c['rsi'] <= 50 and c['rsi'] >= 25
+    # Conditions de rejet assouplies
+    bull_rejection = (c['c'] > c['o'] and c['l'] <= c['ema20'] * 1.0015 and c['c'] > c['ema20'] and c['body_ratio'] >= 0.40)
+    bear_rejection = (c['c'] < c['o'] and c['h'] >= c['ema20'] * 0.9985 and c['c'] < c['ema20'] and c['body_ratio'] >= 0.40)
+    momentum_buy = c['plus_di'] > c['minus_di'] and c['rsi'] >= 50 and c['rsi'] <= 70   # MODIFIÉ : 68 → 70
+    momentum_sell = c['minus_di'] > c['plus_di'] and c['rsi'] <= 50 and c['rsi'] >= 30  # MODIFIÉ : 48 → 50, 32 → 30
     adx_ok = c['adx'] >= config['ADX_THRESHOLD']
     macd_buy = c['macd_line'] > c['macd_signal']
     macd_sell = c['macd_line'] < c['macd_signal']
@@ -1142,7 +1126,7 @@ def check_signal(df, instrument):
         score += 2
         score += 1 if c['adx'] >= config['ADX_THRESHOLD'] + 5 else 0
         score += 1 if c['plus_di'] > c['minus_di'] else 0
-        score += 1 if 52 <= c['rsi'] <= 68 else 0
+        score += 1 if 52 <= c['rsi'] <= 68 else 0   # on garde cette plage pour un bonus
         score += 1 if macd_buy else 0
         score += 1 if c['c'] > prev['h'] else 0
         if score >= MIN_SETUP_SCORE:
@@ -1171,7 +1155,7 @@ def check_signal(df, instrument):
         score += 2
         score += 1 if c['adx'] >= config['ADX_THRESHOLD'] + 5 else 0
         score += 1 if c['minus_di'] > c['plus_di'] else 0
-        score += 1 if 32 <= c['rsi'] <= 48 else 0
+        score += 1 if 32 <= c['rsi'] <= 48 else 0   # plage bonus
         score += 1 if macd_sell else 0
         score += 1 if c['c'] < prev['l'] else 0
         if score >= MIN_SETUP_SCORE:
@@ -1258,9 +1242,7 @@ def check_signal(df, instrument):
 
 
 def check_future_news_and_alert():
-    """Vérifie les news à venir dans les prochaines 24h et envoie une alerte si nécessaire."""
     now = datetime.now(tz)
-    # Récupérer les news des prochaines 24h
     events = get_high_impact_news()
     future_events = [e for e in events if e["time"] > now and e["time"] - now < timedelta(hours=NEWS_CHECK_FUTURE_HOURS)]
     if future_events:
@@ -1318,7 +1300,6 @@ def main():
     print(start_msg)
     send_telegram_message(start_msg)
 
-    # Envoyer une alerte si des news sont prévues dans les prochaines 24h
     check_future_news_and_alert()
 
     try:
@@ -1372,15 +1353,12 @@ def main():
                 blocked, event, time_until = check_and_block_news(now)
                 if event is not None and time_until is not None:
                     minutes_until = time_until.total_seconds() / 60.0
-                    # Alerte préventive 15 min avant
                     if minutes_until <= NEWS_WARNING_MINUTES and minutes_until > NEWS_CLOSE_BEFORE_MINUTES:
                         send_telegram_message(
                             f"📰 <b>High-impact news in {int(minutes_until)} minutes:</b> {event['title']} at {event['time'].strftime('%H:%M')}\n"
                             f"Trade on {active_trade['pair']} is open. Action will be taken at {NEWS_CLOSE_BEFORE_MINUTES} min before."
                         )
-                    # Action à 5 minutes avant
                     if minutes_until <= NEWS_CLOSE_BEFORE_MINUTES:
-                        # Calculer le P&L actuel du trade
                         try:
                             resp = ctx.pricing.get(ACCOUNT_ID, instruments=active_trade['pair'])
                             price_info = resp.body['prices'][0]
@@ -1394,7 +1372,6 @@ def main():
                             unrealized_pnl = 0
 
                         if unrealized_pnl > 0:
-                            # Trade gagnant : fermer
                             if close_full_position_market():
                                 send_telegram_message(
                                     f"🔒 <b>Trade closed automatically before news</b>\n"
@@ -1402,13 +1379,10 @@ def main():
                                     f"P&L: {unrealized_pnl:.2f} USD\n"
                                     f"Reason: High-impact news '{event['title']}' in <5 min."
                                 )
-                                # Attendre que la clôture soit traitée
                                 time.sleep(2)
-                                # active_trade sera mis à None par check_closed_trade plus tard
                             else:
                                 send_telegram_message("⚠️ Failed to close trade automatically. Please monitor.")
                         else:
-                            # Trade perdant ou à BE : protéger le SL
                             if move_sl_to_entry():
                                 send_telegram_message(
                                     f"🛡️ <b>Stop-loss moved to entry before news</b>\n"
@@ -1434,7 +1408,6 @@ def main():
             )
 
             if shutdown_1205 or shutdown_1705:
-                # Vérifier les news à venir avant l'envoi du message d'arrêt
                 check_future_news_and_alert()
                 BOT_STATUS = "stopped"
                 save_status_json()
@@ -1457,7 +1430,6 @@ def main():
                         news_sentiment_filter[pair] = sentiment
                 main.next_news_check = now + timedelta(seconds=60)
 
-            # On récupère le blocage pour les nouvelles entrées
             blocked, _, _ = check_and_block_news(now)
             news_blocked = blocked
 
