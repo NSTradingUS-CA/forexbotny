@@ -1,6 +1,6 @@
 {
-  "time": "2026-08-18 12:05:28",
-  "bot_status": "stopped",
+  "time": "2026-08-19 06:30:40",
+  "bot_status": "running",
   "session": {
     "trades_today": 0,
     "max_trades": 3,
@@ -9,8 +9,8 @@
   },
   "active_trade": null,
   "next_news_event": {
-    "title": "CPI y/y",
-    "time": "02:00",
+    "title": "FOMC Meeting Minutes",
+    "time": "14:00",
     "impact": "High"
   },
   "strategy": "H1 regime + M15 pullback/breakout",
