@@ -1,5 +1,5 @@
 {
-  "time": "2026-08-19 12:04:47",
+  "time": "2026-08-20 06:30:40",
   "bot_status": "running",
   "session": {
     "trades_today": 0,
@@ -8,11 +8,7 @@
     "end": "11:00"
   },
   "active_trade": null,
-  "next_news_event": {
-    "title": "FOMC Meeting Minutes",
-    "time": "14:00",
-    "impact": "High"
-  },
+  "next_news_event": null,
   "strategy": "H1 regime + M15 pullback/breakout",
   "max_risk_per_trade_percent": 0.65,
   "daily_loss_limit_percent": 2.0
