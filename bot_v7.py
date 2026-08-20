@@ -34,14 +34,14 @@ MAX_TRADES_PER_DAY = 3
 MIN_MINUTES_BETWEEN_TRADES = 15
 ATR_PERIOD = 14
 ADX_PERIOD = 10
-EXECUTION_GRANULARITY = "M15"
+EXECUTION_GRANULARITY = "H1"            # MODIFIÉ : M15 → H1 (comme ancien script)
 REGIME_GRANULARITY = "H1"
 EXECUTION_CANDLES = 300
 REGIME_CANDLES = 300
-MIN_SETUP_SCORE = 6               # MODIFIÉ : 7 → 6
+MIN_SETUP_SCORE = 4                     # MODIFIÉ : 6 → 4 (très assoupli, quasi booléen)
 BREAKOUT_LOOKBACK = 12
 BREAKOUT_BUFFER_ATR = 0.10
-MAX_ENTRY_EXTENSION_ATR = 3.5      # MODIFIÉ : 2.5 → 3.5
+MAX_ENTRY_EXTENSION_ATR = 99.0          # DÉSACTIVÉ : valeur très élevée
 MIN_SL_PIPS = 8
 MAX_SL_PIPS = 35
 NEWS_BLOCK_MINUTES = 15
@@ -60,13 +60,13 @@ FIXED_TRAILING_PIPS = 20
 LIMIT_ORDER_EXPIRY_MINUTES = 5
 MAX_SLIPPAGE_ATR_FACTOR = 0.5
 
-# Nouveaux paramètres pour la gestion des news
+# Paramètres news
 NEWS_CLOSE_BEFORE_MINUTES = 5
 NEWS_WARNING_MINUTES = 15
 NEWS_CHECK_FUTURE_HOURS = 24
 
 PAIR_CONFIG = {
-    "EUR_USD": {"MAX_SPREAD_PIPS": 2.5, "ADX_THRESHOLD": 18, "ATR_MULTIPLIER": 2.0},  # MODIFIÉ : 20 → 18
+    "EUR_USD": {"MAX_SPREAD_PIPS": 2.5, "ADX_THRESHOLD": 20, "ATR_MULTIPLIER": 2.0},
     "GBP_USD": {"MAX_SPREAD_PIPS": 3.0, "ADX_THRESHOLD": 15, "ATR_MULTIPLIER": 2.0}
 }
 # ============================
@@ -98,8 +98,6 @@ STATUS_FILE = "status.json"
 BOT_STATUS = "running"
 _last_status_data = None
 _last_status_push_time = None
-
-# Caches pour rejected_signals.json
 _last_rejected_data = None
 _last_rejected_push_time = None
 
@@ -238,24 +236,17 @@ def load_rejected_from_file():
 
 def save_rejected_to_file():
     global _last_rejected_data, _last_rejected_push_time
-
     now = datetime.now(tz)
-
     data = {
         "signals": rejected_signals[-50:],
         "last_cleanup": datetime.now(tz).strftime("%Y-%m-%d")
     }
-
     if data == _last_rejected_data:
         return
-
-    if _last_rejected_push_time is not None:
-        if (now - _last_rejected_push_time).total_seconds() < 60:
-            return
-
+    if _last_rejected_push_time is not None and (now - _last_rejected_push_time).total_seconds() < 60:
+        return
     if not GH_PAT:
         return
-
     try:
         with open(REJECTED_FILE, 'w') as f:
             json.dump(data, f, indent=2)
@@ -268,19 +259,13 @@ def save_rejected_to_file():
 
 def push_status_json(data_dict):
     global _last_status_data, _last_status_push_time
-
     now = datetime.now(tz)
-
     if data_dict == _last_status_data:
         return
-
-    if _last_status_push_time is not None:
-        if (now - _last_status_push_time).total_seconds() < 60:
-            return
-
+    if _last_status_push_time is not None and (now - _last_status_push_time).total_seconds() < 60:
+        return
     if not GH_PAT:
         return
-
     try:
         url = f"https://api.github.com/repos/{os.getenv('GITHUB_REPOSITORY')}/contents/status.json"
         headers = {"Authorization": f"token {GH_PAT}", "Accept": "application/vnd.github.v3+json",
@@ -316,11 +301,10 @@ def save_status_json():
         },
         "active_trade": None,
         "next_news_event": None,
-        "strategy": "H1 regime + M15 pullback/breakout",
+        "strategy": "H1 regime + H1 pullback/breakout (simplified)",
         "max_risk_per_trade_percent": RISK_PERCENT,
         "daily_loss_limit_percent": DAILY_LOSS_LIMIT_PERCENT
     }
-
     if active_trade:
         pair = active_trade['pair']
         try:
@@ -331,13 +315,11 @@ def save_status_json():
             current_price = bid if active_trade['direction'] == 'sell' else ask
         except:
             current_price = active_trade['entry_price']
-
         sl_distance = abs(current_price - active_trade['sl'])
         tp_distance = abs(active_trade['tp2'] - current_price) if active_trade.get('tp2') else 0
         unrealized_pnl = (current_price - active_trade['entry_price']) * abs(active_trade['units'])
         if active_trade['direction'] == 'sell':
             unrealized_pnl = -unrealized_pnl
-
         status["active_trade"] = {
             "pair": active_trade['pair'],
             "type": "Buy" if active_trade['direction'] == 'buy' else "Sell",
@@ -360,7 +342,6 @@ def save_status_json():
             "opened_at": active_trade.get('opened_at'),
             "units": active_trade.get('units')
         }
-
     events = news_cache["events"]
     if events:
         for e in events:
@@ -372,7 +353,6 @@ def save_status_json():
                     "impact": "High"
                 }
                 break
-
     push_status_json(status)
 
 
@@ -398,7 +378,6 @@ def count_all_trades_today():
 
 def load_existing_open_position():
     global active_trade
-
     saved_flags = {}
     if os.path.exists(STATUS_FILE):
         try:
@@ -420,7 +399,6 @@ def load_existing_open_position():
                     }
         except Exception as e:
             print(f"Could not read status.json for restore: {e}")
-
     try:
         resp_pos = retry_api_call(ctx.position.list, ACCOUNT_ID)
         for pos in resp_pos.body['positions']:
@@ -845,7 +823,7 @@ def manage_active_trade():
                     body = {"stopLoss": {"price": f"{new_sl:.5f}"}}
                     retry_api_call(ctx.position.close, ACCOUNT_ID, instrument=pair, data=body)
                     active_trade['sl'] = new_sl
-                    active_trade['trailing_distance'] = f"{TRAILING_ATR_MULT}x M15 ATR"
+                    active_trade['trailing_distance'] = f"{TRAILING_ATR_MULT}x H1 ATR"
                     print(f"Trailing SL updated on {pair} to {new_sl:.5f}")
                     send_telegram_message(f"📈 Trailing SL updated on {pair} to {new_sl:.5f}")
             else:
@@ -854,7 +832,7 @@ def manage_active_trade():
                     body = {"stopLoss": {"price": f"{new_sl:.5f}"}}
                     retry_api_call(ctx.position.close, ACCOUNT_ID, instrument=pair, data=body)
                     active_trade['sl'] = new_sl
-                    active_trade['trailing_distance'] = f"{TRAILING_ATR_MULT}x M15 ATR"
+                    active_trade['trailing_distance'] = f"{TRAILING_ATR_MULT}x H1 ATR"
                     print(f"Trailing SL updated on {pair} to {new_sl:.5f}")
                     send_telegram_message(f"📈 Trailing SL updated on {pair} to {new_sl:.5f}")
         except Exception as e:
@@ -1071,173 +1049,93 @@ def check_closed_trade():
 
 
 def check_signal(df, instrument):
+    """
+    Version simplifiée – retour à la logique H1 avec conditions booléennes.
+    """
     if len(df) < 220:
-        return False, 0, 0, 0, 0, None, "Not enough M15 candles", "Not enough M15 candles", None, 0
-
-    h1 = get_candles(instrument, count=REGIME_CANDLES, granularity=REGIME_GRANULARITY)
-    if len(h1) < 220:
         return False, 0, 0, 0, 0, None, "Not enough H1 candles", "Not enough H1 candles", None, 0
 
     c = df.iloc[-2]
-    prev = df.iloc[-3]
-    h = h1.iloc[-2]
+    h = df.iloc[-2]  # même timeframe H1 pour régime et exécution
+
     config = PAIR_CONFIG[instrument]
     atr = float(c['atr'])
-    if any(pd.isna(c[x]) for x in ['atr','ema20','ema50','rsi','adx','plus_di','minus_di']):
-        return False, 0, 0, 0, 0, None, "Missing M15 indicators", "Missing M15 indicators", None, 0
-    if any(pd.isna(h[x]) for x in ['ema50','ema200','adx']):
-        return False, 0, 0, 0, 0, None, "Missing H1 regime", "Missing H1 regime", None, 0
+    if any(pd.isna(c[x]) for x in ['atr','ema50','ema200','rsi','adx','plus_di','minus_di']):
+        return False, 0, 0, 0, 0, None, "Missing indicators", "Missing indicators", None, 0
 
-    h1_up = h['ema50'] > h['ema200'] and h['c'] > h['ema50']
-    h1_down = h['ema50'] < h['ema200'] and h['c'] < h['ema50']
-    h1_trending = h['adx'] >= max(18, config['ADX_THRESHOLD'] - 2)
+    h1_up = c['ema50'] > c['ema200'] and c['c'] > c['ema50']
+    h1_down = c['ema50'] < c['ema200'] and c['c'] < c['ema50']
+
+    sentiment = news_sentiment_filter.get(instrument, 'neutral')
 
     buy_reasons = []
     sell_reasons = []
 
-    if not h1_trending:
-        reason = f"H1 regime too weak (ADX {h['adx']:.1f})"
-        buy_reasons.append(reason)
-        sell_reasons.append(reason)
-        return False, 0, 0, 0, 0, None, "\n".join(buy_reasons), "\n".join(sell_reasons), None, 0
-
-    extension = abs(c['c'] - c['ema50']) / atr if atr > 0 else 99
-    if extension > MAX_ENTRY_EXTENSION_ATR:
-        reason = f"Entry too extended ({extension:.2f} ATR)"
-        buy_reasons.append(reason)
-        sell_reasons.append(reason)
-        return False, 0, 0, 0, 0, None, "\n".join(buy_reasons), "\n".join(sell_reasons), None, 0
-
-    sentiment = news_sentiment_filter.get(instrument, 'neutral')
-
-    # Conditions de rejet assouplies
-    bull_rejection = (c['c'] > c['o'] and c['l'] <= c['ema20'] * 1.0015 and c['c'] > c['ema20'] and c['body_ratio'] >= 0.40)
-    bear_rejection = (c['c'] < c['o'] and c['h'] >= c['ema20'] * 0.9985 and c['c'] < c['ema20'] and c['body_ratio'] >= 0.40)
-    momentum_buy = c['plus_di'] > c['minus_di'] and c['rsi'] >= 50 and c['rsi'] <= 70   # MODIFIÉ : 68 → 70
-    momentum_sell = c['minus_di'] > c['plus_di'] and c['rsi'] <= 50 and c['rsi'] >= 30  # MODIFIÉ : 48 → 50, 32 → 30
-    adx_ok = c['adx'] >= config['ADX_THRESHOLD']
-    macd_buy = c['macd_line'] > c['macd_signal']
-    macd_sell = c['macd_line'] < c['macd_signal']
-
-    # Setup A: Pullback - BUY
-    if h1_up and sentiment != 'bearish' and bull_rejection and momentum_buy and adx_ok:
-        score = 0
-        score += 2
-        score += 2
-        score += 1 if c['adx'] >= config['ADX_THRESHOLD'] + 5 else 0
-        score += 1 if c['plus_di'] > c['minus_di'] else 0
-        score += 1 if 52 <= c['rsi'] <= 68 else 0   # on garde cette plage pour un bonus
-        score += 1 if macd_buy else 0
-        score += 1 if c['c'] > prev['h'] else 0
-        if score >= MIN_SETUP_SCORE:
+    # --- Signal BUY (simplifié) ---
+    if h1_up and sentiment != 'bearish':
+        adx_ok = c['adx'] >= config['ADX_THRESHOLD']
+        plus_di_ok = c['plus_di'] > c['minus_di']
+        macd_ok = c['macd_line'] > c['macd_signal'] if USE_MACD_FILTER else True
+        rsi_ok = 30 < c['rsi'] < 70
+        # Toucher de l'EMA50 (simple croisement)
+        touched_ema = (c['l'] <= c['ema50'] <= c['h']) or (c['c'] > c['ema50'] and c['o'] < c['ema50'])
+        if adx_ok and plus_di_ok and macd_ok and rsi_ok and touched_ema:
+            # Calcul du stop et TP
             levels = setup_stop_and_target(df, 'buy', float(c['c']), config, 'pullback')
             if levels:
                 sl, tp, sl_pips, atr_val = levels
                 return True, float(c['c']), sl, tp, sl_pips, 'buy', "", "", 'pullback', RISK_PERCENT
         else:
-            buy_reasons.append(f"Pullback BUY score {score}/{MIN_SETUP_SCORE} too low")
+            if not adx_ok:
+                buy_reasons.append(f"ADX too low ({c['adx']:.1f} < {config['ADX_THRESHOLD']})")
+            if not plus_di_ok:
+                buy_reasons.append("+DI not > -DI")
+            if not macd_ok:
+                buy_reasons.append("MACD not bullish")
+            if not rsi_ok:
+                buy_reasons.append(f"RSI out of range ({c['rsi']:.1f})")
+            if not touched_ema:
+                buy_reasons.append("Price did not touch EMA50")
     else:
         if not h1_up:
-            buy_reasons.append("H1 trend not up for BUY")
+            buy_reasons.append("H1 trend not up")
         if sentiment == 'bearish':
-            buy_reasons.append("Sentiment bearish blocks BUY")
-        if not bull_rejection:
-            buy_reasons.append("No bullish rejection at EMA20")
-        if not momentum_buy:
-            buy_reasons.append("Momentum not favorable for BUY")
-        if not adx_ok:
-            buy_reasons.append(f"ADX too low ({c['adx']:.1f} < {config['ADX_THRESHOLD']})")
+            buy_reasons.append("Sentiment bearish")
 
-    # Setup A: Pullback - SELL
-    if h1_down and sentiment != 'bullish' and bear_rejection and momentum_sell and adx_ok:
-        score = 0
-        score += 2
-        score += 2
-        score += 1 if c['adx'] >= config['ADX_THRESHOLD'] + 5 else 0
-        score += 1 if c['minus_di'] > c['plus_di'] else 0
-        score += 1 if 32 <= c['rsi'] <= 48 else 0   # plage bonus
-        score += 1 if macd_sell else 0
-        score += 1 if c['c'] < prev['l'] else 0
-        if score >= MIN_SETUP_SCORE:
+    # --- Signal SELL (simplifié) ---
+    if h1_down and sentiment != 'bullish':
+        adx_ok = c['adx'] >= config['ADX_THRESHOLD']
+        minus_di_ok = c['minus_di'] > c['plus_di']
+        macd_ok = c['macd_line'] < c['macd_signal'] if USE_MACD_FILTER else True
+        rsi_ok = 30 < c['rsi'] < 70
+        touched_ema = (c['l'] <= c['ema50'] <= c['h']) or (c['c'] < c['ema50'] and c['o'] > c['ema50'])
+        if adx_ok and minus_di_ok and macd_ok and rsi_ok and touched_ema:
             levels = setup_stop_and_target(df, 'sell', float(c['c']), config, 'pullback')
             if levels:
                 sl, tp, sl_pips, atr_val = levels
                 return True, float(c['c']), sl, tp, sl_pips, 'sell', "", "", 'pullback', RISK_PERCENT
         else:
-            sell_reasons.append(f"Pullback SELL score {score}/{MIN_SETUP_SCORE} too low")
+            if not adx_ok:
+                sell_reasons.append(f"ADX too low ({c['adx']:.1f} < {config['ADX_THRESHOLD']})")
+            if not minus_di_ok:
+                sell_reasons.append("-DI not > +DI")
+            if not macd_ok:
+                sell_reasons.append("MACD not bearish")
+            if not rsi_ok:
+                sell_reasons.append(f"RSI out of range ({c['rsi']:.1f})")
+            if not touched_ema:
+                sell_reasons.append("Price did not touch EMA50")
     else:
         if not h1_down:
-            sell_reasons.append("H1 trend not down for SELL")
+            sell_reasons.append("H1 trend not down")
         if sentiment == 'bullish':
-            sell_reasons.append("Sentiment bullish blocks SELL")
-        if not bear_rejection:
-            sell_reasons.append("No bearish rejection at EMA20")
-        if not momentum_sell:
-            sell_reasons.append("Momentum not favorable for SELL")
-        if not adx_ok:
-            sell_reasons.append(f"ADX too low ({c['adx']:.1f} < {config['ADX_THRESHOLD']})")
-
-    # Setup B: Breakout
-    if len(df) >= BREAKOUT_LOOKBACK + 5:
-        box = df.iloc[-(BREAKOUT_LOOKBACK + 2):-2]
-        resistance = float(box['h'].max())
-        support = float(box['l'].min())
-        buffer = BREAKOUT_BUFFER_ATR * atr
-        buy_break = prev['c'] > resistance + buffer and c['l'] <= resistance + buffer and c['c'] > resistance
-        sell_break = prev['c'] < support - buffer and c['h'] >= support - buffer and c['c'] < support
-        breakout_quality_buy = c['body_ratio'] >= 0.55 and c['c'] > c['o'] and c['adx'] >= config['ADX_THRESHOLD']
-        breakout_quality_sell = c['body_ratio'] >= 0.55 and c['c'] < c['o'] and c['adx'] >= config['ADX_THRESHOLD']
-
-        if h1_up and sentiment != 'bearish' and buy_break and breakout_quality_buy and c['plus_di'] > c['minus_di']:
-            score = 2 + 2 + 1
-            score += 1 if c['adx'] >= config['ADX_THRESHOLD'] + 5 else 0
-            score += 1 if c['rsi'] < 72 else 0
-            score += 1 if macd_buy else 0
-            score += 1 if c['c'] > c['ema20'] else 0
-            if score >= MIN_SETUP_SCORE:
-                levels = setup_stop_and_target(df, 'buy', float(c['c']), config, 'breakout')
-                if levels:
-                    sl, tp, sl_pips, atr_val = levels
-                    return True, float(c['c']), sl, tp, sl_pips, 'buy', "", "", 'breakout', RISK_PERCENT_BREAKOUT
-            else:
-                buy_reasons.append(f"Breakout BUY score {score}/{MIN_SETUP_SCORE} too low")
-        else:
-            if not h1_up:
-                buy_reasons.append("H1 not up for breakout BUY")
-            if not buy_break:
-                buy_reasons.append("No breakout BUY setup")
-            if not breakout_quality_buy:
-                buy_reasons.append("Breakout quality (body/ADX) insufficient for BUY")
-            if not (c['plus_di'] > c['minus_di']):
-                buy_reasons.append("+DI not > -DI for BUY")
-
-        if h1_down and sentiment != 'bullish' and sell_break and breakout_quality_sell and c['minus_di'] > c['plus_di']:
-            score = 2 + 2 + 1
-            score += 1 if c['adx'] >= config['ADX_THRESHOLD'] + 5 else 0
-            score += 1 if c['rsi'] > 28 else 0
-            score += 1 if macd_sell else 0
-            score += 1 if c['c'] < c['ema20'] else 0
-            if score >= MIN_SETUP_SCORE:
-                levels = setup_stop_and_target(df, 'sell', float(c['c']), config, 'breakout')
-                if levels:
-                    sl, tp, sl_pips, atr_val = levels
-                    return True, float(c['c']), sl, tp, sl_pips, 'sell', "", "", 'breakout', RISK_PERCENT_BREAKOUT
-            else:
-                sell_reasons.append(f"Breakout SELL score {score}/{MIN_SETUP_SCORE} too low")
-        else:
-            if not h1_down:
-                sell_reasons.append("H1 not down for breakout SELL")
-            if not sell_break:
-                sell_reasons.append("No breakout SELL setup")
-            if not breakout_quality_sell:
-                sell_reasons.append("Breakout quality (body/ADX) insufficient for SELL")
-            if not (c['minus_di'] > c['plus_di']):
-                sell_reasons.append("-DI not > +DI for SELL")
+            sell_reasons.append("Sentiment bullish")
 
     if not buy_reasons:
         buy_reasons.append("No BUY setup triggered")
     if not sell_reasons:
         sell_reasons.append("No SELL setup triggered")
+
     return False, 0, 0, 0, 0, None, "\n".join(buy_reasons), "\n".join(sell_reasons), None, 0
 
 
@@ -1293,7 +1191,7 @@ def main():
     )
 
     start_msg = (
-        f"🟢 Forex Sniper 7-12 started – max {MAX_TRADES_PER_DAY} trades/day, "
+        f"🟢 Forex Sniper 7-12 started (simplified H1) – max {MAX_TRADES_PER_DAY} trades/day, "
         f"buffer {MIN_MINUTES_BETWEEN_TRADES}min, Buy & Sell. "
         f"({trades_today} already taken)"
     )
