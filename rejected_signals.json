@@ -1,4 +1,20 @@
 {
-  "signals": [],
+  "signals": [
+    {
+      "time": "07:00:26",
+      "pair": "EUR_USD",
+      "direction": null,
+      "buy_reason": "No bullish rejection at EMA20\nNo breakout BUY setup\nBreakout quality (body/ADX) insufficient for BUY",
+      "sell_reason": "H1 trend not down for SELL\nNo bearish rejection at EMA20\nMomentum not favorable for SELL\nH1 not down for breakout SELL\nNo breakout SELL setup\n-DI not > +DI for SELL",
+      "spread": 0.0001500000000000945,
+      "adx": 50.619510388885466,
+      "plus_di": 26.55370702131546,
+      "minus_di": 10.03944619115272,
+      "ema50": 1.1683906227439311,
+      "ema200": 1.1641778913543255,
+      "rsi": 62.21947305370599,
+      "atr": 0.0007021428571428892
+    }
+  ],
   "last_cleanup": "2026-08-20"
 }
