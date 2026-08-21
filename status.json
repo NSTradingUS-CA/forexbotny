@@ -1,6 +1,6 @@
 {
-  "time": "2026-08-20 12:05:13",
-  "bot_status": "stopped",
+  "time": "2026-08-21 06:30:39",
+  "bot_status": "running",
   "session": {
     "trades_today": 0,
     "max_trades": 3,
@@ -9,7 +9,7 @@
   },
   "active_trade": null,
   "next_news_event": null,
-  "strategy": "H1 regime + M15 pullback/breakout",
+  "strategy": "H1 regime + H1 pullback/breakout (simplified)",
   "max_risk_per_trade_percent": 0.65,
   "daily_loss_limit_percent": 2.0
 }
