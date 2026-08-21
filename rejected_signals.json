@@ -1,4 +1,20 @@
 {
-  "signals": [],
+  "signals": [
+    {
+      "time": "07:00:28",
+      "pair": "EUR_USD",
+      "direction": null,
+      "buy_reason": "Price did not touch EMA50",
+      "sell_reason": "H1 trend not down",
+      "spread": 0.000140000000000029,
+      "adx": 53.60194683191957,
+      "plus_di": 28.579968586983018,
+      "minus_di": 6.569284654800432,
+      "ema50": 1.1669239610837117,
+      "ema200": 1.160548377183287,
+      "rsi": 61.22043278240039,
+      "atr": 0.0008357142857142888
+    }
+  ],
   "last_cleanup": "2026-08-21"
 }
