@@ -846,7 +846,7 @@ def manage_active_trade():
 def check_signal(df, instrument):
     """
     Évalue 8 setups sur H1.
-    Retourne: signal, price, sl, tp, sl_pips, direction, setup_type, risk_percent
+    Retourne: signal, price, sl, tp, sl_pips, direction, setup_type, risk_percent, reason
     """
     if len(df) < 220:
         return False, 0, 0, 0, 0, None, None, 0, "Not enough candles"
@@ -862,9 +862,9 @@ def check_signal(df, instrument):
     h1_up = c['ema50'] > c['ema200'] and c['c'] > c['ema50']
     h1_down = c['ema50'] < c['ema200'] and c['c'] < c['ema50']
 
-    # Filtres communs (MACD renforcé)
-    macd_bullish = c['macd_line'] > c['macd_signal'] and c['macd_line'] > 0
-    macd_bearish = c['macd_line'] < c['macd_signal'] and c['macd_line'] < 0
+    # Filtres communs (MACD assoupli : uniquement le croisement, pas de condition par rapport à zéro)
+    macd_bullish = c['macd_line'] > c['macd_signal']
+    macd_bearish = c['macd_line'] < c['macd_signal']
     adx_ok = c['adx'] >= config['ADX_THRESHOLD']
     rsi_bull = 30 < c['rsi'] < 70
     rsi_bear = 30 < c['rsi'] < 70
@@ -1034,7 +1034,7 @@ def check_signal(df, instrument):
         best = signals[0]
         return True, best[0], best[1], best[2], best[3], best[4], best[5], best[6], f"{best[5]} selected"
     else:
-        # Construire les raisons de rejet synthétiques
+        # Construire les raisons de rejet SANS les préfixes "BUY:" et "SELL:"
         buy_reasons = []
         sell_reasons = []
         if not h1_up:
@@ -1060,7 +1060,8 @@ def check_signal(df, instrument):
             buy_reasons.append("No BUY setup triggered")
         if not sell_reasons:
             sell_reasons.append("No SELL setup triggered")
-        return False, 0, 0, 0, 0, None, None, 0, f"BUY: {', '.join(buy_reasons)} | SELL: {', '.join(sell_reasons)}"
+        # Retourner une chaîne unique sans préfixes "BUY:" et "SELL:"
+        return False, 0, 0, 0, 0, None, None, 0, f"{', '.join(buy_reasons)} | {', '.join(sell_reasons)}"
 
 
 # ---------- News alert ----------
@@ -1297,11 +1298,15 @@ def main():
                         candidates.append((pair, price, sl, tp, sl_pips, direction, setup_type, risk_pct, reason))
                     else:
                         c = df.iloc[-2]
+                        # On sépare la raison en buy_reason et sell_reason pour le JSON
+                        parts = reason.split("|")
+                        buy_reason = parts[0].strip() if len(parts) > 0 else reason
+                        sell_reason = parts[1].strip() if len(parts) > 1 else ""
                         rejected_signals.append({
                             "time": now.strftime("%H:%M:%S"),
                             "pair": pair,
-                            "buy_reason": reason.split("|")[0].strip() if "|" in reason else reason,
-                            "sell_reason": reason.split("|")[1].strip() if "|" in reason else reason,
+                            "buy_reason": buy_reason,
+                            "sell_reason": sell_reason,
                             "spread": spread,
                             "adx": c['adx'] if not pd.isna(c['adx']) else None,
                             "plus_di": c['plus_di'] if not pd.isna(c['plus_di']) else None,
@@ -1452,7 +1457,7 @@ def place_trade(instrument, entry, sl, tp, units, direction, setup_type, risk_pe
     return True
 
 
-# ---------- Fonction check_closed_trade (inchangée) ----------
+# ---------- Fonction check_closed_trade ----------
 def check_closed_trade():
     global active_trade, last_close_time
     if active_trade is None:
