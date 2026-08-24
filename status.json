@@ -1,5 +1,5 @@
 {
-  "time": "2026-08-21 12:04:59",
+  "time": "2026-08-24 06:30:37",
   "bot_status": "running",
   "session": {
     "trades_today": 0,
@@ -8,8 +8,12 @@
     "end": "11:00"
   },
   "active_trade": null,
-  "next_news_event": null,
-  "strategy": "H1 regime + H1 pullback/breakout (simplified)",
+  "next_news_event": {
+    "title": "CPI m/m",
+    "time": "21:30",
+    "impact": "High"
+  },
+  "strategy": "H1 Multi-Setup (8 types)",
   "max_risk_per_trade_percent": 0.65,
   "daily_loss_limit_percent": 2.0
 }
