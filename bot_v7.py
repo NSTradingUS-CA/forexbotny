@@ -862,7 +862,7 @@ def check_signal(df, instrument):
     h1_up = c['ema50'] > c['ema200'] and c['c'] > c['ema50']
     h1_down = c['ema50'] < c['ema200'] and c['c'] < c['ema50']
 
-    # Filtres communs (MACD assoupli : uniquement le croisement, pas de condition par rapport à zéro)
+    # Filtres communs (MACD assoupli : uniquement le croisement)
     macd_bullish = c['macd_line'] > c['macd_signal']
     macd_bearish = c['macd_line'] < c['macd_signal']
     adx_ok = c['adx'] >= config['ADX_THRESHOLD']
@@ -1026,7 +1026,7 @@ def check_signal(df, instrument):
 
     # --- Sélection du meilleur signal ---
     if signals:
-        # Ordre de priorité (index dans la liste des signaux)
+        # Ordre de priorité
         priority = {'Engulfing': 1, 'Pin Bar': 2, 'Pullback': 3, 'Support': 4, 'Resistance': 4,
                     'Breakout': 5, 'Inside Bar': 6, 'Momentum': 7, 'ORB': 8}
         # Trier par priorité puis par SL le plus serré
@@ -1034,7 +1034,7 @@ def check_signal(df, instrument):
         best = signals[0]
         return True, best[0], best[1], best[2], best[3], best[4], best[5], best[6], f"{best[5]} selected"
     else:
-        # Construire les raisons de rejet SANS les préfixes "BUY:" et "SELL:"
+        # Construire les raisons de rejet SANS les préfixes
         buy_reasons = []
         sell_reasons = []
         if not h1_up:
@@ -1060,7 +1060,6 @@ def check_signal(df, instrument):
             buy_reasons.append("No BUY setup triggered")
         if not sell_reasons:
             sell_reasons.append("No SELL setup triggered")
-        # Retourner une chaîne unique sans préfixes "BUY:" et "SELL:"
         return False, 0, 0, 0, 0, None, None, 0, f"{', '.join(buy_reasons)} | {', '.join(sell_reasons)}"
 
 
@@ -1298,7 +1297,6 @@ def main():
                         candidates.append((pair, price, sl, tp, sl_pips, direction, setup_type, risk_pct, reason))
                     else:
                         c = df.iloc[-2]
-                        # On sépare la raison en buy_reason et sell_reason pour le JSON
                         parts = reason.split("|")
                         buy_reason = parts[0].strip() if len(parts) > 0 else reason
                         sell_reason = parts[1].strip() if len(parts) > 1 else ""
@@ -1320,7 +1318,6 @@ def main():
                         print(f" -> REJECTED {pair}: {reason[:80]}...")
 
                 if candidates:
-                    # Sélection du meilleur candidat (par priorité déjà triée dans check_signal)
                     best = candidates[0]
                     pair, price, sl, tp, sl_pips, direction, setup_type, risk_pct, reason = best
                     print(f" -> SIGNAL {direction} {pair} [{setup_type}]")
@@ -1368,10 +1365,12 @@ def place_trade(instrument, entry, sl, tp, units, direction, setup_type, risk_pe
         current = bid if direction == 'sell' else ask
     except:
         current = None
+    
     if current is not None:
         atr = active_trade.get('atr', 0.0001) if active_trade else 0.0001
         if abs(current - entry) > MAX_SLIPPAGE_ATR_FACTOR * atr:
-            send_telegram_message(f"⚠️ Slippage too high for {instrument}: entry {entry:.5f} vs {current:.5f}")
+            # Alerte supprimée : on imprime simplement dans les logs
+            print(f"Slippage too high for {instrument}: entry {entry:.5f} vs current {current:.5f} - order cancelled.")
             return False
 
     expiry = datetime.now(tz) + timedelta(minutes=LIMIT_ORDER_EXPIRY_MINUTES)
