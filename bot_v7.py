@@ -1401,7 +1401,7 @@ def place_trade(instrument, entry, sl, tp, units, direction, setup_type, risk_pe
     try:
         fill = r.body.get('orderFillTransaction', r.body.get('orderCreateTransaction'))
         if not fill:
-            send_telegram_message(f"⚠️ LIMIT order created but not filled immediately for {instrument}")
+            print(f"LIMIT order created but not filled immediately for {instrument}")
             return False
         trade = fill.tradeOpened
         active_trade = {
