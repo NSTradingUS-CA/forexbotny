@@ -308,7 +308,7 @@ def save_status_json():
         },
         "active_trade": None,
         "next_news_event": None,
-        "strategy": "H1 Multi-Setup (8 types)",
+        "strategy": "H1 Multi-Setup (8 types) - Quality Score based",
         "max_risk_per_trade_percent": max(RISK_PULLBACK, RISK_BREAKOUT, RISK_PINBAR, RISK_INSIDE_BAR,
                                           RISK_SUPPORT_RESISTANCE, RISK_MOMENTUM_CONTINU, RISK_ENGULFING, RISK_ORB),
         "daily_loss_limit_percent": DAILY_LOSS_LIMIT_PERCENT
@@ -842,6 +842,88 @@ def manage_active_trade():
             print(f"Trailing update failed: {e}")
 
 
+# ================== FONCTION DE CALCUL DE SCORE DE QUALITÉ ==================
+def compute_quality_score(signal, c, df, instrument, config, atr):
+    """
+    Calcule un score de qualité technique pour un signal donné (entre 0 et 100).
+    signal est un tuple: (price, sl, tp, sl_pips, direction, setup_type, risk_pct)
+    """
+    price, sl, tp, sl_pips, direction, setup_type, risk_pct = signal
+    h1_up = c['ema50'] > c['ema200'] and c['c'] > c['ema50']
+    h1_down = c['ema50'] < c['ema200'] and c['c'] < c['ema50']
+
+    # 1. ADX (0-20)
+    adx_score = min(c['adx'] / 50.0, 1.0) * 20
+
+    # 2. Écart DI (0-15)
+    di_spread = abs(c['plus_di'] - c['minus_di'])
+    di_score = min(di_spread / 30.0, 1.0) * 15
+
+    # 3. RSI optimal (0-15)
+    if direction == 'buy':
+        ideal_low, ideal_high = 55, 65
+    else:  # sell
+        ideal_low, ideal_high = 35, 45
+    rsi = c['rsi']
+    if ideal_low <= rsi <= ideal_high:
+        rsi_score = 15
+    elif rsi < ideal_low:
+        # Décroissance linéaire de 0 à ideal_low
+        rsi_score = max(0, (rsi / ideal_low) * 15)
+    else:  # rsi > ideal_high
+        # Décroissance linéaire de ideal_high à 100
+        rsi_score = max(0, ((100 - rsi) / (100 - ideal_high)) * 15)
+
+    # 4. Body ratio (0-20)
+    body_ratio = c['body_ratio'] if not pd.isna(c['body_ratio']) else 0.0
+    body_score = min(body_ratio, 1.0) * 20
+
+    # 5. Force du rejet (0-10) pour les setups avec rejet
+    rejection_score = 5  # valeur par défaut pour les setups sans rejet
+    if setup_type in ['Pullback', 'Pin Bar', 'Support', 'Resistance']:
+        if direction == 'buy':
+            # Mèche basse relative à la range
+            rejection = (c['o'] - c['l']) / c['range'] if c['range'] > 0 else 0
+        else:
+            # Mèche haute
+            rejection = (c['h'] - c['o']) / c['range'] if c['range'] > 0 else 0
+        rejection_score = min(rejection * 2, 1.0) * 10  # normalisé sur 10
+    elif setup_type == 'Engulfing':
+        # Engulfing a un rejet implicite fort
+        rejection_score = 8
+    elif setup_type == 'Breakout':
+        rejection_score = 6
+    # Inside Bar, Momentum, ORB gardent la valeur par défaut (5)
+
+    # 6. Proximité de l'EMA50 (0-10) pour les Pullback, Sinon valeur par défaut
+    ema_proximity_score = 5  # défaut
+    if setup_type == 'Pullback':
+        dist_ema = abs(c['c'] - c['ema50']) / atr if atr > 0 else 99
+        # Plus la distance est petite, meilleur est le score (max si dist < 0.2 ATR)
+        if dist_ema < 0.2:
+            ema_proximity_score = 10
+        else:
+            ema_proximity_score = max(0, 10 * (1 - (dist_ema - 0.2) / 5))
+            # On plafonne à 10
+        ema_proximity_score = min(ema_proximity_score, 10)
+
+    # 7. SL en pips (0-10) - plus petit = meilleur
+    sl_score = 0
+    if MIN_SL_PIPS < MAX_SL_PIPS:
+        # Normaliser entre MIN et MAX
+        norm = (sl_pips - MIN_SL_PIPS) / (MAX_SL_PIPS - MIN_SL_PIPS)
+        # Plus norm est petit, meilleur est le score
+        sl_score = (1 - min(max(norm, 0), 1)) * 10
+    else:
+        sl_score = 5  # valeur par défaut si les bornes sont identiques
+
+    # Score total (somme des composants, max 100)
+    total_score = adx_score + di_score + rsi_score + body_score + rejection_score + ema_proximity_score + sl_score
+    # On s'assure que le score est entre 0 et 100
+    total_score = min(max(total_score, 0), 100)
+    return total_score
+
+
 # ================== COEUR DE LA STRATÉGIE ==================
 def check_signal(df, instrument):
     """
@@ -879,18 +961,18 @@ def check_signal(df, instrument):
     now = datetime.now(tz)
     if TRADING_HOURS_START <= now.hour < TRADING_HOURS_START + 1:
         if not orb_range["recorded"]:
-            # Enregistrer le range de la première heure
-            orb_range["high"] = df['h'].tail(4).max()  # 4 bougies H1 = ~1 heure
+            orb_range["high"] = df['h'].tail(4).max()
             orb_range["low"] = df['l'].tail(4).min()
             orb_range["recorded"] = True
             print(f"ORB recorded for {instrument}: high={orb_range['high']:.5f}, low={orb_range['low']:.5f}")
     else:
         orb_range["recorded"] = False
 
-    # Dictionnaire pour collecter les signaux
+    # Dictionnaire pour collecter les signaux (sous forme de tuples)
+    # Chaque signal est un tuple: (price, sl, tp, sl_pips, direction, setup_type, risk_pct)
     signals = []
 
-    # --- 1. ENGULFING (priorité max) ---
+    # --- 1. ENGULFING ---
     if h1_up and sentiment != 'bearish':
         engulfing_buy = c['o'] < prev['l'] and c['c'] > prev['h'] and c['c'] > c['o']
         if engulfing_buy and adx_ok and macd_bullish and rsi_bull:
@@ -906,7 +988,7 @@ def check_signal(df, instrument):
                 sl, tp, sl_pips, atr_val = levels
                 signals.append((c['c'], sl, tp, sl_pips, 'sell', 'Engulfing', RISK_ENGULFING))
 
-    # --- 2. PIN BAR (rejection) ---
+    # --- 2. PIN BAR ---
     if h1_up and sentiment != 'bearish':
         pin_buy = (c['o'] - c['l']) > (c['h'] - c['c']) * 2 and c['c'] > c['o']
         if pin_buy and adx_ok and macd_bullish and rsi_bull:
@@ -922,7 +1004,7 @@ def check_signal(df, instrument):
                 sl, tp, sl_pips, atr_val = levels
                 signals.append((c['c'], sl, tp, sl_pips, 'sell', 'Pin Bar', RISK_PINBAR))
 
-    # --- 3. PULLBACK (EMA50 + rejet) ---
+    # --- 3. PULLBACK ---
     if h1_up and sentiment != 'bearish':
         bull_rejection = (c['o'] - c['l']) > (c['h'] - c['c']) * 2 and c['c'] > c['o']
         touched_ema = (c['l'] <= c['ema50'] <= c['h']) or (c['c'] > c['ema50'] and c['o'] < c['ema50'])
@@ -1011,7 +1093,7 @@ def check_signal(df, instrument):
                 sl, tp, sl_pips, atr_val = levels
                 signals.append((c['c'], sl, tp, sl_pips, 'sell', 'Momentum', RISK_MOMENTUM_CONTINU))
 
-    # --- 8. ORB (après la première heure) ---
+    # --- 8. ORB ---
     if orb_range["recorded"] and now.hour >= TRADING_HOURS_START + 1:
         if h1_up and sentiment != 'bearish' and c['c'] > orb_range["high"]:
             levels = setup_stop_and_target(df, 'buy', c['c'], config, 'orb')
@@ -1024,15 +1106,19 @@ def check_signal(df, instrument):
                 sl, tp, sl_pips, atr_val = levels
                 signals.append((c['c'], sl, tp, sl_pips, 'sell', 'ORB', RISK_ORB))
 
-    # --- Sélection du meilleur signal ---
+    # --- Sélection du meilleur signal basé sur le score de qualité ---
     if signals:
-        # Ordre de priorité
-        priority = {'Engulfing': 1, 'Pin Bar': 2, 'Pullback': 3, 'Support': 4, 'Resistance': 4,
-                    'Breakout': 5, 'Inside Bar': 6, 'Momentum': 7, 'ORB': 8}
-        # Trier par priorité puis par SL le plus serré
-        signals.sort(key=lambda x: (priority.get(x[4], 99), x[3]))
-        best = signals[0]
-        return True, best[0], best[1], best[2], best[3], best[4], best[5], best[6], f"{best[5]} selected"
+        # Calculer le score de qualité pour chaque signal
+        scored_signals = []
+        for sig in signals:
+            score = compute_quality_score(sig, c, df, instrument, config, atr)
+            # sig est un tuple: (price, sl, tp, sl_pips, direction, setup_type, risk_pct)
+            scored_signals.append((score, sig))
+        # Trier par score décroissant
+        scored_signals.sort(key=lambda x: x[0], reverse=True)
+        best_score, best_signal = scored_signals[0]
+        price, sl, tp, sl_pips, direction, setup_type, risk_pct = best_signal
+        return True, price, sl, tp, sl_pips, direction, setup_type, risk_pct, f"{setup_type} selected (score {best_score:.1f})"
     else:
         # Construire les raisons de rejet SANS les préfixes
         buy_reasons = []
@@ -1116,7 +1202,7 @@ def main():
 
     start_msg = (
         f"🟢 Forex Sniper 7-12 Multi-Setup started – max {MAX_TRADES_PER_DAY} trades/day, "
-        f"buffer {MIN_MINUTES_BETWEEN_TRADES}min, 8 setups. ({trades_today} already taken)"
+        f"buffer {MIN_MINUTES_BETWEEN_TRADES}min, 8 setups. Quality Score selection. ({trades_today} already taken)"
     )
     print(start_msg)
     send_telegram_message(start_msg)
@@ -1318,9 +1404,10 @@ def main():
                         print(f" -> REJECTED {pair}: {reason[:80]}...")
 
                 if candidates:
+                    # Sélection du meilleur candidat (déjà trié par score dans check_signal)
                     best = candidates[0]
                     pair, price, sl, tp, sl_pips, direction, setup_type, risk_pct, reason = best
-                    print(f" -> SIGNAL {direction} {pair} [{setup_type}]")
+                    print(f" -> SIGNAL {direction} {pair} [{setup_type}] {reason}")
                     sl_distance = abs(price - sl)
                     units = calculate_units(balance, sl_distance, pair, risk_pct)
                     if units >= 1000:
@@ -1369,7 +1456,6 @@ def place_trade(instrument, entry, sl, tp, units, direction, setup_type, risk_pe
     if current is not None:
         atr = active_trade.get('atr', 0.0001) if active_trade else 0.0001
         if abs(current - entry) > MAX_SLIPPAGE_ATR_FACTOR * atr:
-            # Alerte supprimée : on imprime simplement dans les logs
             print(f"Slippage too high for {instrument}: entry {entry:.5f} vs current {current:.5f} - order cancelled.")
             return False
 
@@ -1438,6 +1524,7 @@ def place_trade(instrument, entry, sl, tp, units, direction, setup_type, risk_pe
            f"TP1: {tp1:.5f} (1R, {TP_PARTIAL_RATIO:.0%})\n"
            f"TP2: {tp2:.5f} (2R)\n"
            f"R/R: 1:2\n"
+           f"Quality score: {reason.split('score')[1].strip() if 'score' in reason else 'N/A'}\n"
            f"Time: {datetime.now(tz).strftime('%Y-%m-%d %H:%M:%S')}")
     send_telegram_message(msg)
     log_trade({
