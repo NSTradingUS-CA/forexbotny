@@ -57,6 +57,7 @@ USE_MACD_FILTER = True
 MACD_FAST = 5
 MACD_SLOW = 13
 MACD_SIGNAL = 9
+MACD_TOLERANCE = 0.0001          # <--- NOUVEAU
 USE_VOLUME_FILTER = False
 
 BE_R_MULT = 1.0
@@ -72,8 +73,8 @@ NEWS_WARNING_MINUTES = 15
 NEWS_CHECK_FUTURE_HOURS = 24
 
 PAIR_CONFIG = {
-    "EUR_USD": {"MAX_SPREAD_PIPS": 2.5, "ADX_THRESHOLD": 20, "ATR_MULTIPLIER": 2.0},
-    "GBP_USD": {"MAX_SPREAD_PIPS": 3.0, "ADX_THRESHOLD": 15, "ATR_MULTIPLIER": 2.0}
+    "EUR_USD": {"MAX_SPREAD_PIPS": 2.5, "ADX_THRESHOLD": 18, "ATR_MULTIPLIER": 2.0},   # MODIFIÉ : 20 → 18
+    "GBP_USD": {"MAX_SPREAD_PIPS": 3.0, "ADX_THRESHOLD": 13, "ATR_MULTIPLIER": 2.0}    # MODIFIÉ : 15 → 13
 }
 # ============================
 
@@ -868,10 +869,8 @@ def compute_quality_score(signal, c, df, instrument, config, atr):
     if ideal_low <= rsi <= ideal_high:
         rsi_score = 15
     elif rsi < ideal_low:
-        # Décroissance linéaire de 0 à ideal_low
         rsi_score = max(0, (rsi / ideal_low) * 15)
     else:  # rsi > ideal_high
-        # Décroissance linéaire de ideal_high à 100
         rsi_score = max(0, ((100 - rsi) / (100 - ideal_high)) * 15)
 
     # 4. Body ratio (0-20)
@@ -882,44 +881,34 @@ def compute_quality_score(signal, c, df, instrument, config, atr):
     rejection_score = 5  # valeur par défaut pour les setups sans rejet
     if setup_type in ['Pullback', 'Pin Bar', 'Support', 'Resistance']:
         if direction == 'buy':
-            # Mèche basse relative à la range
             rejection = (c['o'] - c['l']) / c['range'] if c['range'] > 0 else 0
         else:
-            # Mèche haute
             rejection = (c['h'] - c['o']) / c['range'] if c['range'] > 0 else 0
-        rejection_score = min(rejection * 2, 1.0) * 10  # normalisé sur 10
+        rejection_score = min(rejection * 2, 1.0) * 10
     elif setup_type == 'Engulfing':
-        # Engulfing a un rejet implicite fort
         rejection_score = 8
     elif setup_type == 'Breakout':
         rejection_score = 6
-    # Inside Bar, Momentum, ORB gardent la valeur par défaut (5)
 
     # 6. Proximité de l'EMA50 (0-10) pour les Pullback, Sinon valeur par défaut
-    ema_proximity_score = 5  # défaut
+    ema_proximity_score = 5
     if setup_type == 'Pullback':
         dist_ema = abs(c['c'] - c['ema50']) / atr if atr > 0 else 99
-        # Plus la distance est petite, meilleur est le score (max si dist < 0.2 ATR)
         if dist_ema < 0.2:
             ema_proximity_score = 10
         else:
             ema_proximity_score = max(0, 10 * (1 - (dist_ema - 0.2) / 5))
-            # On plafonne à 10
         ema_proximity_score = min(ema_proximity_score, 10)
 
     # 7. SL en pips (0-10) - plus petit = meilleur
     sl_score = 0
     if MIN_SL_PIPS < MAX_SL_PIPS:
-        # Normaliser entre MIN et MAX
         norm = (sl_pips - MIN_SL_PIPS) / (MAX_SL_PIPS - MIN_SL_PIPS)
-        # Plus norm est petit, meilleur est le score
         sl_score = (1 - min(max(norm, 0), 1)) * 10
     else:
-        sl_score = 5  # valeur par défaut si les bornes sont identiques
+        sl_score = 5
 
-    # Score total (somme des composants, max 100)
     total_score = adx_score + di_score + rsi_score + body_score + rejection_score + ema_proximity_score + sl_score
-    # On s'assure que le score est entre 0 et 100
     total_score = min(max(total_score, 0), 100)
     return total_score
 
@@ -944,9 +933,10 @@ def check_signal(df, instrument):
     h1_up = c['ema50'] > c['ema200'] and c['c'] > c['ema50']
     h1_down = c['ema50'] < c['ema200'] and c['c'] < c['ema50']
 
-    # Filtres communs (MACD assoupli : uniquement le croisement)
-    macd_bullish = c['macd_line'] > c['macd_signal']
-    macd_bearish = c['macd_line'] < c['macd_signal']
+    # Filtres communs (MACD avec tolérance)
+    MACD_TOLERANCE = 0.0001   # <--- NOUVEAU
+    macd_bullish = c['macd_line'] > c['macd_signal'] - MACD_TOLERANCE   # MODIFIÉ
+    macd_bearish = c['macd_line'] < c['macd_signal'] + MACD_TOLERANCE   # MODIFIÉ
     adx_ok = c['adx'] >= config['ADX_THRESHOLD']
     rsi_bull = 30 < c['rsi'] < 70
     rsi_bear = 30 < c['rsi'] < 70
@@ -969,7 +959,6 @@ def check_signal(df, instrument):
         orb_range["recorded"] = False
 
     # Dictionnaire pour collecter les signaux (sous forme de tuples)
-    # Chaque signal est un tuple: (price, sl, tp, sl_pips, direction, setup_type, risk_pct)
     signals = []
 
     # --- 1. ENGULFING ---
@@ -1108,19 +1097,16 @@ def check_signal(df, instrument):
 
     # --- Sélection du meilleur signal basé sur le score de qualité ---
     if signals:
-        # Calculer le score de qualité pour chaque signal
         scored_signals = []
         for sig in signals:
             score = compute_quality_score(sig, c, df, instrument, config, atr)
-            # sig est un tuple: (price, sl, tp, sl_pips, direction, setup_type, risk_pct)
             scored_signals.append((score, sig))
-        # Trier par score décroissant
         scored_signals.sort(key=lambda x: x[0], reverse=True)
         best_score, best_signal = scored_signals[0]
         price, sl, tp, sl_pips, direction, setup_type, risk_pct = best_signal
         return True, price, sl, tp, sl_pips, direction, setup_type, risk_pct, f"{setup_type} selected (score {best_score:.1f})"
     else:
-        # Construire les raisons de rejet SANS les préfixes
+        # Construire les raisons de rejet
         buy_reasons = []
         sell_reasons = []
         if not h1_up:
@@ -1404,7 +1390,6 @@ def main():
                         print(f" -> REJECTED {pair}: {reason[:80]}...")
 
                 if candidates:
-                    # Sélection du meilleur candidat (déjà trié par score dans check_signal)
                     best = candidates[0]
                     pair, price, sl, tp, sl_pips, direction, setup_type, risk_pct, reason = best
                     print(f" -> SIGNAL {direction} {pair} [{setup_type}] {reason}")
