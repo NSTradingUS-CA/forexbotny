@@ -1,4 +1,19 @@
 {
-  "signals": [],
+  "signals": [
+    {
+      "time": "07:00:16",
+      "pair": "EUR_USD",
+      "buy_reason": "H1 not up, MACD not bullish",
+      "sell_reason": "No SELL setup triggered",
+      "spread": 0.00015999999999993797,
+      "adx": 20.832713834472226,
+      "plus_di": 21.154072415086116,
+      "minus_di": 23.120335752181518,
+      "ema50": 1.1668826806464065,
+      "ema200": 1.1639827113580605,
+      "rsi": 46.56036687539772,
+      "atr": 0.0005721428571428465
+    }
+  ],
   "last_cleanup": "2026-08-26"
 }
