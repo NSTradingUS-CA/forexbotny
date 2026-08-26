@@ -1,5 +1,5 @@
 {
-  "time": "2026-08-25 12:04:58",
+  "time": "2026-08-26 06:30:39",
   "bot_status": "running",
   "session": {
     "trades_today": 0,
@@ -9,11 +9,11 @@
   },
   "active_trade": null,
   "next_news_event": {
-    "title": "CPI m/m",
-    "time": "21:30",
+    "title": "Prelim GDP q/q",
+    "time": "08:30",
     "impact": "High"
   },
-  "strategy": "H1 Multi-Setup (8 types)",
+  "strategy": "H1 Multi-Setup (8 types) - Quality Score based",
   "max_risk_per_trade_percent": 0.65,
   "daily_loss_limit_percent": 2.0
 }
