@@ -33,6 +33,7 @@ RISK_SUPPORT_RESISTANCE = 0.50
 RISK_MOMENTUM_CONTINU = 0.40
 RISK_ENGULFING = 0.60
 RISK_ORB = 0.50
+RISK_TREND_BREAKOUT = 0.30          # <--- NOUVEAU setup n°9
 
 DAILY_LOSS_LIMIT_PERCENT = 2.0
 TRADING_HOURS_START = 7
@@ -57,7 +58,7 @@ USE_MACD_FILTER = True
 MACD_FAST = 5
 MACD_SLOW = 13
 MACD_SIGNAL = 9
-MACD_TOLERANCE = 0.0001          # <--- NOUVEAU
+MACD_TOLERANCE = 0.0001
 USE_VOLUME_FILTER = False
 
 BE_R_MULT = 1.0
@@ -73,8 +74,8 @@ NEWS_WARNING_MINUTES = 15
 NEWS_CHECK_FUTURE_HOURS = 24
 
 PAIR_CONFIG = {
-    "EUR_USD": {"MAX_SPREAD_PIPS": 2.5, "ADX_THRESHOLD": 18, "ATR_MULTIPLIER": 2.0},   # MODIFIÉ : 20 → 18
-    "GBP_USD": {"MAX_SPREAD_PIPS": 3.0, "ADX_THRESHOLD": 13, "ATR_MULTIPLIER": 2.0}    # MODIFIÉ : 15 → 13
+    "EUR_USD": {"MAX_SPREAD_PIPS": 2.5, "ADX_THRESHOLD": 18, "ATR_MULTIPLIER": 2.0},
+    "GBP_USD": {"MAX_SPREAD_PIPS": 3.0, "ADX_THRESHOLD": 13, "ATR_MULTIPLIER": 2.0}
 }
 # ============================
 
@@ -309,9 +310,10 @@ def save_status_json():
         },
         "active_trade": None,
         "next_news_event": None,
-        "strategy": "H1 Multi-Setup (8 types) - Quality Score based",
+        "strategy": "H1 Multi-Setup (9 types) - Quality Score based",
         "max_risk_per_trade_percent": max(RISK_PULLBACK, RISK_BREAKOUT, RISK_PINBAR, RISK_INSIDE_BAR,
-                                          RISK_SUPPORT_RESISTANCE, RISK_MOMENTUM_CONTINU, RISK_ENGULFING, RISK_ORB),
+                                          RISK_SUPPORT_RESISTANCE, RISK_MOMENTUM_CONTINU, RISK_ENGULFING,
+                                          RISK_ORB, RISK_TREND_BREAKOUT),
         "daily_loss_limit_percent": DAILY_LOSS_LIMIT_PERCENT
     }
     if active_trade:
@@ -916,7 +918,7 @@ def compute_quality_score(signal, c, df, instrument, config, atr):
 # ================== COEUR DE LA STRATÉGIE ==================
 def check_signal(df, instrument):
     """
-    Évalue 8 setups sur H1.
+    Évalue 9 setups sur H1.
     Retourne: signal, price, sl, tp, sl_pips, direction, setup_type, risk_percent, reason
     """
     if len(df) < 220:
@@ -934,9 +936,9 @@ def check_signal(df, instrument):
     h1_down = c['ema50'] < c['ema200'] and c['c'] < c['ema50']
 
     # Filtres communs (MACD avec tolérance)
-    MACD_TOLERANCE = 0.0001   # <--- NOUVEAU
-    macd_bullish = c['macd_line'] > c['macd_signal'] - MACD_TOLERANCE   # MODIFIÉ
-    macd_bearish = c['macd_line'] < c['macd_signal'] + MACD_TOLERANCE   # MODIFIÉ
+    MACD_TOLERANCE = 0.0001
+    macd_bullish = c['macd_line'] > c['macd_signal'] - MACD_TOLERANCE
+    macd_bearish = c['macd_line'] < c['macd_signal'] + MACD_TOLERANCE
     adx_ok = c['adx'] >= config['ADX_THRESHOLD']
     rsi_bull = 30 < c['rsi'] < 70
     rsi_bear = 30 < c['rsi'] < 70
@@ -1066,16 +1068,17 @@ def check_signal(df, instrument):
                     sl, tp, sl_pips, atr_val = levels
                     signals.append((c['c'], sl, tp, sl_pips, 'sell', 'Inside Bar', RISK_INSIDE_BAR))
 
-    # --- 7. MOMENTUM CONTINU ---
+    # --- 7. MOMENTUM CONTINU (assoupli) ---
+    # MODIFIÉ : suppression de c['c'] > prev['c'] / c['c'] < prev['c']
     if h1_up and sentiment != 'bearish':
-        mom_buy = c['c'] > prev['c'] and c['c'] > c['ema50'] and c['adx'] > 25
+        mom_buy = c['c'] > c['ema50'] and c['adx'] > 25
         if mom_buy and adx_ok and macd_bullish and rsi_bull:
             levels = setup_stop_and_target(df, 'buy', c['c'], config, 'momentum')
             if levels:
                 sl, tp, sl_pips, atr_val = levels
                 signals.append((c['c'], sl, tp, sl_pips, 'buy', 'Momentum', RISK_MOMENTUM_CONTINU))
     if h1_down and sentiment != 'bullish':
-        mom_sell = c['c'] < prev['c'] and c['c'] < c['ema50'] and c['adx'] > 25
+        mom_sell = c['c'] < c['ema50'] and c['adx'] > 25
         if mom_sell and adx_ok and macd_bearish and rsi_bear:
             levels = setup_stop_and_target(df, 'sell', c['c'], config, 'momentum')
             if levels:
@@ -1094,6 +1097,28 @@ def check_signal(df, instrument):
             if levels:
                 sl, tp, sl_pips, atr_val = levels
                 signals.append((c['c'], sl, tp, sl_pips, 'sell', 'ORB', RISK_ORB))
+
+    # --- 9. TREND BREAKOUT (NOUVEAU) ---
+    # Conditions : ADX > 30, MACD bullish/bearish, prix du bon côté de l'EMA50,
+    # cassure du plus haut/bas des 5 bougies, body_ratio >= 0.3, pas de RSI
+    if h1_up and sentiment != 'bearish':
+        # BUY : cassure du plus haut des 5 bougies précédentes
+        high_5 = df['h'].tail(6).iloc[:-1].max()  # max des 5 bougies avant la dernière
+        break_buy = c['c'] > high_5
+        if break_buy and c['adx'] > 30 and macd_bullish and c['c'] > c['ema50'] and c['body_ratio'] >= 0.3:
+            levels = setup_stop_and_target(df, 'buy', c['c'], config, 'trendbreakout')
+            if levels:
+                sl, tp, sl_pips, atr_val = levels
+                signals.append((c['c'], sl, tp, sl_pips, 'buy', 'Trend Breakout', RISK_TREND_BREAKOUT))
+    if h1_down and sentiment != 'bullish':
+        # SELL : cassure du plus bas des 5 bougies précédentes
+        low_5 = df['l'].tail(6).iloc[:-1].min()   # min des 5 bougies avant la dernière
+        break_sell = c['c'] < low_5
+        if break_sell and c['adx'] > 30 and macd_bearish and c['c'] < c['ema50'] and c['body_ratio'] >= 0.3:
+            levels = setup_stop_and_target(df, 'sell', c['c'], config, 'trendbreakout')
+            if levels:
+                sl, tp, sl_pips, atr_val = levels
+                signals.append((c['c'], sl, tp, sl_pips, 'sell', 'Trend Breakout', RISK_TREND_BREAKOUT))
 
     # --- Sélection du meilleur signal basé sur le score de qualité ---
     if signals:
@@ -1188,7 +1213,8 @@ def main():
 
     start_msg = (
         f"🟢 Forex Sniper 7-12 Multi-Setup started – max {MAX_TRADES_PER_DAY} trades/day, "
-        f"buffer {MIN_MINUTES_BETWEEN_TRADES}min, 8 setups. Quality Score selection. ({trades_today} already taken)"
+        f"buffer {MIN_MINUTES_BETWEEN_TRADES}min, 9 setups (incl. Trend Breakout). Quality Score selection. "
+        f"({trades_today} already taken)"
     )
     print(start_msg)
     send_telegram_message(start_msg)
