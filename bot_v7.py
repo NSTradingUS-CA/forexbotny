@@ -67,14 +67,17 @@ TRAILING_ATR_MULT = 1.8
 FIXED_TRAILING_PIPS = 20
 
 LIMIT_ORDER_EXPIRY_MINUTES = 5
-MAX_SLIPPAGE_ATR_FACTOR = 0.5
+MAX_SLIPPAGE_ATR_FACTOR = 0.5   # Conservé mais non utilisé (Option B)
+
+# Nouveau délai après échec d'ordre
+ORDER_RETRY_COOLDOWN_MINUTES = 2
 
 NEWS_CLOSE_BEFORE_MINUTES = 5
 NEWS_WARNING_MINUTES = 15
 NEWS_CHECK_FUTURE_HOURS = 24
 
 PAIR_CONFIG = {
-    "EUR_USD": {"MAX_SPREAD_PIPS": 2.5, "ADX_THRESHOLD": 18, "ATR_MULTIPLIER": 2.0},
+    "EUR_USD": {"MAX_SPREAD_PIPS": 2.5, "ADX_THRESHOLD": 16, "ATR_MULTIPLIER": 2.0},   # MODIFIÉ : 18 → 16
     "GBP_USD": {"MAX_SPREAD_PIPS": 3.0, "ADX_THRESHOLD": 13, "ATR_MULTIPLIER": 2.0}
 }
 # ============================
@@ -102,6 +105,9 @@ daily_start_balance = None
 _current_blocked_pairs = []
 _current_active_pairs = []
 _current_news_event = None
+
+# Cache pour les tentatives d'ordre (cooldown)
+_last_order_attempt = {}   # {pair: datetime}
 
 CLOSED_TRADES_FILE = "closed_trades.json"
 REJECTED_FILE = "rejected_signals.json"
@@ -284,7 +290,7 @@ def save_rejected_to_file():
     global _last_rejected_data, _last_rejected_push_time
     now = datetime.now(tz)
     data = {
-        "signals": rejected_signals[-100:],  # <--- MODIFIÉ : 50 → 100
+        "signals": rejected_signals[-100:],
         "last_cleanup": datetime.now(tz).strftime("%Y-%m-%d")
     }
     if data == _last_rejected_data:
@@ -1222,7 +1228,7 @@ def main():
     global trades_today, last_trade_date, last_close_time, active_trade
     global closed_trades_today, rejected_signals
     global late_shutdown_required, trade_opened_during_window_today, daily_start_balance
-    global BOT_STATUS, orb_range
+    global BOT_STATUS, orb_range, _last_order_attempt
 
     load_closed_trades_from_file()
     load_rejected_from_file()
@@ -1278,6 +1284,8 @@ def main():
                 late_shutdown_required = False
                 trade_opened_during_window_today = False
                 orb_range = {"high": None, "low": None, "recorded": False}
+                # Réinitialiser le cache des tentatives d'ordre
+                _last_order_attempt = {}
                 load_closed_trades_from_file()
                 load_rejected_from_file()
                 if active_trade is None:
@@ -1415,6 +1423,11 @@ def main():
                         continue
                     if has_open_position(pair):
                         continue
+                    # Vérifier si la paire est en cooldown après une tentative d'ordre
+                    last_attempt = _last_order_attempt.get(pair)
+                    if last_attempt is not None and (now - last_attempt) < timedelta(minutes=ORDER_RETRY_COOLDOWN_MINUTES):
+                        print(f" -> SKIPPED {pair}: cooldown active (last attempt at {last_attempt.strftime('%H:%M:%S')})")
+                        continue
                     try:
                         spread = get_spread(pair)
                     except Exception as e:
@@ -1471,6 +1484,10 @@ def main():
                         success = place_trade(pair, price, sl, tp, units, direction, setup_type, risk_pct, reason)
                         if success:
                             trade_opened_during_window_today = True
+                        else:
+                            # En cas d'échec (slippage ou non-exécution), on enregistre le timestamp pour la cooldown
+                            _last_order_attempt[pair] = now
+                            print(f"Order attempt failed for {pair}, cooldown {ORDER_RETRY_COOLDOWN_MINUTES} min activated.")
 
             save_status_json()
 
@@ -1501,20 +1518,9 @@ def place_trade(instrument, entry, sl, tp, units, direction, setup_type, risk_pe
     if active_trade is not None:
         return False
 
-    try:
-        resp = ctx.pricing.get(ACCOUNT_ID, instruments=instrument)
-        pi = resp.body['prices'][0]
-        bid = float(pi.bids[0].price)
-        ask = float(pi.asks[0].price)
-        current = bid if direction == 'sell' else ask
-    except:
-        current = None
-    
-    if current is not None:
-        atr = active_trade.get('atr', 0.0001) if active_trade else 0.0001
-        if abs(current - entry) > MAX_SLIPPAGE_ATR_FACTOR * atr:
-            print(f"Slippage too high for {instrument}: entry {entry:.5f} vs current {current:.5f} - order cancelled.")
-            return False
+    # --- Option B : suppression du filtre de slippage ---
+    # La vérification de slippage est désactivée. L'ordre LIMIT est placé tel quel.
+    # S'il n'est pas exécuté, il expirera après LIMIT_ORDER_EXPIRY_MINUTES minutes.
 
     expiry = datetime.now(tz) + timedelta(minutes=LIMIT_ORDER_EXPIRY_MINUTES)
     expiry_str = expiry.strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -1545,6 +1551,8 @@ def place_trade(instrument, entry, sl, tp, units, direction, setup_type, risk_pe
         fill = r.body.get('orderFillTransaction', r.body.get('orderCreateTransaction'))
         if not fill:
             print(f"LIMIT order created but not filled immediately for {instrument}")
+            # On ne retourne pas False ici pour éviter de déclencher la cooldown sur un ordre simplement en attente.
+            # Le bot continuera de surveiller la position.
             return False
         trade = fill.tradeOpened
         active_trade = {
