@@ -452,43 +452,17 @@ def render_dashboard():
         else:
             st.write("No closed trades.")
 
-    # *************** ONGLET REJECTED (MODIFIÉ : plus de limite) ***************
+    # *************** ONGLET REJECTED (MODIFIÉ) ***************
     with tab2:
         if rejected:
-            for r in rejected[::-1]:   # <--- SUPPRESSION DE [:30]
+            for r in rejected[::-1]:   # tous les rejets, sans limite
                 time_pair = f"{r.get('time','')} {r.get('pair','')}"
                 buy_reason = r.get('buy_reason', '')
                 sell_reason = r.get('sell_reason', '')
-                
-                indicators = ""
-                if 'adx' in r:
-                    spread_val = r.get('spread')
-                    spread_str = f"{spread_val:.5f}" if spread_val is not None else "--"
-                    adx_val = r.get('adx')
-                    adx_str = f"{adx_val:.1f}" if adx_val is not None else "--"
-                    plus_di = r.get('plus_di')
-                    plus_str = f"{plus_di:.1f}" if plus_di is not None else "--"
-                    minus_di = r.get('minus_di')
-                    minus_str = f"{minus_di:.1f}" if minus_di is not None else "--"
-                    ema50 = r.get('ema50')
-                    ema50_str = f"{ema50:.5f}" if ema50 is not None else "--"
-                    ema200 = r.get('ema200')
-                    ema200_str = f"{ema200:.5f}" if ema200 is not None else "--"
-                    rsi = r.get('rsi')
-                    rsi_str = f"{rsi:.1f}" if rsi is not None else "--"
-                    atr = r.get('atr')
-                    atr_str = f"{atr:.5f}" if atr is not None else "--"
-                    indicators = (
-                        f"Spread: {spread_str} | ADX: {adx_str} | +DI: {plus_str} | -DI: {minus_str} | "
-                        f"EMA50: {ema50_str} | EMA200: {ema200_str} | RSI: {rsi_str} | ATR: {atr_str}"
-                    )
-
                 st.markdown(
                     f"**{time_pair}** – 🔵 **BUY:** {buy_reason}    |    🔴 **SELL:** {sell_reason}",
                     unsafe_allow_html=True
                 )
-                if indicators:
-                    st.caption(indicators)
                 st.markdown("---")
         else:
             st.write("No rejected setups.")
