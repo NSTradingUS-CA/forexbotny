@@ -280,8 +280,31 @@ def render_dashboard():
     # ---------- Bannière de pause news ----------
     if pause_until > now_mtl.timestamp():
         resume_time = datetime.fromtimestamp(pause_until, MONTREAL_TZ).strftime('%H:%M')
+        news_event = data.get("next_news_event", {})
+        event_title = news_event.get("title", "")
+        event_time = news_event.get("time", "")
+        blocked_pairs = data.get("blocked_pairs", [])
+        active_pairs = data.get("active_pairs", [])
+        
+        if blocked_pairs and active_pairs:
+            blocked_str = ", ".join(blocked_pairs)
+            active_str = ", ".join(active_pairs)
+            banner_text = (
+                f"📅 {event_title} at {event_time} – "
+                f"Trading paused on {blocked_str} until {resume_time} "
+                f"(Active pairs: {active_str})"
+            )
+        elif blocked_pairs:
+            blocked_str = ", ".join(blocked_pairs)
+            banner_text = (
+                f"📅 {event_title} at {event_time} – "
+                f"Trading paused on {blocked_str} until {resume_time}"
+            )
+        else:
+            banner_text = f"📅 High-impact news detected – Trading paused until {resume_time}"
+        
         st.markdown(
-            f'<div class="news-pause-banner">📅 High-impact news detected – Trading paused until {resume_time}</div>',
+            f'<div class="news-pause-banner">{banner_text}</div>',
             unsafe_allow_html=True
         )
 
@@ -384,10 +407,8 @@ def render_dashboard():
         if trail_info:
             st.caption(f"Trailing Stop: {trail_info}")
 
-        # --- AJOUT : Volume ---
         st.caption(f"Volume: {abs(active.get('units', 0))} units")
 
-        # Ligne de détails enrichie avec BE et TP1
         setup = display_setup(active)
         score = display_score(active)
         risk = display_risk(active)
@@ -422,7 +443,6 @@ def render_dashboard():
             for t in closed_trades[::-1]:
                 pnl = t.get('pnl',0)
                 color = "green" if pnl >= 0 else "red"
-                # --- AJOUT : Volume dans Closed ---
                 st.markdown(
                     f"<span class='{color}'>{t.get('pair','')} {t.get('type','')} – "
                     f"{display_setup(t)} | R: {display_r(t)} | Score: {display_score(t)} | "
@@ -432,15 +452,14 @@ def render_dashboard():
         else:
             st.write("No closed trades.")
 
-    # *************** ONGLET REJECTED (MODIFIÉ) ***************
+    # *************** ONGLET REJECTED (MODIFIÉ : plus de limite) ***************
     with tab2:
         if rejected:
-            for r in rejected[::-1][:30]:
+            for r in rejected[::-1]:   # <--- SUPPRESSION DE [:30]
                 time_pair = f"{r.get('time','')} {r.get('pair','')}"
                 buy_reason = r.get('buy_reason', '')
                 sell_reason = r.get('sell_reason', '')
                 
-                # Construction de la ligne des indicateurs
                 indicators = ""
                 if 'adx' in r:
                     spread_val = r.get('spread')
@@ -464,19 +483,17 @@ def render_dashboard():
                         f"EMA50: {ema50_str} | EMA200: {ema200_str} | RSI: {rsi_str} | ATR: {atr_str}"
                     )
 
-                # Première ligne : heure/pair + BUY + SELL
                 st.markdown(
                     f"**{time_pair}** – 🔵 **BUY:** {buy_reason}    |    🔴 **SELL:** {sell_reason}",
                     unsafe_allow_html=True
                 )
-                # Deuxième ligne : indicateurs (en caption)
                 if indicators:
                     st.caption(indicators)
                 st.markdown("---")
         else:
             st.write("No rejected setups.")
 
-    # *************** ONGLET PERFORMANCE ***************
+    # *************** ONGLET PERFORMANCE (GÉNÉRALISÉ) ***************
     with tab3:
         if not closed_trades:
             st.write("No setups performance stats available yet.")
@@ -485,10 +502,10 @@ def render_dashboard():
             df_trades['setup'] = df_trades['setup'].str.upper()
             df_trades['r_multiple'] = pd.to_numeric(df_trades['r_multiple'], errors='coerce')
             df_trades['score'] = pd.to_numeric(df_trades['score'], errors='coerce')
+            df_trades['pnl'] = pd.to_numeric(df_trades['pnl'], errors='coerce')
 
-            pullback = df_trades[df_trades['setup'] == 'PULLBACK']
-            breakout = df_trades[df_trades['setup'] == 'BREAKOUT']
-            global_df = df_trades
+            all_setups = df_trades['setup'].unique()
+            setup_groups = list(all_setups) + ["Global"]
 
             def compute_metrics(df):
                 if df.empty:
@@ -530,11 +547,7 @@ def render_dashboard():
                     'avg_loss': avg_loss
                 }
 
-            metrics_pullback = compute_metrics(pullback)
-            metrics_breakout = compute_metrics(breakout)
-            metrics_global = compute_metrics(global_df)
-
-            data_table = {
+            metrics_data = {
                 'Métrique': [
                     'Nombre de trades',
                     'Win rate',
@@ -544,40 +557,27 @@ def render_dashboard():
                     'Max drawdown (R)',
                     'Gain moyen (USD)',
                     'Perte moyenne (USD)'
-                ],
-                'PULLBACK': [
-                    f"{metrics_pullback['count']}",
-                    f"{metrics_pullback['win_rate']:.1f}%",
-                    f"{metrics_pullback['avg_r']:.2f}R",
-                    f"{metrics_pullback['expectancy']:.2f}R",
-                    f"{metrics_pullback['profit_factor']:.2f}",
-                    f"-{metrics_pullback['max_drawdown']:.2f}R",
-                    f"{metrics_pullback['avg_gain']:.2f} USD",
-                    f"{metrics_pullback['avg_loss']:.2f} USD"
-                ],
-                'BREAKOUT': [
-                    f"{metrics_breakout['count']}",
-                    f"{metrics_breakout['win_rate']:.1f}%",
-                    f"{metrics_breakout['avg_r']:.2f}R",
-                    f"{metrics_breakout['expectancy']:.2f}R",
-                    f"{metrics_breakout['profit_factor']:.2f}",
-                    f"-{metrics_breakout['max_drawdown']:.2f}R",
-                    f"{metrics_breakout['avg_gain']:.2f} USD",
-                    f"{metrics_breakout['avg_loss']:.2f} USD"
-                ],
-                'Global': [
-                    f"{metrics_global['count']}",
-                    f"{metrics_global['win_rate']:.1f}%",
-                    f"{metrics_global['avg_r']:.2f}R",
-                    f"{metrics_global['expectancy']:.2f}R",
-                    f"{metrics_global['profit_factor']:.2f}",
-                    f"-{metrics_global['max_drawdown']:.2f}R",
-                    f"{metrics_global['avg_gain']:.2f} USD",
-                    f"{metrics_global['avg_loss']:.2f} USD"
                 ]
             }
 
-            df_table = pd.DataFrame(data_table)
+            for setup_name in setup_groups:
+                if setup_name == "Global":
+                    df_filtered = df_trades
+                else:
+                    df_filtered = df_trades[df_trades['setup'] == setup_name]
+                metrics = compute_metrics(df_filtered)
+                metrics_data[setup_name] = [
+                    f"{metrics['count']}",
+                    f"{metrics['win_rate']:.1f}%",
+                    f"{metrics['avg_r']:.2f}R",
+                    f"{metrics['expectancy']:.2f}R",
+                    f"{metrics['profit_factor']:.2f}",
+                    f"-{metrics['max_drawdown']:.2f}R",
+                    f"{metrics['avg_gain']:.2f} USD",
+                    f"{metrics['avg_loss']:.2f} USD"
+                ]
+
+            df_table = pd.DataFrame(metrics_data)
             st.table(df_table)
 
 render_dashboard()
