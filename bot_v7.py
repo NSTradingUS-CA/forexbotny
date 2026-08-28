@@ -33,7 +33,7 @@ RISK_SUPPORT_RESISTANCE = 0.50
 RISK_MOMENTUM_CONTINU = 0.40
 RISK_ENGULFING = 0.60
 RISK_ORB = 0.50
-RISK_TREND_BREAKOUT = 0.30          # <--- NOUVEAU setup n°9
+RISK_TREND_BREAKOUT = 0.30
 
 DAILY_LOSS_LIMIT_PERCENT = 2.0
 TRADING_HOURS_START = 7
@@ -99,6 +99,10 @@ late_shutdown_required = False
 trade_opened_during_window_today = False
 daily_start_balance = None
 
+_current_blocked_pairs = []
+_current_active_pairs = []
+_current_news_event = None
+
 CLOSED_TRADES_FILE = "closed_trades.json"
 REJECTED_FILE = "rejected_signals.json"
 PAUSE_FILE = "pause_state.json"
@@ -133,8 +137,26 @@ def get_next_high_impact_news(now):
     return None
 
 
+def get_affected_pairs(event_title):
+    """Détermine quelle(s) paire(s) sont affectées par une news."""
+    title_lower = event_title.lower()
+    if any(ev.lower() in title_lower for ev in ["nfp", "cpi", "fomc", "interest rate"]):
+        return PAIRS
+    elif "gdp" in title_lower and "uk" not in title_lower:
+        return ["GBP_USD"]
+    elif "retail sales" in title_lower and "uk" in title_lower:
+        return ["GBP_USD"]
+    elif "retail sales" in title_lower:
+        return PAIRS
+    else:
+        return PAIRS
+
+
 def check_and_block_news(now):
+    global _current_blocked_pairs, _current_active_pairs, _current_news_event
     events = get_high_impact_news()
+    blocked_pairs = []
+    affected_pairs = []
     for event in events:
         block_start = event["time"] - timedelta(minutes=NEWS_BLOCK_MINUTES)
         block_end = event["time"] + timedelta(minutes=NEWS_BLOCK_MINUTES)
@@ -142,17 +164,32 @@ def check_and_block_news(now):
             pause_until = block_end.timestamp()
             if get_pause_until() < pause_until:
                 set_pause_until(pause_until)
-                msg = (f"📅 High-impact news detected: {event['title']} at "
-                       f"{event['time'].strftime('%H:%M')} – Trading paused from "
-                       f"{block_start.strftime('%H:%M')} to {block_end.strftime('%H:%M')}")
+                affected_pairs = get_affected_pairs(event['title'])
+                blocked_pairs = affected_pairs
+                _current_blocked_pairs = blocked_pairs
+                _current_active_pairs = [p for p in PAIRS if p not in blocked_pairs]
+                _current_news_event = event
+                if set(affected_pairs) == set(PAIRS):
+                    msg = (f"📅 High-impact news detected: {event['title']} at "
+                           f"{event['time'].strftime('%H:%M')} – Trading paused on ALL pairs from "
+                           f"{block_start.strftime('%H:%M')} to {block_end.strftime('%H:%M')}")
+                else:
+                    active_pairs = [p for p in PAIRS if p not in affected_pairs]
+                    msg = (f"📅 High-impact news detected: {event['title']} at "
+                           f"{event['time'].strftime('%H:%M')} – Trading paused on {', '.join(affected_pairs)} from "
+                           f"{block_start.strftime('%H:%M')} to {block_end.strftime('%H:%M')}\n"
+                           f"(Active pairs: {', '.join(active_pairs)})")
                 send_telegram_message(msg)
                 print(msg)
-            return True, event, event["time"] - now
+            return True, event, event["time"] - now, blocked_pairs
     if get_pause_until() > 0 and now.timestamp() >= get_pause_until():
         set_pause_until(0)
+        _current_blocked_pairs = []
+        _current_active_pairs = PAIRS
+        _current_news_event = None
         send_telegram_message("🟢 News pause lifted – trading resumed")
         print("News pause lifted.")
-    return False, None, None
+    return False, None, None, []
 
 
 def push_file_to_github(local_path, remote_path):
@@ -247,7 +284,7 @@ def save_rejected_to_file():
     global _last_rejected_data, _last_rejected_push_time
     now = datetime.now(tz)
     data = {
-        "signals": rejected_signals[-50:],
+        "signals": rejected_signals[-100:],  # <--- MODIFIÉ : 50 → 100
         "last_cleanup": datetime.now(tz).strftime("%Y-%m-%d")
     }
     if data == _last_rejected_data:
@@ -297,7 +334,7 @@ def push_status_json(data_dict):
 
 
 def save_status_json():
-    global BOT_STATUS
+    global BOT_STATUS, _current_blocked_pairs, _current_active_pairs, _current_news_event
     now = datetime.now(tz)
     status = {
         "time": now.strftime("%Y-%m-%d %H:%M:%S"),
@@ -314,8 +351,29 @@ def save_status_json():
         "max_risk_per_trade_percent": max(RISK_PULLBACK, RISK_BREAKOUT, RISK_PINBAR, RISK_INSIDE_BAR,
                                           RISK_SUPPORT_RESISTANCE, RISK_MOMENTUM_CONTINU, RISK_ENGULFING,
                                           RISK_ORB, RISK_TREND_BREAKOUT),
-        "daily_loss_limit_percent": DAILY_LOSS_LIMIT_PERCENT
+        "daily_loss_limit_percent": DAILY_LOSS_LIMIT_PERCENT,
+        "blocked_pairs": _current_blocked_pairs,
+        "active_pairs": _current_active_pairs,
     }
+    if _current_news_event:
+        status["next_news_event"] = {
+            "title": _current_news_event["title"],
+            "time": _current_news_event["time"].strftime("%H:%M"),
+            "impact": "High"
+        }
+    else:
+        events = news_cache["events"]
+        if events:
+            for e in events:
+                time_since_event = now - e["time"]
+                if time_since_event < timedelta(minutes=30):
+                    status["next_news_event"] = {
+                        "title": e["title"],
+                        "time": e["time"].strftime("%H:%M"),
+                        "impact": "High"
+                    }
+                    break
+
     if active_trade:
         pair = active_trade['pair']
         try:
@@ -351,17 +409,7 @@ def save_status_json():
             "opened_at": active_trade.get('opened_at'),
             "units": active_trade.get('units')
         }
-    events = news_cache["events"]
-    if events:
-        for e in events:
-            time_since_event = now - e["time"]
-            if time_since_event < timedelta(minutes=30):
-                status["next_news_event"] = {
-                    "title": e["title"],
-                    "time": e["time"].strftime("%H:%M"),
-                    "impact": "High"
-                }
-                break
+
     push_status_json(status)
 
 
@@ -1069,7 +1117,6 @@ def check_signal(df, instrument):
                     signals.append((c['c'], sl, tp, sl_pips, 'sell', 'Inside Bar', RISK_INSIDE_BAR))
 
     # --- 7. MOMENTUM CONTINU (assoupli) ---
-    # MODIFIÉ : suppression de c['c'] > prev['c'] / c['c'] < prev['c']
     if h1_up and sentiment != 'bearish':
         mom_buy = c['c'] > c['ema50'] and c['adx'] > 25
         if mom_buy and adx_ok and macd_bullish and rsi_bull:
@@ -1098,12 +1145,9 @@ def check_signal(df, instrument):
                 sl, tp, sl_pips, atr_val = levels
                 signals.append((c['c'], sl, tp, sl_pips, 'sell', 'ORB', RISK_ORB))
 
-    # --- 9. TREND BREAKOUT (NOUVEAU) ---
-    # Conditions : ADX > 30, MACD bullish/bearish, prix du bon côté de l'EMA50,
-    # cassure du plus haut/bas des 5 bougies, body_ratio >= 0.3, pas de RSI
+    # --- 9. TREND BREAKOUT ---
     if h1_up and sentiment != 'bearish':
-        # BUY : cassure du plus haut des 5 bougies précédentes
-        high_5 = df['h'].tail(6).iloc[:-1].max()  # max des 5 bougies avant la dernière
+        high_5 = df['h'].tail(6).iloc[:-1].max()
         break_buy = c['c'] > high_5
         if break_buy and c['adx'] > 30 and macd_bullish and c['c'] > c['ema50'] and c['body_ratio'] >= 0.3:
             levels = setup_stop_and_target(df, 'buy', c['c'], config, 'trendbreakout')
@@ -1111,8 +1155,7 @@ def check_signal(df, instrument):
                 sl, tp, sl_pips, atr_val = levels
                 signals.append((c['c'], sl, tp, sl_pips, 'buy', 'Trend Breakout', RISK_TREND_BREAKOUT))
     if h1_down and sentiment != 'bullish':
-        # SELL : cassure du plus bas des 5 bougies précédentes
-        low_5 = df['l'].tail(6).iloc[:-1].min()   # min des 5 bougies avant la dernière
+        low_5 = df['l'].tail(6).iloc[:-1].min()
         break_sell = c['c'] < low_5
         if break_sell and c['adx'] > 30 and macd_bearish and c['c'] < c['ema50'] and c['body_ratio'] >= 0.3:
             levels = setup_stop_and_target(df, 'sell', c['c'], config, 'trendbreakout')
@@ -1267,46 +1310,48 @@ def main():
 
             # News handling with open trade
             if active_trade is not None:
-                blocked, event, time_until = check_and_block_news(now)
+                blocked, event, time_until, blocked_pairs = check_and_block_news(now)
                 if event is not None and time_until is not None:
                     minutes_until = time_until.total_seconds() / 60.0
                     if minutes_until <= NEWS_WARNING_MINUTES and minutes_until > NEWS_CLOSE_BEFORE_MINUTES:
-                        send_telegram_message(
-                            f"📰 <b>High-impact news in {int(minutes_until)} min:</b> {event['title']} at {event['time'].strftime('%H:%M')}\n"
-                            f"Trade {active_trade['pair']} open. Action in {NEWS_CLOSE_BEFORE_MINUTES} min."
-                        )
+                        if active_trade['pair'] in blocked_pairs:
+                            send_telegram_message(
+                                f"📰 <b>High-impact news in {int(minutes_until)} min:</b> {event['title']} at {event['time'].strftime('%H:%M')}\n"
+                                f"Trade {active_trade['pair']} will be paused. Action in {NEWS_CLOSE_BEFORE_MINUTES} min."
+                            )
                     if minutes_until <= NEWS_CLOSE_BEFORE_MINUTES:
-                        try:
-                            resp = ctx.pricing.get(ACCOUNT_ID, instruments=active_trade['pair'])
-                            pi = resp.body['prices'][0]
-                            bid = float(pi.bids[0].price)
-                            ask = float(pi.asks[0].price)
-                            current = bid if active_trade['direction'] == 'sell' else ask
-                            pnl = (current - active_trade['entry_price']) * active_trade['units']
-                            if active_trade['direction'] == 'sell':
-                                pnl = -pnl
-                        except:
-                            pnl = 0
-                        if pnl > 0:
-                            if close_full_position_market():
-                                send_telegram_message(
-                                    f"🔒 Trade closed before news\n"
-                                    f"Pair: {active_trade['pair']}\n"
-                                    f"P&L: {pnl:.2f} USD\n"
-                                    f"Reason: '{event['title']}' in <5 min."
-                                )
-                                time.sleep(2)
+                        if active_trade['pair'] in blocked_pairs:
+                            try:
+                                resp = ctx.pricing.get(ACCOUNT_ID, instruments=active_trade['pair'])
+                                pi = resp.body['prices'][0]
+                                bid = float(pi.bids[0].price)
+                                ask = float(pi.asks[0].price)
+                                current = bid if active_trade['direction'] == 'sell' else ask
+                                pnl = (current - active_trade['entry_price']) * active_trade['units']
+                                if active_trade['direction'] == 'sell':
+                                    pnl = -pnl
+                            except:
+                                pnl = 0
+                            if pnl > 0:
+                                if close_full_position_market():
+                                    send_telegram_message(
+                                        f"🔒 Trade closed before news\n"
+                                        f"Pair: {active_trade['pair']}\n"
+                                        f"P&L: {pnl:.2f} USD\n"
+                                        f"Reason: '{event['title']}' in <5 min."
+                                    )
+                                    time.sleep(2)
+                                else:
+                                    send_telegram_message("⚠️ Failed to close. Please monitor.")
                             else:
-                                send_telegram_message("⚠️ Failed to close. Please monitor.")
-                        else:
-                            if move_sl_to_entry():
-                                send_telegram_message(
-                                    f"🛡️ SL moved to entry before news\n"
-                                    f"Pair: {active_trade['pair']}\n"
-                                    f"New SL: {active_trade['sl']:.5f}"
-                                )
-                            else:
-                                send_telegram_message("⚠️ Could not move SL. Please monitor.")
+                                if move_sl_to_entry():
+                                    send_telegram_message(
+                                        f"🛡️ SL moved to entry before news\n"
+                                        f"Pair: {active_trade['pair']}\n"
+                                        f"New SL: {active_trade['sl']:.5f}"
+                                    )
+                                else:
+                                    send_telegram_message("⚠️ Could not move SL. Please monitor.")
 
             # Arrêt programmé
             shutdown_1205 = (
@@ -1338,8 +1383,7 @@ def main():
                 main.next_news_check = now + timedelta(seconds=60)
 
             # Blocage news pour nouvelles entrées
-            blocked, _, _ = check_and_block_news(now)
-            news_blocked = blocked
+            blocked, _, _, blocked_pairs = check_and_block_news(now)
 
             in_trading_hours = TRADING_HOURS_START <= now.hour < TRADING_HOURS_END
             can_trade_time = True
@@ -1359,7 +1403,6 @@ def main():
                 active_trade is None
                 and trades_today < MAX_TRADES_PER_DAY
                 and in_trading_hours
-                and not news_blocked
                 and can_trade_time
                 and not daily_loss_blocked
             )
@@ -1367,6 +1410,9 @@ def main():
             if can_trade:
                 candidates = []
                 for pair in PAIRS:
+                    if pair in blocked_pairs:
+                        print(f" -> SKIPPED {pair}: news block active on this pair")
+                        continue
                     if has_open_position(pair):
                         continue
                     try:
