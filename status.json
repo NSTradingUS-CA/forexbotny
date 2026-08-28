@@ -1,5 +1,5 @@
 {
-  "time": "2026-08-28 08:59:57",
+  "time": "2026-08-28 09:01:03",
   "bot_status": "running",
   "session": {
     "trades_today": 0,
@@ -8,11 +8,7 @@
     "end": "11:00"
   },
   "active_trade": null,
-  "next_news_event": {
-    "title": "GDP m/m",
-    "time": "08:30",
-    "impact": "High"
-  },
+  "next_news_event": null,
   "strategy": "H1 Multi-Setup (9 types) - Quality Score based",
   "max_risk_per_trade_percent": 0.65,
   "daily_loss_limit_percent": 2.0
