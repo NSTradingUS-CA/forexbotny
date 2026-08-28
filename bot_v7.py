@@ -1513,14 +1513,11 @@ def main():
         send_telegram_message("🔴 Bot stopped manually (Ctrl+C)")
 
 
+# ---------- FONCTION PLACE_TRADE MODIFIÉE ----------
 def place_trade(instrument, entry, sl, tp, units, direction, setup_type, risk_percent, reason):
-    global active_trade, trades_today
+    global active_trade, trades_today, rejected_signals
     if active_trade is not None:
         return False
-
-    # --- Option B : suppression du filtre de slippage ---
-    # La vérification de slippage est désactivée. L'ordre LIMIT est placé tel quel.
-    # S'il n'est pas exécuté, il expirera après LIMIT_ORDER_EXPIRY_MINUTES minutes.
 
     expiry = datetime.now(tz) + timedelta(minutes=LIMIT_ORDER_EXPIRY_MINUTES)
     expiry_str = expiry.strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -1544,15 +1541,23 @@ def place_trade(instrument, entry, sl, tp, units, direction, setup_type, risk_pe
 
     r = retry_api_call(ctx.order.create, ACCOUNT_ID, order=order)
     if hasattr(r.body, 'errorMessage') and r.body.errorMessage:
-        send_telegram_message(f"⚠️ Order rejected: {r.body.errorMessage}")
+        msg = r.body.errorMessage
+        send_telegram_message(f"⚠️ Order rejected: {msg}")
+        # --- AJOUT : enregistrement dans les rejets ---
+        rejected_signals.append({
+            "time": datetime.now(tz).strftime("%H:%M:%S"),
+            "pair": instrument,
+            "buy_reason": f"Order rejected: {msg}",
+            "sell_reason": f"Order rejected: {msg}",
+        })
+        save_rejected_to_file()
         return False
 
     try:
         fill = r.body.get('orderFillTransaction', r.body.get('orderCreateTransaction'))
         if not fill:
             print(f"LIMIT order created but not filled immediately for {instrument}")
-            # On ne retourne pas False ici pour éviter de déclencher la cooldown sur un ordre simplement en attente.
-            # Le bot continuera de surveiller la position.
+            # Ordre en attente – pas de rejet, on ne l'enregistre pas
             return False
         trade = fill.tradeOpened
         active_trade = {
