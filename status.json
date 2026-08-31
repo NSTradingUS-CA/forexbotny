@@ -1,5 +1,5 @@
 {
-  "time": "2026-08-31 09:30:03",
+  "time": "2026-08-31 09:31:04",
   "bot_status": "running",
   "session": {
     "trades_today": 1,
@@ -15,10 +15,10 @@
     "tp1": 1.3522457142857143,
     "tp2": 1.3504314285714285,
     "trailing_stop": "20 pips initial",
-    "current_price": 1.3547,
-    "unrealized_pnl": -188.94,
-    "distance_to_sl_pips": 11.7,
-    "distance_to_tp2_pips": 42.7,
+    "current_price": 1.3546,
+    "unrealized_pnl": -159.42,
+    "distance_to_sl_pips": 12.7,
+    "distance_to_tp2_pips": 41.7,
     "atr": 0.0009071428571428365,
     "be_triggered": false,
     "tp1_hit": false,
