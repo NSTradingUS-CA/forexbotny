@@ -66,11 +66,9 @@ TP_PARTIAL_RATIO = 0.33
 TRAILING_ATR_MULT = 1.8
 FIXED_TRAILING_PIPS = 20
 
-# === PARAMÈTRES POUR LE MARKET DIRECT ===
-# (plus utilisés : LIMIT_ORDER_EXPIRY_MINUTES, MAX_SLIPPAGE_ATR_FACTOR, ORDER_RETRY_COOLDOWN_MINUTES)
-# On garde une variable pour le seuil de slippage basé sur l'ATR
-SLIPPAGE_ATR_FACTOR = 0.25      # facteur multiplicateur de l'ATR pour le seuil de slippage
-SLIPPAGE_MIN_PIPS = 1.5         # plancher minimal en pips
+# Paramètres MARKET direct
+SLIPPAGE_ATR_FACTOR = 0.25
+SLIPPAGE_MIN_PIPS = 1.5
 
 NEWS_CLOSE_BEFORE_MINUTES = 5
 NEWS_WARNING_MINUTES = 15
@@ -336,6 +334,16 @@ def push_status_json(data_dict):
         print(f"Error pushing status.json: {e}")
 
 
+def get_usd_cad_rate():
+    """Récupère le taux de change USD/CAD via l'API OANDA"""
+    try:
+        resp = ctx.pricing.get(ACCOUNT_ID, instruments="USD_CAD")
+        return float(resp.body['prices'][0].bids[0].price)
+    except Exception as e:
+        print(f"⚠️ Could not fetch USD/CAD rate: {e}. Using 1.0 as fallback.")
+        return 1.0
+
+
 def save_status_json():
     global BOT_STATUS, _current_blocked_pairs, _current_active_pairs, _current_news_event
     now = datetime.now(tz)
@@ -389,9 +397,16 @@ def save_status_json():
             current_price = active_trade['entry_price']
         sl_distance = abs(current_price - active_trade['sl'])
         tp_distance = abs(active_trade['tp2'] - current_price) if active_trade.get('tp2') else 0
-        unrealized_pnl = (current_price - active_trade['entry_price']) * abs(active_trade['units'])
+
+        # P&L en USD
+        unrealized_pnl_usd = (current_price - active_trade['entry_price']) * abs(active_trade['units'])
         if active_trade['direction'] == 'sell':
-            unrealized_pnl = -unrealized_pnl
+            unrealized_pnl_usd = -unrealized_pnl_usd
+
+        # Conversion en CAD
+        usd_cad = get_usd_cad_rate()
+        unrealized_pnl_cad = unrealized_pnl_usd * usd_cad
+
         status["active_trade"] = {
             "pair": active_trade['pair'],
             "type": "Buy" if active_trade['direction'] == 'buy' else "Sell",
@@ -401,7 +416,9 @@ def save_status_json():
             "tp2": active_trade.get('tp2'),
             "trailing_stop": active_trade.get('trailing_distance', '20 pips'),
             "current_price": current_price,
-            "unrealized_pnl": round(unrealized_pnl, 2),
+            "unrealized_pnl_usd": round(unrealized_pnl_usd, 2),
+            "unrealized_pnl_cad": round(unrealized_pnl_cad, 2),
+            "usd_cad_rate": round(usd_cad, 4),
             "distance_to_sl_pips": round(sl_distance / 0.0001, 1),
             "distance_to_tp2_pips": round(tp_distance / 0.0001, 1) if tp_distance else 0,
             "atr": active_trade.get('atr'),
@@ -1465,16 +1482,13 @@ def main():
                         print(f" -> REJECTED {pair}: {reason[:80]}...")
 
                 if candidates:
-                    # On prend le premier (meilleur score) - on pourrait trier, mais check_signal a déjà sélectionné le meilleur pour la paire
                     best = candidates[0]
                     pair, price, sl, tp, sl_pips, direction, setup_type, risk_pct, reason, df = best
                     print(f" -> SIGNAL {direction} {pair} [{setup_type}] {reason}")
                     
-                    # On passe le df à place_trade pour le recalcul
                     success = place_trade(pair, price, sl, tp, direction, setup_type, risk_pct, reason, df, balance)
                     if success:
                         trade_opened_during_window_today = True
-                    # else: le rejet a déjà été enregistré dans place_trade
 
             save_status_json()
 
@@ -1500,7 +1514,7 @@ def main():
         send_telegram_message("🔴 Bot stopped manually (Ctrl+C)")
 
 
-# ---------- NOUVELLE FONCTION PLACE_TRADE (MARKET direct avec recalcul et seuil ATR) ----------
+# ---------- NOUVELLE FONCTION PLACE_TRADE (MARKET direct) ----------
 def place_trade(instrument, entry_price_signal, sl_signal, tp_signal, direction, setup_type, risk_percent, reason, df, balance):
     """
     Place un ordre MARKET directement, avec recalcul dynamique du SL/TP et du volume,
@@ -1525,12 +1539,11 @@ def place_trade(instrument, entry_price_signal, sl_signal, tp_signal, direction,
     # 2. Calcul du slippage en pips
     slippage_pips = abs(current_price - entry_price_signal) / 0.0001
 
-    # 3. Seuil de slippage dynamique basé sur l'ATR (dernière valeur complète)
+    # 3. Seuil de slippage dynamique basé sur l'ATR
     try:
         atr = float(df['atr'].iloc[-2])
         atr_pips = atr / 0.0001
         max_slippage_pips = max(SLIPPAGE_MIN_PIPS, SLIPPAGE_ATR_FACTOR * atr_pips)
-        # On plafonne à 5 pips pour éviter des seuils trop larges en période très volatile
         max_slippage_pips = min(max_slippage_pips, 5.0)
     except Exception as e:
         print(f"ATR not available, using default 3 pips: {e}")
@@ -1572,7 +1585,6 @@ def place_trade(instrument, entry_price_signal, sl_signal, tp_signal, direction,
     if new_units < 1000:
         msg = f"Volume too low ({new_units}) for {instrument}"
         print(msg)
-        # on ne rejette pas dans rejected_signals car ce n'est pas un rejet de signal mais un problème de calcul
         return False
 
     # 6. Placement de l'ordre MARKET
@@ -1611,7 +1623,7 @@ def place_trade(instrument, entry_price_signal, sl_signal, tp_signal, direction,
             'units': int(trade.units),
             'entry_price': float(trade.price),
             'sl': new_sl,
-            'tp1': (current_price + sl_distance) if direction == 'buy' else (current_price - sl_distance),  # TP1 = 1R
+            'tp1': (current_price + sl_distance) if direction == 'buy' else (current_price - sl_distance),
             'tp2': new_tp,
             'direction': direction,
             'setup_type': setup_type,
@@ -1628,6 +1640,12 @@ def place_trade(instrument, entry_price_signal, sl_signal, tp_signal, direction,
         return False
 
     trades_today += 1
+    # Récupération du taux USD/CAD pour affichage en CAD
+    usd_cad = get_usd_cad_rate()
+    pnl_cad = (current_price - active_trade['entry_price']) * abs(active_trade['units']) * usd_cad
+    if direction == 'sell':
+        pnl_cad = -pnl_cad
+
     msg = (f"<b>✅ Trade opened ({trades_today}/{MAX_TRADES_PER_DAY})</b>\n"
            f"Pair: {instrument}\n"
            f"Setup: {setup_type.upper()}\n"
@@ -1658,7 +1676,7 @@ def place_trade(instrument, entry_price_signal, sl_signal, tp_signal, direction,
     return True
 
 
-# ---------- Fonction check_closed_trade ----------
+# ---------- Fonction check_closed_trade CORRIGÉE ----------
 def check_closed_trade():
     global active_trade, last_close_time
     if active_trade is None:
@@ -1666,20 +1684,37 @@ def check_closed_trade():
     pair = active_trade['pair']
     if has_open_position(pair):
         return
+
     try:
+        # Récupération des trades clôturés pour cette paire
         resp = retry_api_call(ctx.trade.list, ACCOUNT_ID, instrument=pair, count=20, state='CLOSED')
         closed_trades = resp.body.get('trades', [])
         if not closed_trades:
             return
+
+        # On prend le trade le plus récemment clôturé (par closeTime)
         latest = sorted(closed_trades, key=lambda t: str(getattr(t, 'closeTime', '')), reverse=True)[0]
-        total_pnl = float(latest.realizedPL)
-        close_price = float(latest.price)
+        
+        total_pnl_usd = float(latest.realizedPL)
+        close_price = float(latest.closePrice)  # ✅ CORRECTION : on utilise closePrice au lieu de price
         entry = active_trade['entry_price']
         units = active_trade['units']
         direction = active_trade.get('direction', 'buy')
         setup = active_trade.get('setup_type', 'unknown')
         init_risk = active_trade.get('initial_risk', 0.0)
-        realized_r = ((close_price - entry) / init_risk) if direction == 'buy' and init_risk > 0 else ((entry - close_price) / init_risk) if init_risk > 0 else 0.0
+
+        # Calcul du R multiple basé sur le prix de sortie réel
+        if direction == 'buy' and init_risk > 0:
+            realized_r = (close_price - entry) / init_risk
+        elif direction == 'sell' and init_risk > 0:
+            realized_r = (entry - close_price) / init_risk
+        else:
+            realized_r = 0.0
+
+        # Conversion USD -> CAD pour le message Telegram
+        usd_cad = get_usd_cad_rate()
+        total_pnl_cad = total_pnl_usd * usd_cad
+
         msg = (f"<b>🔴 Trade closed ({trades_today}/{MAX_TRADES_PER_DAY})</b>\n"
                f"Pair: {pair}\n"
                f"Setup: {setup.upper()}\n"
@@ -1687,25 +1722,32 @@ def check_closed_trade():
                f"Entry: {entry:.5f}\n"
                f"Exit: {close_price:.5f}\n"
                f"Volume: {abs(units)}\n"
-               f"P&L: {total_pnl:.2f} USD\n"
+               f"P&L: {total_pnl_cad:.2f} CAD\n"
                f"R: {realized_r:+.2f}R\n"
                f"Time: {datetime.now(tz).strftime('%Y-%m-%d %H:%M:%S')}")
         send_telegram_message(msg)
+
+        # Enregistrement dans le fichier closed_trades.json
         closed_trades_today.append({
             "pair": pair,
             "type": "Buy" if direction == 'buy' else "Sell",
             "setup": setup,
-            "pnl": total_pnl,
+            "pnl": round(total_pnl_cad, 2),      # on stocke en CAD
+            "pnl_usd": round(total_pnl_usd, 2),  # pour référence
             "time": datetime.now(tz).strftime("%H:%M:%S"),
-            "r_multiple": realized_r,
-            "units": abs(units)
+            "r_multiple": round(realized_r, 2),
+            "units": abs(units),
+            "entry": entry,
+            "exit": close_price
         })
         save_closed_trades_to_file()
         last_close_time = datetime.now(tz)
+
     except Exception as e:
         print(f"Error retrieving closed trade: {e}")
         send_telegram_message(f"⚠️ Trade on {pair} closed (details unavailable).")
         last_close_time = datetime.now(tz)
+
     active_trade = None
 
 
