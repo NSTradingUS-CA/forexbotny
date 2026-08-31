@@ -1,13 +1,32 @@
 {
-  "time": "2026-08-31 09:21:56",
+  "time": "2026-08-31 09:23:21",
   "bot_status": "running",
   "session": {
-    "trades_today": 0,
+    "trades_today": 1,
     "max_trades": 3,
     "start": "07:00",
     "end": "11:00"
   },
-  "active_trade": null,
+  "active_trade": {
+    "pair": "GBP_USD",
+    "type": "Sell",
+    "entry": 1.35406,
+    "sl": 1.3558742857142858,
+    "tp1": 1.3522457142857143,
+    "tp2": 1.3504314285714285,
+    "trailing_stop": "20 pips initial",
+    "current_price": 1.3542,
+    "unrealized_pnl": -41.33,
+    "distance_to_sl_pips": 16.7,
+    "distance_to_tp2_pips": 37.7,
+    "atr": 0.0009071428571428365,
+    "be_triggered": false,
+    "tp1_hit": false,
+    "setup_type": "Pin Bar",
+    "risk_percent": 0.55,
+    "opened_at": "2026-08-31T09:22:50.021740-04:00",
+    "units": -295220
+  },
   "next_news_event": {
     "title": "GDP q/q",
     "time": "21:30",
