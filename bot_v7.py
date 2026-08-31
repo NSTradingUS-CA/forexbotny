@@ -66,18 +66,18 @@ TP_PARTIAL_RATIO = 0.33
 TRAILING_ATR_MULT = 1.8
 FIXED_TRAILING_PIPS = 20
 
-LIMIT_ORDER_EXPIRY_MINUTES = 5
-MAX_SLIPPAGE_ATR_FACTOR = 0.5   # Conservé mais non utilisé (Option B)
-
-# Nouveau délai après échec d'ordre
-ORDER_RETRY_COOLDOWN_MINUTES = 2
+# === PARAMÈTRES POUR LE MARKET DIRECT ===
+# (plus utilisés : LIMIT_ORDER_EXPIRY_MINUTES, MAX_SLIPPAGE_ATR_FACTOR, ORDER_RETRY_COOLDOWN_MINUTES)
+# On garde une variable pour le seuil de slippage basé sur l'ATR
+SLIPPAGE_ATR_FACTOR = 0.25      # facteur multiplicateur de l'ATR pour le seuil de slippage
+SLIPPAGE_MIN_PIPS = 1.5         # plancher minimal en pips
 
 NEWS_CLOSE_BEFORE_MINUTES = 5
 NEWS_WARNING_MINUTES = 15
 NEWS_CHECK_FUTURE_HOURS = 24
 
 PAIR_CONFIG = {
-    "EUR_USD": {"MAX_SPREAD_PIPS": 2.5, "ADX_THRESHOLD": 16, "ATR_MULTIPLIER": 2.0},   # MODIFIÉ : 18 → 16
+    "EUR_USD": {"MAX_SPREAD_PIPS": 2.5, "ADX_THRESHOLD": 16, "ATR_MULTIPLIER": 2.0},
     "GBP_USD": {"MAX_SPREAD_PIPS": 3.0, "ADX_THRESHOLD": 13, "ATR_MULTIPLIER": 2.0}
 }
 # ============================
@@ -105,9 +105,6 @@ daily_start_balance = None
 _current_blocked_pairs = []
 _current_active_pairs = []
 _current_news_event = None
-
-# Cache pour les tentatives d'ordre (cooldown)
-_last_order_attempt = {}   # {pair: datetime}
 
 CLOSED_TRADES_FILE = "closed_trades.json"
 REJECTED_FILE = "rejected_signals.json"
@@ -1228,7 +1225,7 @@ def main():
     global trades_today, last_trade_date, last_close_time, active_trade
     global closed_trades_today, rejected_signals
     global late_shutdown_required, trade_opened_during_window_today, daily_start_balance
-    global BOT_STATUS, orb_range, _last_order_attempt
+    global BOT_STATUS, orb_range
 
     load_closed_trades_from_file()
     load_rejected_from_file()
@@ -1263,7 +1260,7 @@ def main():
     start_msg = (
         f"🟢 Forex Sniper 7-12 Multi-Setup started – max {MAX_TRADES_PER_DAY} trades/day, "
         f"buffer {MIN_MINUTES_BETWEEN_TRADES}min, 9 setups (incl. Trend Breakout). Quality Score selection. "
-        f"({trades_today} already taken)"
+        f"({trades_today} already taken) – Using MARKET orders with dynamic SL/TP and ATR-based slippage filter."
     )
     print(start_msg)
     send_telegram_message(start_msg)
@@ -1284,8 +1281,6 @@ def main():
                 late_shutdown_required = False
                 trade_opened_during_window_today = False
                 orb_range = {"high": None, "low": None, "recorded": False}
-                # Réinitialiser le cache des tentatives d'ordre
-                _last_order_attempt = {}
                 load_closed_trades_from_file()
                 load_rejected_from_file()
                 if active_trade is None:
@@ -1423,11 +1418,6 @@ def main():
                         continue
                     if has_open_position(pair):
                         continue
-                    # Vérifier si la paire est en cooldown après une tentative d'ordre
-                    last_attempt = _last_order_attempt.get(pair)
-                    if last_attempt is not None and (now - last_attempt) < timedelta(minutes=ORDER_RETRY_COOLDOWN_MINUTES):
-                        print(f" -> SKIPPED {pair}: cooldown active (last attempt at {last_attempt.strftime('%H:%M:%S')})")
-                        continue
                     try:
                         spread = get_spread(pair)
                     except Exception as e:
@@ -1451,7 +1441,7 @@ def main():
                         continue
                     signal, price, sl, tp, sl_pips, direction, setup_type, risk_pct, reason = check_signal(df, pair)
                     if signal:
-                        candidates.append((pair, price, sl, tp, sl_pips, direction, setup_type, risk_pct, reason))
+                        candidates.append((pair, price, sl, tp, sl_pips, direction, setup_type, risk_pct, reason, df))
                     else:
                         c = df.iloc[-2]
                         parts = reason.split("|")
@@ -1475,19 +1465,16 @@ def main():
                         print(f" -> REJECTED {pair}: {reason[:80]}...")
 
                 if candidates:
+                    # On prend le premier (meilleur score) - on pourrait trier, mais check_signal a déjà sélectionné le meilleur pour la paire
                     best = candidates[0]
-                    pair, price, sl, tp, sl_pips, direction, setup_type, risk_pct, reason = best
+                    pair, price, sl, tp, sl_pips, direction, setup_type, risk_pct, reason, df = best
                     print(f" -> SIGNAL {direction} {pair} [{setup_type}] {reason}")
-                    sl_distance = abs(price - sl)
-                    units = calculate_units(balance, sl_distance, pair, risk_pct)
-                    if units >= 1000:
-                        success = place_trade(pair, price, sl, tp, units, direction, setup_type, risk_pct, reason)
-                        if success:
-                            trade_opened_during_window_today = True
-                        else:
-                            # En cas d'échec (slippage ou non-exécution), on enregistre le timestamp pour la cooldown
-                            _last_order_attempt[pair] = now
-                            print(f"Order attempt failed for {pair}, cooldown {ORDER_RETRY_COOLDOWN_MINUTES} min activated.")
+                    
+                    # On passe le df à place_trade pour le recalcul
+                    success = place_trade(pair, price, sl, tp, direction, setup_type, risk_pct, reason, df, balance)
+                    if success:
+                        trade_opened_during_window_today = True
+                    # else: le rejet a déjà été enregistré dans place_trade
 
             save_status_json()
 
@@ -1513,51 +1500,109 @@ def main():
         send_telegram_message("🔴 Bot stopped manually (Ctrl+C)")
 
 
-# ---------- FONCTION PLACE_TRADE MODIFIÉE ----------
-def place_trade(instrument, entry, sl, tp, units, direction, setup_type, risk_percent, reason):
+# ---------- NOUVELLE FONCTION PLACE_TRADE (MARKET direct avec recalcul et seuil ATR) ----------
+def place_trade(instrument, entry_price_signal, sl_signal, tp_signal, direction, setup_type, risk_percent, reason, df, balance):
+    """
+    Place un ordre MARKET directement, avec recalcul dynamique du SL/TP et du volume,
+    et un filtre de slippage basé sur l'ATR.
+    """
     global active_trade, trades_today, rejected_signals
+    
     if active_trade is not None:
         return False
 
-    expiry = datetime.now(tz) + timedelta(minutes=LIMIT_ORDER_EXPIRY_MINUTES)
-    expiry_str = expiry.strftime("%Y-%m-%dT%H:%M:%SZ")
-    signed_units = -abs(units) if direction == 'sell' else abs(units)
-    sl_dist = abs(entry - sl)
-    tp1 = entry + sl_dist if direction == 'buy' else entry - sl_dist
-    tp2 = tp
-    trailing = str(round(FIXED_TRAILING_PIPS * 0.0001, 5))
+    # 1. Récupération du prix actuel (bid pour sell, ask pour buy)
+    try:
+        resp = ctx.pricing.get(ACCOUNT_ID, instruments=instrument)
+        price_info = resp.body['prices'][0]
+        bid = float(price_info.bids[0].price)
+        ask = float(price_info.asks[0].price)
+        current_price = bid if direction == 'sell' else ask
+    except Exception as e:
+        send_telegram_message(f"⚠️ Could not get current price for {instrument}: {e}")
+        return False
 
+    # 2. Calcul du slippage en pips
+    slippage_pips = abs(current_price - entry_price_signal) / 0.0001
+
+    # 3. Seuil de slippage dynamique basé sur l'ATR (dernière valeur complète)
+    try:
+        atr = float(df['atr'].iloc[-2])
+        atr_pips = atr / 0.0001
+        max_slippage_pips = max(SLIPPAGE_MIN_PIPS, SLIPPAGE_ATR_FACTOR * atr_pips)
+        # On plafonne à 5 pips pour éviter des seuils trop larges en période très volatile
+        max_slippage_pips = min(max_slippage_pips, 5.0)
+    except Exception as e:
+        print(f"ATR not available, using default 3 pips: {e}")
+        max_slippage_pips = 3.0
+
+    if slippage_pips > max_slippage_pips:
+        msg = f"Slippage too high ({slippage_pips:.1f} pips) on {instrument} – trade rejected. Max allowed: {max_slippage_pips:.1f} pips."
+        print(msg)
+        rejected_signals.append({
+            "time": datetime.now(tz).strftime("%H:%M:%S"),
+            "pair": instrument,
+            "buy_reason": f"Slippage {slippage_pips:.1f}pips > {max_slippage_pips:.1f}",
+            "sell_reason": f"Slippage {slippage_pips:.1f}pips > {max_slippage_pips:.1f}",
+        })
+        save_rejected_to_file()
+        return False
+
+    # 4. Recalcul du SL et TP en fonction du prix actuel
+    config = PAIR_CONFIG[instrument]
+    levels = setup_stop_and_target(df, direction, current_price, config, setup_type)
+    if not levels:
+        msg = f"SL/TP recalculation failed for {instrument} at price {current_price:.5f}"
+        rejected_signals.append({
+            "time": datetime.now(tz).strftime("%H:%M:%S"),
+            "pair": instrument,
+            "buy_reason": msg,
+            "sell_reason": msg,
+        })
+        save_rejected_to_file()
+        return False
+
+    new_sl, new_tp, sl_pips, atr_val = levels
+
+    # 5. Recalcul du volume (units) avec la nouvelle distance SL
+    sl_distance = abs(current_price - new_sl)
+    if sl_distance <= 0:
+        return False
+    new_units = calculate_units(balance, sl_distance, instrument, risk_percent)
+    if new_units < 1000:
+        msg = f"Volume too low ({new_units}) for {instrument}"
+        print(msg)
+        # on ne rejette pas dans rejected_signals car ce n'est pas un rejet de signal mais un problème de calcul
+        return False
+
+    # 6. Placement de l'ordre MARKET
+    signed_units = -abs(new_units) if direction == 'sell' else abs(new_units)
     order = {
-        "type": "LIMIT",
+        "type": "MARKET",
         "instrument": instrument,
         "units": str(signed_units),
-        "price": f"{entry:.5f}",
-        "stopLossOnFill": {"price": f"{sl:.5f}"},
-        "takeProfitOnFill": {"price": f"{tp2:.5f}"},
-        "trailingStopLossOnFill": {"distance": trailing},
-        "timeInForce": "GTD",
-        "gtdTime": expiry_str
+        "stopLossOnFill": {"price": f"{new_sl:.5f}"},
+        "takeProfitOnFill": {"price": f"{new_tp:.5f}"},
     }
 
     r = retry_api_call(ctx.order.create, ACCOUNT_ID, order=order)
     if hasattr(r.body, 'errorMessage') and r.body.errorMessage:
         msg = r.body.errorMessage
-        send_telegram_message(f"⚠️ Order rejected: {msg}")
-        # --- AJOUT : enregistrement dans les rejets ---
+        send_telegram_message(f"⚠️ Market order rejected: {msg}")
         rejected_signals.append({
             "time": datetime.now(tz).strftime("%H:%M:%S"),
             "pair": instrument,
-            "buy_reason": f"Order rejected: {msg}",
-            "sell_reason": f"Order rejected: {msg}",
+            "buy_reason": f"Market order rejected: {msg}",
+            "sell_reason": f"Market order rejected: {msg}",
         })
         save_rejected_to_file()
         return False
 
+    # 7. Récupération des détails du trade
     try:
         fill = r.body.get('orderFillTransaction', r.body.get('orderCreateTransaction'))
         if not fill:
-            print(f"LIMIT order created but not filled immediately for {instrument}")
-            # Ordre en attente – pas de rejet, on ne l'enregistre pas
+            print(f"Market order created but not filled immediately for {instrument}")
             return False
         trade = fill.tradeOpened
         active_trade = {
@@ -1565,17 +1610,17 @@ def place_trade(instrument, entry, sl, tp, units, direction, setup_type, risk_pe
             'pair': instrument,
             'units': int(trade.units),
             'entry_price': float(trade.price),
-            'sl': sl,
-            'tp1': tp1,
-            'tp2': tp2,
+            'sl': new_sl,
+            'tp1': (current_price + sl_distance) if direction == 'buy' else (current_price - sl_distance),  # TP1 = 1R
+            'tp2': new_tp,
             'direction': direction,
             'setup_type': setup_type,
             'risk_percent': risk_percent,
-            'initial_risk': sl_dist,
+            'initial_risk': sl_distance,
             'be_triggered': False,
             'tp1_hit': False,
             'trailing_distance': f"{FIXED_TRAILING_PIPS} pips initial",
-            'atr': 0.0,
+            'atr': atr_val,
             'opened_at': datetime.now(tz).isoformat()
         }
     except Exception as e:
@@ -1589,10 +1634,10 @@ def place_trade(instrument, entry, sl, tp, units, direction, setup_type, risk_pe
            f"Type: {'Buy' if direction == 'buy' else 'Sell'}\n"
            f"Risk: {risk_percent:.2f}%\n"
            f"Volume: {abs(active_trade['units'])} units\n"
-           f"Entry: {entry:.5f}\n"
-           f"SL: {sl:.5f}\n"
-           f"TP1: {tp1:.5f} (1R, {TP_PARTIAL_RATIO:.0%})\n"
-           f"TP2: {tp2:.5f} (2R)\n"
+           f"Entry: {current_price:.5f} (market, slippage {slippage_pips:.1f} pips)\n"
+           f"SL: {new_sl:.5f}\n"
+           f"TP1: {active_trade['tp1']:.5f} (1R, {TP_PARTIAL_RATIO:.0%})\n"
+           f"TP2: {new_tp:.5f} (2R)\n"
            f"R/R: 1:2\n"
            f"Quality score: {reason.split('score')[1].strip() if 'score' in reason else 'N/A'}\n"
            f"Time: {datetime.now(tz).strftime('%Y-%m-%d %H:%M:%S')}")
@@ -1601,10 +1646,10 @@ def place_trade(instrument, entry, sl, tp, units, direction, setup_type, risk_pe
         "time": datetime.now(tz).isoformat(),
         "pair": instrument,
         "setup": setup_type,
-        "entry": entry,
-        "sl": sl,
-        "tp1": tp1,
-        "tp2": tp2,
+        "entry": current_price,
+        "sl": new_sl,
+        "tp1": active_trade['tp1'],
+        "tp2": new_tp,
         "units": abs(active_trade['units']),
         "direction": direction,
         "risk_percent": risk_percent,
