@@ -1,34 +1,6 @@
 {
   "signals": [
     {
-      "time": "07:33:43",
-      "pair": "GBP_USD",
-      "buy_reason": "H1 not up",
-      "sell_reason": "H1 not down, MACD not bearish",
-      "spread": 0.00017000000000000348,
-      "adx": 31.824404550644047,
-      "plus_di": 14.615582410479941,
-      "minus_di": 16.433824295448165,
-      "ema50": 1.3566019767682185,
-      "ema200": 1.3586664297038622,
-      "rsi": 39.06209612363598,
-      "atr": 0.0008621428571428431
-    },
-    {
-      "time": "07:34:14",
-      "pair": "EUR_USD",
-      "buy_reason": "H1 not up",
-      "sell_reason": "H1 not down, MACD not bearish",
-      "spread": 0.00017000000000000348,
-      "adx": 33.0612997209705,
-      "plus_di": 20.61542817421281,
-      "minus_di": 15.968852128711719,
-      "ema50": 1.1618158920579822,
-      "ema200": 1.1633319071649346,
-      "rsi": 45.932959352229844,
-      "atr": 0.0007235714285714424
-    },
-    {
       "time": "07:34:14",
       "pair": "GBP_USD",
       "buy_reason": "H1 not up",
@@ -1388,6 +1360,34 @@
     },
     {
       "time": "08:01:02",
+      "pair": "EUR_USD",
+      "buy_reason": "H1 not up",
+      "sell_reason": "H1 not down, MACD not bearish",
+      "spread": 0.0001500000000000945,
+      "adx": 31.337653345044632,
+      "plus_di": 20.576306302183013,
+      "minus_di": 14.953735473957991,
+      "ema50": 1.1617336974879684,
+      "ema200": 1.1632751432454314,
+      "rsi": 44.45483454081989,
+      "atr": 0.0007121428571428755
+    },
+    {
+      "time": "08:01:34",
+      "pair": "EUR_USD",
+      "buy_reason": "H1 not up",
+      "sell_reason": "H1 not down, MACD not bearish",
+      "spread": 0.00015999999999993797,
+      "adx": 31.337653345044632,
+      "plus_di": 20.576306302183013,
+      "minus_di": 14.953735473957991,
+      "ema50": 1.1617336974879684,
+      "ema200": 1.1632751432454314,
+      "rsi": 44.45483454081989,
+      "atr": 0.0007121428571428755
+    },
+    {
+      "time": "08:02:06",
       "pair": "EUR_USD",
       "buy_reason": "H1 not up",
       "sell_reason": "H1 not down, MACD not bearish",
