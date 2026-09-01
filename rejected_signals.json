@@ -41,6 +41,18 @@
       "pair": "EUR_USD",
       "buy_reason": "Slippage 3.7pips > 1.7",
       "sell_reason": "Slippage 3.7pips > 1.7"
+    },
+    {
+      "time": "07:03:50",
+      "pair": "EUR_USD",
+      "buy_reason": "Slippage 3.8pips > 1.7",
+      "sell_reason": "Slippage 3.8pips > 1.7"
+    },
+    {
+      "time": "07:04:22",
+      "pair": "EUR_USD",
+      "buy_reason": "Slippage 3.3pips > 1.7",
+      "sell_reason": "Slippage 3.3pips > 1.7"
     }
   ],
   "last_cleanup": "2026-09-01"
