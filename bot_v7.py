@@ -428,7 +428,7 @@ def save_status_json():
             "risk_percent": active_trade.get('risk_percent'),
             "opened_at": active_trade.get('opened_at'),
             "units": active_trade.get('units'),
-            "score": active_trade.get('quality_score')  # <-- AJOUT pour le dashboard
+            "score": active_trade.get('quality_score')  # <--- AJOUT POUR LE SCORE
         }
 
     push_status_json(status)
@@ -1622,7 +1622,6 @@ def place_trade(instrument, entry_price_signal, sl_signal, tp_signal, direction,
             print(f"Market order created but not filled immediately for {instrument}")
             return False
         trade = fill.tradeOpened
-        # Extraction du score numérique depuis reason
         import re
         score_match = re.search(r'score\s+([\d.]+)', reason, re.IGNORECASE)
         quality_score = float(score_match.group(1)) if score_match else None
@@ -1644,14 +1643,13 @@ def place_trade(instrument, entry_price_signal, sl_signal, tp_signal, direction,
             'trailing_distance': f"{FIXED_TRAILING_PIPS} pips initial",
             'atr': atr_val,
             'opened_at': datetime.now(tz).isoformat(),
-            'quality_score': quality_score  # <-- AJOUT
+            'quality_score': quality_score
         }
     except Exception as e:
         send_telegram_message(f"⚠️ Error extracting trade details: {str(e)[:100]}")
         return False
 
     trades_today += 1
-    # Récupération du taux USD/CAD pour affichage en CAD
     usd_cad = get_usd_cad_rate()
     pnl_cad = (current_price - active_trade['entry_price']) * abs(active_trade['units']) * usd_cad
     if direction == 'sell':
@@ -1668,7 +1666,7 @@ def place_trade(instrument, entry_price_signal, sl_signal, tp_signal, direction,
            f"TP1: {active_trade['tp1']:.5f} (1R, {TP_PARTIAL_RATIO:.0%})\n"
            f"TP2: {new_tp:.5f} (2R)\n"
            f"R/R: 1:2\n"
-           f"Quality score: {quality_score:.1f}\n"  # <-- PLUS DE PARENTHÈSE
+           f"Quality score: {quality_score:.1f}\n"
            f"Time: {datetime.now(tz).strftime('%Y-%m-%d %H:%M:%S')}")
     send_telegram_message(msg)
     log_trade({
@@ -1697,24 +1695,21 @@ def check_closed_trade():
         return
 
     try:
-        # Récupération des trades clôturés pour cette paire
         resp = retry_api_call(ctx.trade.list, ACCOUNT_ID, instrument=pair, count=20, state='CLOSED')
         closed_trades = resp.body.get('trades', [])
         if not closed_trades:
             return
 
-        # On prend le trade le plus récemment clôturé (par closeTime)
         latest = sorted(closed_trades, key=lambda t: str(getattr(t, 'closeTime', '')), reverse=True)[0]
         
         total_pnl_usd = float(latest.realizedPL)
-        close_price = float(latest.closePrice)  # ✅ CORRECTION : on utilise closePrice
+        close_price = float(latest.closePrice)  # Bon prix de sortie
         entry = active_trade['entry_price']
         units = active_trade['units']
         direction = active_trade.get('direction', 'buy')
         setup = active_trade.get('setup_type', 'unknown')
         init_risk = active_trade.get('initial_risk', 0.0)
 
-        # Calcul du R multiple basé sur le prix de sortie réel
         if direction == 'buy' and init_risk > 0:
             realized_r = (close_price - entry) / init_risk
         elif direction == 'sell' and init_risk > 0:
@@ -1722,7 +1717,6 @@ def check_closed_trade():
         else:
             realized_r = 0.0
 
-        # Conversion USD -> CAD pour le message Telegram
         usd_cad = get_usd_cad_rate()
         total_pnl_cad = total_pnl_usd * usd_cad
 
@@ -1738,19 +1732,18 @@ def check_closed_trade():
                f"Time: {datetime.now(tz).strftime('%Y-%m-%d %H:%M:%S')}")
         send_telegram_message(msg)
 
-        # Enregistrement dans le fichier closed_trades.json
         closed_trades_today.append({
             "pair": pair,
             "type": "Buy" if direction == 'buy' else "Sell",
             "setup": setup,
-            "pnl": round(total_pnl_cad, 2),      # CAD
-            "pnl_usd": round(total_pnl_usd, 2),  # USD
+            "pnl": round(total_pnl_cad, 2),
+            "pnl_usd": round(total_pnl_usd, 2),
             "time": datetime.now(tz).strftime("%H:%M:%S"),
             "r_multiple": round(realized_r, 2),
             "units": abs(units),
             "entry": entry,
             "exit": close_price,
-            "score": active_trade.get('quality_score')  # on stocke le score
+            "score": active_trade.get('quality_score')
         })
         save_closed_trades_to_file()
         last_close_time = datetime.now(tz)
