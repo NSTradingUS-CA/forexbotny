@@ -427,7 +427,8 @@ def save_status_json():
             "setup_type": active_trade.get('setup_type'),
             "risk_percent": active_trade.get('risk_percent'),
             "opened_at": active_trade.get('opened_at'),
-            "units": active_trade.get('units')
+            "units": active_trade.get('units'),
+            "score": active_trade.get('quality_score')  # <-- AJOUT pour le dashboard
         }
 
     push_status_json(status)
@@ -471,7 +472,8 @@ def load_existing_open_position():
                         "opened_at": saved_trade.get("opened_at"),
                         "trailing_distance": saved_trade.get("trailing_stop", "20 pips"),
                         "atr": saved_trade.get("atr"),
-                        "units": saved_trade.get("units")
+                        "units": saved_trade.get("units"),
+                        "quality_score": saved_trade.get("score")
                     }
         except Exception as e:
             print(f"Could not read status.json for restore: {e}")
@@ -510,7 +512,8 @@ def load_existing_open_position():
                         'tp1_hit': saved_flags.get("tp1_hit", False),
                         'opened_at': saved_flags.get("opened_at", str(trade.openTime) if getattr(trade, 'openTime', None) else None),
                         'trailing_distance': saved_flags.get("trailing_distance", "20 pips"),
-                        'atr': saved_flags.get("atr")
+                        'atr': saved_flags.get("atr"),
+                        'quality_score': saved_flags.get("quality_score")
                     }
                     print(f"Existing open position loaded: {instrument} {active_trade['direction']} with flags restored")
                     return
@@ -1285,229 +1288,231 @@ def main():
 
     try:
         while True:
-            now = datetime.now(tz)
+            try:  # Boucle intérieure pour résister aux erreurs
+                now = datetime.now(tz)
 
-            # Réinitialisation journalière
-            today = now.date()
-            if last_trade_date != today:
-                trades_today = count_all_trades_today()
-                last_trade_date = today
-                last_close_time = None
-                closed_trades_today.clear()
-                rejected_signals.clear()
-                late_shutdown_required = False
-                trade_opened_during_window_today = False
-                orb_range = {"high": None, "low": None, "recorded": False}
-                load_closed_trades_from_file()
-                load_rejected_from_file()
-                if active_trade is None:
-                    load_existing_open_position()
-                try:
-                    daily_start_balance = get_account_balance(retry_api_call(ctx.account.summary, ACCOUNT_ID))
-                except Exception:
-                    daily_start_balance = None
-                if active_trade is not None:
-                    opened_at = active_trade.get("opened_at")
-                    if opened_at:
-                        try:
-                            opened_dt = datetime.fromisoformat(opened_at.replace("Z", "+00:00")).astimezone(tz)
-                            trade_opened_during_window_today = (
-                                opened_dt.date() == today
-                                and TRADING_HOURS_START <= opened_dt.hour < TRADING_HOURS_END
-                            )
-                        except (ValueError, TypeError):
-                            pass
-
-            manage_active_trade()
-            check_closed_trade()
-
-            if (
-                now.hour >= TRADING_HOURS_END
-                and trade_opened_during_window_today
-                and active_trade is not None
-            ):
-                late_shutdown_required = True
-
-            # News handling with open trade
-            if active_trade is not None:
-                blocked, event, time_until, blocked_pairs = check_and_block_news(now)
-                if event is not None and time_until is not None:
-                    minutes_until = time_until.total_seconds() / 60.0
-                    if minutes_until <= NEWS_WARNING_MINUTES and minutes_until > NEWS_CLOSE_BEFORE_MINUTES:
-                        if active_trade['pair'] in blocked_pairs:
-                            send_telegram_message(
-                                f"📰 <b>High-impact news in {int(minutes_until)} min:</b> {event['title']} at {event['time'].strftime('%H:%M')}\n"
-                                f"Trade {active_trade['pair']} will be paused. Action in {NEWS_CLOSE_BEFORE_MINUTES} min."
-                            )
-                    if minutes_until <= NEWS_CLOSE_BEFORE_MINUTES:
-                        if active_trade['pair'] in blocked_pairs:
+                # Réinitialisation journalière
+                today = now.date()
+                if last_trade_date != today:
+                    trades_today = count_all_trades_today()
+                    last_trade_date = today
+                    last_close_time = None
+                    closed_trades_today.clear()
+                    rejected_signals.clear()
+                    late_shutdown_required = False
+                    trade_opened_during_window_today = False
+                    orb_range = {"high": None, "low": None, "recorded": False}
+                    load_closed_trades_from_file()
+                    load_rejected_from_file()
+                    if active_trade is None:
+                        load_existing_open_position()
+                    try:
+                        daily_start_balance = get_account_balance(retry_api_call(ctx.account.summary, ACCOUNT_ID))
+                    except Exception:
+                        daily_start_balance = None
+                    if active_trade is not None:
+                        opened_at = active_trade.get("opened_at")
+                        if opened_at:
                             try:
-                                resp = ctx.pricing.get(ACCOUNT_ID, instruments=active_trade['pair'])
-                                pi = resp.body['prices'][0]
-                                bid = float(pi.bids[0].price)
-                                ask = float(pi.asks[0].price)
-                                current = bid if active_trade['direction'] == 'sell' else ask
-                                pnl = (current - active_trade['entry_price']) * active_trade['units']
-                                if active_trade['direction'] == 'sell':
-                                    pnl = -pnl
-                            except:
-                                pnl = 0
-                            if pnl > 0:
-                                if close_full_position_market():
-                                    send_telegram_message(
-                                        f"🔒 Trade closed before news\n"
-                                        f"Pair: {active_trade['pair']}\n"
-                                        f"P&L: {pnl:.2f} USD\n"
-                                        f"Reason: '{event['title']}' in <5 min."
-                                    )
-                                    time.sleep(2)
-                                else:
-                                    send_telegram_message("⚠️ Failed to close. Please monitor.")
-                            else:
-                                if move_sl_to_entry():
-                                    send_telegram_message(
-                                        f"🛡️ SL moved to entry before news\n"
-                                        f"Pair: {active_trade['pair']}\n"
-                                        f"New SL: {active_trade['sl']:.5f}"
-                                    )
-                                else:
-                                    send_telegram_message("⚠️ Could not move SL. Please monitor.")
+                                opened_dt = datetime.fromisoformat(opened_at.replace("Z", "+00:00")).astimezone(tz)
+                                trade_opened_during_window_today = (
+                                    opened_dt.date() == today
+                                    and TRADING_HOURS_START <= opened_dt.hour < TRADING_HOURS_END
+                                )
+                            except (ValueError, TypeError):
+                                pass
 
-            # Arrêt programmé
-            shutdown_1205 = (
-                now.hour == 12
-                and now.minute >= 5
-                and not late_shutdown_required
-            )
-            shutdown_1705 = (
-                now.hour > BOT_SHUTDOWN_HOUR
-                or (now.hour == BOT_SHUTDOWN_HOUR and now.minute >= 5)
-            )
-            if shutdown_1205 or shutdown_1705:
-                check_future_news_and_alert()
-                BOT_STATUS = "stopped"
+                manage_active_trade()
+                check_closed_trade()
+
+                # Mise à jour de late_shutdown_required
+                if (
+                    now.hour >= TRADING_HOURS_END
+                    and trade_opened_during_window_today
+                    and active_trade is not None
+                ):
+                    late_shutdown_required = True
+
+                # News handling with open trade
+                if active_trade is not None:
+                    blocked, event, time_until, blocked_pairs = check_and_block_news(now)
+                    if event is not None and time_until is not None:
+                        minutes_until = time_until.total_seconds() / 60.0
+                        if minutes_until <= NEWS_WARNING_MINUTES and minutes_until > NEWS_CLOSE_BEFORE_MINUTES:
+                            if active_trade['pair'] in blocked_pairs:
+                                send_telegram_message(
+                                    f"📰 <b>High-impact news in {int(minutes_until)} min:</b> {event['title']} at {event['time'].strftime('%H:%M')}\n"
+                                    f"Trade {active_trade['pair']} will be paused. Action in {NEWS_CLOSE_BEFORE_MINUTES} min."
+                                )
+                        if minutes_until <= NEWS_CLOSE_BEFORE_MINUTES:
+                            if active_trade['pair'] in blocked_pairs:
+                                try:
+                                    resp = ctx.pricing.get(ACCOUNT_ID, instruments=active_trade['pair'])
+                                    pi = resp.body['prices'][0]
+                                    bid = float(pi.bids[0].price)
+                                    ask = float(pi.asks[0].price)
+                                    current = bid if active_trade['direction'] == 'sell' else ask
+                                    pnl = (current - active_trade['entry_price']) * active_trade['units']
+                                    if active_trade['direction'] == 'sell':
+                                        pnl = -pnl
+                                except:
+                                    pnl = 0
+                                if pnl > 0:
+                                    if close_full_position_market():
+                                        send_telegram_message(
+                                            f"🔒 Trade closed before news\n"
+                                            f"Pair: {active_trade['pair']}\n"
+                                            f"P&L: {pnl:.2f} USD\n"
+                                            f"Reason: '{event['title']}' in <5 min."
+                                        )
+                                        time.sleep(2)
+                                    else:
+                                        send_telegram_message("⚠️ Failed to close. Please monitor.")
+                                else:
+                                    if move_sl_to_entry():
+                                        send_telegram_message(
+                                            f"🛡️ SL moved to entry before news\n"
+                                            f"Pair: {active_trade['pair']}\n"
+                                            f"New SL: {active_trade['sl']:.5f}"
+                                        )
+                                    else:
+                                        send_telegram_message("⚠️ Could not move SL. Please monitor.")
+
+                # Arrêt programmé
+                shutdown_1205 = (
+                    now.hour == 12
+                    and now.minute >= 5
+                    and not late_shutdown_required
+                )
+                shutdown_1705 = (
+                    now.hour > BOT_SHUTDOWN_HOUR
+                    or (now.hour == BOT_SHUTDOWN_HOUR and now.minute >= 5)
+                )
+                if shutdown_1205 or shutdown_1705:
+                    check_future_news_and_alert()
+                    BOT_STATUS = "stopped"
+                    save_status_json()
+                    stop_msg = f"🔴 Bot stopped – End of session ({now.strftime('%H:%M')}), {trades_today} trade(s) taken."
+                    print(stop_msg)
+                    send_telegram_message(stop_msg)
+                    break
+
+                # Mise à jour du sentiment (Finnhub) toutes les minutes
+                if not hasattr(main, "next_news_check"):
+                    main.next_news_check = now
+                if now >= main.next_news_check:
+                    for pair in PAIRS:
+                        s = get_finnhub_sentiment(pair)
+                        if s != 'neutral':
+                            news_sentiment_filter[pair] = s
+                    main.next_news_check = now + timedelta(seconds=60)
+
+                # Blocage news pour nouvelles entrées
+                blocked, _, _, blocked_pairs = check_and_block_news(now)
+
+                in_trading_hours = TRADING_HOURS_START <= now.hour < TRADING_HOURS_END
+                can_trade_time = True
+                if last_close_time is not None and (now - last_close_time) < timedelta(minutes=MIN_MINUTES_BETWEEN_TRADES):
+                    can_trade_time = False
+
+                balance = None
+                daily_loss_blocked = False
+                try:
+                    balance = get_account_balance(retry_api_call(ctx.account.summary, ACCOUNT_ID))
+                    _, daily_loss_blocked = get_daily_loss_status(balance)
+                except Exception as e:
+                    print(f"Risk check failed: {e}")
+                    daily_loss_blocked = True
+
+                can_trade = (
+                    active_trade is None
+                    and trades_today < MAX_TRADES_PER_DAY
+                    and in_trading_hours
+                    and can_trade_time
+                    and not daily_loss_blocked
+                )
+
+                if can_trade:
+                    candidates = []
+                    for pair in PAIRS:
+                        if pair in blocked_pairs:
+                            print(f" -> SKIPPED {pair}: news block active on this pair")
+                            continue
+                        if has_open_position(pair):
+                            continue
+                        try:
+                            spread = get_spread(pair)
+                        except Exception as e:
+                            print(f"Spread check failed {pair}: {e}")
+                            continue
+                        if not is_spread_ok(pair, spread):
+                            print(f" -> REJECTED {pair}: spread too wide")
+                            rejected_signals.append({
+                                "time": now.strftime("%H:%M:%S"),
+                                "pair": pair,
+                                "buy_reason": "Spread too wide",
+                                "sell_reason": "Spread too wide",
+                                "spread": spread
+                            })
+                            save_rejected_to_file()
+                            continue
+                        try:
+                            df = get_candles(pair, count=EXECUTION_CANDLES, granularity=EXECUTION_GRANULARITY)
+                        except Exception as e:
+                            print(f"Candles failed {pair}: {e}")
+                            continue
+                        signal, price, sl, tp, sl_pips, direction, setup_type, risk_pct, reason = check_signal(df, pair)
+                        if signal:
+                            candidates.append((pair, price, sl, tp, sl_pips, direction, setup_type, risk_pct, reason, df))
+                        else:
+                            c = df.iloc[-2]
+                            parts = reason.split("|")
+                            buy_reason = parts[0].strip() if len(parts) > 0 else reason
+                            sell_reason = parts[1].strip() if len(parts) > 1 else ""
+                            rejected_signals.append({
+                                "time": now.strftime("%H:%M:%S"),
+                                "pair": pair,
+                                "buy_reason": buy_reason,
+                                "sell_reason": sell_reason,
+                                "spread": spread,
+                                "adx": c['adx'] if not pd.isna(c['adx']) else None,
+                                "plus_di": c['plus_di'] if not pd.isna(c['plus_di']) else None,
+                                "minus_di": c['minus_di'] if not pd.isna(c['minus_di']) else None,
+                                "ema50": c['ema50'] if not pd.isna(c['ema50']) else None,
+                                "ema200": c['ema200'] if not pd.isna(c['ema200']) else None,
+                                "rsi": c['rsi'] if not pd.isna(c['rsi']) else None,
+                                "atr": c['atr'] if not pd.isna(c['atr']) else None
+                            })
+                            save_rejected_to_file()
+                            print(f" -> REJECTED {pair}: {reason[:80]}...")
+
+                    if candidates:
+                        best = candidates[0]
+                        pair, price, sl, tp, sl_pips, direction, setup_type, risk_pct, reason, df = best
+                        print(f" -> SIGNAL {direction} {pair} [{setup_type}] {reason}")
+                        
+                        success = place_trade(pair, price, sl, tp, direction, setup_type, risk_pct, reason, df, balance)
+                        if success:
+                            trade_opened_during_window_today = True
+
                 save_status_json()
-                stop_msg = f"🔴 Bot stopped – End of session ({now.strftime('%H:%M')}), {trades_today} trade(s) taken."
-                print(stop_msg)
-                send_telegram_message(stop_msg)
-                break
 
-            # Mise à jour du sentiment (Finnhub) toutes les minutes
-            if not hasattr(main, "next_news_check"):
-                main.next_news_check = now
-            if now >= main.next_news_check:
-                for pair in PAIRS:
-                    s = get_finnhub_sentiment(pair)
-                    if s != 'neutral':
-                        news_sentiment_filter[pair] = s
-                main.next_news_check = now + timedelta(seconds=60)
+                if not hasattr(main, "next_trade_save"):
+                    main.next_trade_save = now
+                if now >= main.next_trade_save:
+                    save_closed_trades_to_file()
+                    save_rejected_to_file()
+                    main.next_trade_save = now + timedelta(minutes=5)
 
-            # Blocage news pour nouvelles entrées
-            blocked, _, _, blocked_pairs = check_and_block_news(now)
+                time.sleep(30)
 
-            in_trading_hours = TRADING_HOURS_START <= now.hour < TRADING_HOURS_END
-            can_trade_time = True
-            if last_close_time is not None and (now - last_close_time) < timedelta(minutes=MIN_MINUTES_BETWEEN_TRADES):
-                can_trade_time = False
+            except Exception as inner_e:
+                # En cas d'erreur, on log et on continue (pas de plantage)
+                print(f"⚠️ Error in main loop: {inner_e}")
+                traceback.print_exc()
+                time.sleep(60)
+                continue
 
-            balance = None
-            daily_loss_blocked = False
-            try:
-                balance = get_account_balance(retry_api_call(ctx.account.summary, ACCOUNT_ID))
-                _, daily_loss_blocked = get_daily_loss_status(balance)
-            except Exception as e:
-                print(f"Risk check failed: {e}")
-                daily_loss_blocked = True
-
-            can_trade = (
-                active_trade is None
-                and trades_today < MAX_TRADES_PER_DAY
-                and in_trading_hours
-                and can_trade_time
-                and not daily_loss_blocked
-            )
-
-            if can_trade:
-                candidates = []
-                for pair in PAIRS:
-                    if pair in blocked_pairs:
-                        print(f" -> SKIPPED {pair}: news block active on this pair")
-                        continue
-                    if has_open_position(pair):
-                        continue
-                    try:
-                        spread = get_spread(pair)
-                    except Exception as e:
-                        print(f"Spread check failed {pair}: {e}")
-                        continue
-                    if not is_spread_ok(pair, spread):
-                        print(f" -> REJECTED {pair}: spread too wide")
-                        rejected_signals.append({
-                            "time": now.strftime("%H:%M:%S"),
-                            "pair": pair,
-                            "buy_reason": "Spread too wide",
-                            "sell_reason": "Spread too wide",
-                            "spread": spread
-                        })
-                        save_rejected_to_file()
-                        continue
-                    try:
-                        df = get_candles(pair, count=EXECUTION_CANDLES, granularity=EXECUTION_GRANULARITY)
-                    except Exception as e:
-                        print(f"Candles failed {pair}: {e}")
-                        continue
-                    signal, price, sl, tp, sl_pips, direction, setup_type, risk_pct, reason = check_signal(df, pair)
-                    if signal:
-                        candidates.append((pair, price, sl, tp, sl_pips, direction, setup_type, risk_pct, reason, df))
-                    else:
-                        c = df.iloc[-2]
-                        parts = reason.split("|")
-                        buy_reason = parts[0].strip() if len(parts) > 0 else reason
-                        sell_reason = parts[1].strip() if len(parts) > 1 else ""
-                        rejected_signals.append({
-                            "time": now.strftime("%H:%M:%S"),
-                            "pair": pair,
-                            "buy_reason": buy_reason,
-                            "sell_reason": sell_reason,
-                            "spread": spread,
-                            "adx": c['adx'] if not pd.isna(c['adx']) else None,
-                            "plus_di": c['plus_di'] if not pd.isna(c['plus_di']) else None,
-                            "minus_di": c['minus_di'] if not pd.isna(c['minus_di']) else None,
-                            "ema50": c['ema50'] if not pd.isna(c['ema50']) else None,
-                            "ema200": c['ema200'] if not pd.isna(c['ema200']) else None,
-                            "rsi": c['rsi'] if not pd.isna(c['rsi']) else None,
-                            "atr": c['atr'] if not pd.isna(c['atr']) else None
-                        })
-                        save_rejected_to_file()
-                        print(f" -> REJECTED {pair}: {reason[:80]}...")
-
-                if candidates:
-                    best = candidates[0]
-                    pair, price, sl, tp, sl_pips, direction, setup_type, risk_pct, reason, df = best
-                    print(f" -> SIGNAL {direction} {pair} [{setup_type}] {reason}")
-                    
-                    success = place_trade(pair, price, sl, tp, direction, setup_type, risk_pct, reason, df, balance)
-                    if success:
-                        trade_opened_during_window_today = True
-
-            save_status_json()
-
-            if not hasattr(main, "next_trade_save"):
-                main.next_trade_save = now
-            if now >= main.next_trade_save:
-                save_closed_trades_to_file()
-                save_rejected_to_file()
-                main.next_trade_save = now + timedelta(minutes=5)
-
-            time.sleep(30)
-
-    except Exception as e:
-        error_trace = traceback.format_exc()
-        send_telegram_message(f"🚨 CRITICAL ERROR:\n{str(e)[:300]}\n\n{error_trace[:300]}")
-        print(f"Critical error: {e}\n{error_trace}")
-        BOT_STATUS = "stopped"
-        save_status_json()
-        raise
     except KeyboardInterrupt:
         BOT_STATUS = "stopped"
         save_status_json()
@@ -1617,6 +1622,11 @@ def place_trade(instrument, entry_price_signal, sl_signal, tp_signal, direction,
             print(f"Market order created but not filled immediately for {instrument}")
             return False
         trade = fill.tradeOpened
+        # Extraction du score numérique depuis reason
+        import re
+        score_match = re.search(r'score\s+([\d.]+)', reason, re.IGNORECASE)
+        quality_score = float(score_match.group(1)) if score_match else None
+
         active_trade = {
             'trade_id': trade.tradeID,
             'pair': instrument,
@@ -1633,7 +1643,8 @@ def place_trade(instrument, entry_price_signal, sl_signal, tp_signal, direction,
             'tp1_hit': False,
             'trailing_distance': f"{FIXED_TRAILING_PIPS} pips initial",
             'atr': atr_val,
-            'opened_at': datetime.now(tz).isoformat()
+            'opened_at': datetime.now(tz).isoformat(),
+            'quality_score': quality_score  # <-- AJOUT
         }
     except Exception as e:
         send_telegram_message(f"⚠️ Error extracting trade details: {str(e)[:100]}")
@@ -1657,7 +1668,7 @@ def place_trade(instrument, entry_price_signal, sl_signal, tp_signal, direction,
            f"TP1: {active_trade['tp1']:.5f} (1R, {TP_PARTIAL_RATIO:.0%})\n"
            f"TP2: {new_tp:.5f} (2R)\n"
            f"R/R: 1:2\n"
-           f"Quality score: {reason.split('score')[1].strip() if 'score' in reason else 'N/A'}\n"
+           f"Quality score: {quality_score:.1f}\n"  # <-- PLUS DE PARENTHÈSE
            f"Time: {datetime.now(tz).strftime('%Y-%m-%d %H:%M:%S')}")
     send_telegram_message(msg)
     log_trade({
@@ -1696,7 +1707,7 @@ def check_closed_trade():
         latest = sorted(closed_trades, key=lambda t: str(getattr(t, 'closeTime', '')), reverse=True)[0]
         
         total_pnl_usd = float(latest.realizedPL)
-        close_price = float(latest.closePrice)  # ✅ CORRECTION : on utilise closePrice au lieu de price
+        close_price = float(latest.closePrice)  # ✅ CORRECTION : on utilise closePrice
         entry = active_trade['entry_price']
         units = active_trade['units']
         direction = active_trade.get('direction', 'buy')
@@ -1732,13 +1743,14 @@ def check_closed_trade():
             "pair": pair,
             "type": "Buy" if direction == 'buy' else "Sell",
             "setup": setup,
-            "pnl": round(total_pnl_cad, 2),      # on stocke en CAD
-            "pnl_usd": round(total_pnl_usd, 2),  # pour référence
+            "pnl": round(total_pnl_cad, 2),      # CAD
+            "pnl_usd": round(total_pnl_usd, 2),  # USD
             "time": datetime.now(tz).strftime("%H:%M:%S"),
             "r_multiple": round(realized_r, 2),
             "units": abs(units),
             "entry": entry,
-            "exit": close_price
+            "exit": close_price,
+            "score": active_trade.get('quality_score')  # on stocke le score
         })
         save_closed_trades_to_file()
         last_close_time = datetime.now(tz)
