@@ -1,5 +1,5 @@
 {
-  "time": "2026-09-01 10:11:14",
+  "time": "2026-09-01 10:12:16",
   "bot_status": "running",
   "session": {
     "trades_today": 1,
@@ -7,28 +7,7 @@
     "start": "07:00",
     "end": "11:00"
   },
-  "active_trade": {
-    "pair": "EUR_USD",
-    "type": "Sell",
-    "entry": 1.15916,
-    "sl": 1.1607,
-    "tp1": 1.1576199999999999,
-    "tp2": 1.1560799999999998,
-    "trailing_stop": "20 pips initial",
-    "current_price": 1.1605,
-    "unrealized_pnl_usd": -462.54,
-    "unrealized_pnl_cad": -642.18,
-    "usd_cad_rate": 1.3884,
-    "distance_to_sl_pips": 2.0,
-    "distance_to_tp2_pips": 44.2,
-    "atr": 0.0006857142857142737,
-    "be_triggered": false,
-    "tp1_hit": false,
-    "setup_type": "Pin Bar",
-    "risk_percent": 0.55,
-    "opened_at": "2026-09-01T07:11:20.884760-04:00",
-    "units": -345182
-  },
+  "active_trade": null,
   "next_news_event": {
     "title": "GDP q/q",
     "time": "21:30",
