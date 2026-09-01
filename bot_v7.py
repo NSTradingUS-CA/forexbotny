@@ -1380,12 +1380,12 @@ def main():
 
                 # === GESTION DE FIN DE SESSION ===
 
-                # 1. Message de rappel à 16:55 (5 min avant 17h)
+                # 1. Message de rappel à 16:50 (10 min avant 17h)
                 if now.hour == 16 and now.minute >= 50 and now.minute < 52:
                     if active_trade is not None:
                         send_telegram_message(
                             f"⏰ **Reminder:** Trade still open on {active_trade['pair']}.\n"
-                            f"Market closes in ~5 minutes. Please monitor or close manually."
+                            f"Market closes in ~10 minutes. Please monitor or close manually."
                         )
                         print("Fin de session : message de rappel envoyé.")
 
