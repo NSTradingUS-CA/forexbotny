@@ -1,5 +1,5 @@
 {
-  "time": "2026-09-01 09:34:42",
+  "time": "2026-09-01 09:35:45",
   "bot_status": "running",
   "session": {
     "trades_today": 1,
@@ -17,8 +17,8 @@
     "trailing_stop": "20 pips initial",
     "current_price": 1.1596,
     "unrealized_pnl_usd": -151.88,
-    "unrealized_pnl_cad": -210.96,
-    "usd_cad_rate": 1.389,
+    "unrealized_pnl_cad": -210.98,
+    "usd_cad_rate": 1.3891,
     "distance_to_sl_pips": 11.0,
     "distance_to_tp2_pips": 35.2,
     "atr": 0.0006857142857142737,
