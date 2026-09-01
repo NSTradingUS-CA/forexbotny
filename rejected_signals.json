@@ -1,30 +1,6 @@
 {
   "signals": [
     {
-      "time": "07:05:26",
-      "pair": "EUR_USD",
-      "buy_reason": "Slippage 3.7pips > 1.7",
-      "sell_reason": "Slippage 3.7pips > 1.7"
-    },
-    {
-      "time": "07:05:58",
-      "pair": "EUR_USD",
-      "buy_reason": "Slippage 3.8pips > 1.7",
-      "sell_reason": "Slippage 3.8pips > 1.7"
-    },
-    {
-      "time": "07:06:30",
-      "pair": "EUR_USD",
-      "buy_reason": "Slippage 3.8pips > 1.7",
-      "sell_reason": "Slippage 3.8pips > 1.7"
-    },
-    {
-      "time": "07:07:02",
-      "pair": "EUR_USD",
-      "buy_reason": "Slippage 3.8pips > 1.7",
-      "sell_reason": "Slippage 3.8pips > 1.7"
-    },
-    {
       "time": "07:07:36",
       "pair": "EUR_USD",
       "buy_reason": "Slippage 3.4pips > 1.7",
@@ -952,6 +928,46 @@
       "buy_reason": "H1 not up, MACD not bullish",
       "sell_reason": "H1 not down",
       "spread": 0.000180000000000069,
+      "adx": 20.250198340173633,
+      "plus_di": 14.951712163346611,
+      "minus_di": 22.850724457170188,
+      "ema50": 1.3550903983961449,
+      "ema200": 1.3576506657641165,
+      "rsi": 35.26185620017411,
+      "atr": 0.0009042857142857226
+    },
+    {
+      "time": "10:51:12",
+      "pair": "EUR_USD",
+      "buy_reason": "Slippage 3.8pips > 1.8",
+      "sell_reason": "Slippage 3.8pips > 1.8"
+    },
+    {
+      "time": "10:51:42",
+      "pair": "GBP_USD",
+      "buy_reason": "H1 not up, MACD not bullish",
+      "sell_reason": "H1 not down",
+      "spread": 0.000180000000000069,
+      "adx": 20.250198340173633,
+      "plus_di": 14.951712163346611,
+      "minus_di": 22.850724457170188,
+      "ema50": 1.3550903983961449,
+      "ema200": 1.3576506657641165,
+      "rsi": 35.26185620017411,
+      "atr": 0.0009042857142857226
+    },
+    {
+      "time": "10:51:43",
+      "pair": "EUR_USD",
+      "buy_reason": "Slippage 4.0pips > 1.8",
+      "sell_reason": "Slippage 4.0pips > 1.8"
+    },
+    {
+      "time": "10:52:14",
+      "pair": "GBP_USD",
+      "buy_reason": "H1 not up, MACD not bullish",
+      "sell_reason": "H1 not down",
+      "spread": 0.00017000000000000348,
       "adx": 20.250198340173633,
       "plus_di": 14.951712163346611,
       "minus_di": 22.850724457170188,
