@@ -207,6 +207,7 @@ def display_setup(item):
     return str(item.get("setup", item.get("setup_type", "--"))).upper()
 
 def display_score(item):
+    # On regarde d'abord 'score', puis 'setup_score'
     score = item.get("score", item.get("setup_score"))
     return fmt_optional(score, 1) if score is not None else "--"
 
@@ -488,7 +489,7 @@ def render_dashboard():
             if 'score' in df_trades.columns:
                 df_trades['score'] = pd.to_numeric(df_trades['score'], errors='coerce')
             else:
-                df_trades['score'] = pd.NA   # ou None
+                df_trades['score'] = pd.NA
             
             df_trades['pnl'] = pd.to_numeric(df_trades['pnl'], errors='coerce')
 
