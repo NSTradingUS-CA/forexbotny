@@ -699,6 +699,46 @@
       "ema200": 1.3576506657641165,
       "rsi": 35.26185620017411,
       "atr": 0.0009042857142857226
+    },
+    {
+      "time": "10:42:26",
+      "pair": "EUR_USD",
+      "buy_reason": "Slippage 8.0pips > 1.8",
+      "sell_reason": "Slippage 8.0pips > 1.8"
+    },
+    {
+      "time": "10:42:56",
+      "pair": "GBP_USD",
+      "buy_reason": "H1 not up, MACD not bullish",
+      "sell_reason": "H1 not down",
+      "spread": 0.00017000000000000348,
+      "adx": 20.250198340173633,
+      "plus_di": 14.951712163346611,
+      "minus_di": 22.850724457170188,
+      "ema50": 1.3550903983961449,
+      "ema200": 1.3576506657641165,
+      "rsi": 35.26185620017411,
+      "atr": 0.0009042857142857226
+    },
+    {
+      "time": "10:42:58",
+      "pair": "EUR_USD",
+      "buy_reason": "Slippage 6.9pips > 1.8",
+      "sell_reason": "Slippage 6.9pips > 1.8"
+    },
+    {
+      "time": "10:43:29",
+      "pair": "GBP_USD",
+      "buy_reason": "H1 not up, MACD not bullish",
+      "sell_reason": "H1 not down",
+      "spread": 0.00015999999999993797,
+      "adx": 20.250198340173633,
+      "plus_di": 14.951712163346611,
+      "minus_di": 22.850724457170188,
+      "ema50": 1.3550903983961449,
+      "ema200": 1.3576506657641165,
+      "rsi": 35.26185620017411,
+      "atr": 0.0009042857142857226
     }
   ],
   "last_cleanup": "2026-09-01"
