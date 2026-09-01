@@ -207,7 +207,7 @@ def display_setup(item):
     return str(item.get("setup", item.get("setup_type", "--"))).upper()
 
 def display_score(item):
-    # On regarde d'abord 'score', puis 'setup_score'
+    # Lecture du score depuis 'score' (présent dans active_trade et closed_trades)
     score = item.get("score", item.get("setup_score"))
     return fmt_optional(score, 1) if score is not None else "--"
 
@@ -389,7 +389,7 @@ def render_dashboard():
         c3.metric("Entry", f"{active.get('entry',0):.5f}")
         c4.metric("Current", f"{active.get('current_price',0):.5f}")
         
-        # P&L : on privilégie CAD si disponible, sinon USD
+        # P&L : on utilise CAD si disponible, sinon USD
         pnl_cad = active.get('unrealized_pnl_cad')
         if pnl_cad is not None:
             pnl = pnl_cad
@@ -419,7 +419,7 @@ def render_dashboard():
         st.caption(f"Volume: {abs(active.get('units', 0))} units")
 
         setup = display_setup(active)
-        score = display_score(active)
+        score = display_score(active)   # <--- utilise active.get("score")
         risk = display_risk(active)
         current_r = display_r(active)
         management = display_trade_status(active)
@@ -453,7 +453,6 @@ def render_dashboard():
             for t in closed_trades[::-1]:
                 pnl = t.get('pnl', 0)        # déjà en CAD
                 color = "green" if pnl >= 0 else "red"
-                # Format demandé
                 st.markdown(
                     f"<span class='{color}'>{t.get('pair','')} — Dir: {t.get('type','')} | Type: {display_setup(t)} | R: {display_r(t)} | Score: {display_score(t)} | Vol: {abs(t.get('units', 0))} units | PnL: {pnl:.2f} CAD ({t.get('time','')})</span>",
                     unsafe_allow_html=True
@@ -485,7 +484,6 @@ def render_dashboard():
             df_trades['setup'] = df_trades['setup'].str.upper()
             df_trades['r_multiple'] = pd.to_numeric(df_trades['r_multiple'], errors='coerce')
             
-            # Correction KeyError: vérifier si la colonne 'score' existe
             if 'score' in df_trades.columns:
                 df_trades['score'] = pd.to_numeric(df_trades['score'], errors='coerce')
             else:
