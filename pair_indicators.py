@@ -206,7 +206,7 @@ def push_indicators_with_retry(pair_indicators):
                 return
 
             elif put_resp.status_code == 409:
-                # Conflit : le fichier a été modifié entre temps, on réessaye
+                # Conflit : le fichier a été modifié entre temps, on réessaie
                 print(f"⚠️ Conflit 409, nouvelle tentative {attempt+1}/{max_retries}...")
                 time.sleep(1)  # petit délai avant de récupérer le nouveau SHA
                 continue
@@ -222,8 +222,12 @@ def push_indicators_with_retry(pair_indicators):
 
 
 def should_stop(now):
-    """Détermine si le script doit s'arrêter."""
-    # 1. Arrêt programmé à 17:05 (déjà existant)
+    """
+    Détermine si le script doit s'arrêter.
+    - Arrêt normal à 17:05 (peu importe le trade).
+    - Arrêt anticipé à 12:05 uniquement si AUCUN trade n'est actif.
+    """
+    # 1. Arrêt programmé à 17:05
     if now.hour > SHUTDOWN_HOUR or (now.hour == SHUTDOWN_HOUR and now.minute >= 5):
         return True
 
@@ -233,10 +237,9 @@ def should_stop(now):
             if os.path.exists("status.json"):
                 with open("status.json", "r") as f:
                     status = json.load(f)
-                    bot_status = status.get("bot_status")
                     active_trade = status.get("active_trade")
-                    # Si le bot est explicitement arrêté ou qu'il n'y a pas de trade actif
-                    if bot_status == "stopped" or active_trade is None:
+                    # On continue si un trade est actif, sinon on arrête
+                    if active_trade is None:
                         return True
         except Exception as e:
             # En cas d'erreur de lecture, on ne s'arrête pas (prudence)
@@ -254,7 +257,7 @@ def main():
         f"   Normal shutdown at {SHUTDOWN_HOUR}:05, or at {EARLY_SHUTDOWN_HOUR}:05 if no active trade."
     )
     print(start_msg)
-    send_telegram_message(start_msg)   # <--- notification Telegram
+    send_telegram_message(start_msg)
 
     try:
         while True:
@@ -264,7 +267,7 @@ def main():
             if should_stop(now):
                 stop_msg = f"🔴 Pair Indicators stopped – shutdown condition met at {now.strftime('%H:%M')}"
                 print(stop_msg)
-                send_telegram_message(stop_msg)   # <--- notification d'arrêt
+                send_telegram_message(stop_msg)
                 break
 
             pair_indicators = {}
