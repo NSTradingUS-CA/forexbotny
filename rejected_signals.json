@@ -1,46 +1,6 @@
 {
   "signals": [
     {
-      "time": "09:46:21",
-      "pair": "GBP_USD",
-      "buy_reason": "Slippage 17.0pips > 2.7",
-      "sell_reason": "Slippage 17.0pips > 2.7"
-    },
-    {
-      "time": "09:46:52",
-      "pair": "EUR_USD",
-      "buy_reason": "H1 not up",
-      "sell_reason": "H1 not down, MACD not bearish",
-      "spread": 0.000140000000000029,
-      "adx": 29.05544096613138,
-      "plus_di": 17.2905840253389,
-      "minus_di": 24.093122554812478,
-      "ema50": 1.1592906565243315,
-      "ema200": 1.1620157272845941,
-      "rsi": 42.69037069782368,
-      "atr": 0.0007864285714285531
-    },
-    {
-      "time": "09:46:53",
-      "pair": "GBP_USD",
-      "buy_reason": "Slippage 16.3pips > 2.7",
-      "sell_reason": "Slippage 16.3pips > 2.7"
-    },
-    {
-      "time": "09:47:23",
-      "pair": "EUR_USD",
-      "buy_reason": "H1 not up",
-      "sell_reason": "H1 not down, MACD not bearish",
-      "spread": 0.00014999999999987246,
-      "adx": 29.05544096613138,
-      "plus_di": 17.2905840253389,
-      "minus_di": 24.093122554812478,
-      "ema50": 1.1592906565243315,
-      "ema200": 1.1620157272845941,
-      "rsi": 42.69037069782368,
-      "atr": 0.0007864285714285531
-    },
-    {
       "time": "09:47:25",
       "pair": "GBP_USD",
       "buy_reason": "Slippage 18.4pips > 2.7",
@@ -1180,6 +1140,62 @@
     },
     {
       "time": "10:13:23",
+      "pair": "EUR_USD",
+      "buy_reason": "H1 not up",
+      "sell_reason": "H1 not down, MACD not bearish",
+      "spread": 0.00015999999999993797,
+      "adx": 26.54764797930024,
+      "plus_di": 22.963709654861557,
+      "minus_di": 21.2068218616756,
+      "ema50": 1.1592337705584228,
+      "ema200": 1.1619934785569273,
+      "rsi": 44.01964773432169,
+      "atr": 0.0008249999999999805
+    },
+    {
+      "time": "10:13:23",
+      "pair": "GBP_USD",
+      "buy_reason": "H1 not up, RSI 29.0 outside 30-70, MACD not bullish",
+      "sell_reason": "H1 not down, RSI 29.0 outside 30-70",
+      "spread": 0.00017000000000000348,
+      "adx": 38.005089148117136,
+      "plus_di": 10.435089414895552,
+      "minus_di": 30.545198475439015,
+      "ema50": 1.3521700757980835,
+      "ema200": 1.3564046981433795,
+      "rsi": 29.01108736003698,
+      "atr": 0.0011407142857142885
+    },
+    {
+      "time": "10:13:57",
+      "pair": "EUR_USD",
+      "buy_reason": "H1 not up",
+      "sell_reason": "H1 not down, MACD not bearish",
+      "spread": 0.0001500000000000945,
+      "adx": 26.54764797930024,
+      "plus_di": 22.963709654861557,
+      "minus_di": 21.2068218616756,
+      "ema50": 1.1592337705584228,
+      "ema200": 1.1619934785569273,
+      "rsi": 44.01964773432169,
+      "atr": 0.0008249999999999805
+    },
+    {
+      "time": "10:13:57",
+      "pair": "GBP_USD",
+      "buy_reason": "H1 not up, RSI 29.0 outside 30-70, MACD not bullish",
+      "sell_reason": "H1 not down, RSI 29.0 outside 30-70",
+      "spread": 0.00015999999999993797,
+      "adx": 38.005089148117136,
+      "plus_di": 10.435089414895552,
+      "minus_di": 30.545198475439015,
+      "ema50": 1.3521700757980835,
+      "ema200": 1.3564046981433795,
+      "rsi": 29.01108736003698,
+      "atr": 0.0011407142857142885
+    },
+    {
+      "time": "10:14:28",
       "pair": "EUR_USD",
       "buy_reason": "H1 not up",
       "sell_reason": "H1 not down, MACD not bearish",
