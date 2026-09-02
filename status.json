@@ -1,5 +1,5 @@
 {
-  "time": "2026-09-02 09:10:28",
+  "time": "2026-09-02 09:11:31",
   "bot_status": "running",
   "session": {
     "trades_today": 0,
@@ -17,7 +17,7 @@
     "trailing_stop": "1.8x H1 ATR",
     "current_price": 1.158,
     "unrealized_pnl_usd": 389.98,
-    "unrealized_pnl_cad": 542.69,
+    "unrealized_pnl_cad": 542.7,
     "usd_cad_rate": 1.3916,
     "distance_to_sl_pips": 0.5,
     "distance_to_tp2_pips": 14.6,
