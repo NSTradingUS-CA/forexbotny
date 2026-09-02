@@ -1,5 +1,5 @@
 {
-  "time": "2026-09-02 09:13:37",
+  "time": "2026-09-02 09:14:43",
   "bot_status": "running",
   "session": {
     "trades_today": 0,
@@ -7,29 +7,7 @@
     "start": "07:00",
     "end": "11:00"
   },
-  "active_trade": {
-    "pair": "EUR_USD",
-    "type": "Sell",
-    "entry": 1.1595,
-    "sl": 1.157954,
-    "tp1": 1.15803,
-    "tp2": 1.15654,
-    "trailing_stop": "1.8x H1 ATR",
-    "current_price": 1.15791,
-    "unrealized_pnl_usd": 413.37,
-    "unrealized_pnl_cad": 575.29,
-    "usd_cad_rate": 1.3917,
-    "distance_to_sl_pips": 0.4,
-    "distance_to_tp2_pips": 13.7,
-    "atr": 0.0007864285714285531,
-    "be_triggered": true,
-    "tp1_hit": false,
-    "setup_type": "Momentum",
-    "risk_percent": 0.4,
-    "opened_at": "2026-09-01T10:59:19.161483-04:00",
-    "units": -259984,
-    "score": null
-  },
+  "active_trade": null,
   "next_news_event": null,
   "strategy": "H1 Multi-Setup (9 types) - Quality Score based",
   "max_risk_per_trade_percent": 0.65,
