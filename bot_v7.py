@@ -1263,15 +1263,12 @@ def main():
         load_existing_open_position()
 
     # ---------- DETECTION DES CLOTURES MANUELLES AU DEMARRAGE ----------
-    # Si active_trade n'est pas None mais qu'il n'y a pas de position ouverte => clôture manuelle
     if active_trade is not None:
         pair = active_trade['pair']
         if not has_open_position(pair):
             print(f"Trade on {pair} was closed manually before bot start. Enregistrement en cours...")
-            check_closed_trade()  # va enregistrer et mettre active_trade à None
+            check_closed_trade()
         else:
-            # Vérifier si le trade a été partiellement fermé (volume différent)
-            # (on pourrait ajouter une vérification, mais c'est moins critique)
             pass
 
     trade_opened_during_window_today = False
@@ -1304,9 +1301,73 @@ def main():
 
     try:
         while True:
-            try:  # Boucle intérieure pour résister aux erreurs
-                now = datetime.now(tz)
+            now = datetime.now(tz)
 
+            # =========================================================
+            # VÉRIFICATION DES CONDITIONS D'ARRÊT (EN DÉBUT DE BOUCLE)
+            # =========================================================
+
+            # 1. Arrêt anticipé à 12:05 si aucun trade actif
+            if now.hour == 12 and now.minute >= 5 and active_trade is None:
+                print("🕒 12:05 reached with no active trade – stopping bot.")
+                BOT_STATUS = "stopped"
+                save_status_json()
+                send_telegram_message("🔴 Bot stopped – End of session (12:05), no active trade.")
+                break
+
+            # 2. Arrêt normal à 17:05 (toujours, même avec trade)
+            if now.hour > BOT_SHUTDOWN_HOUR or (now.hour == BOT_SHUTDOWN_HOUR and now.minute >= 5):
+                # Si un trade est ouvert, on essaie de le fermer en profit
+                if active_trade is not None:
+                    # Récupérer le P&L actuel
+                    try:
+                        pair = active_trade['pair']
+                        resp = ctx.pricing.get(ACCOUNT_ID, instruments=pair)
+                        pi = resp.body['prices'][0]
+                        bid = float(pi.bids[0].price)
+                        ask = float(pi.asks[0].price)
+                        current_price = bid if active_trade['direction'] == 'sell' else ask
+                        pnl = (current_price - active_trade['entry_price']) * active_trade['units']
+                        if active_trade['direction'] == 'sell':
+                            pnl = -pnl
+                    except:
+                        pnl = 0
+                    if pnl > 0:
+                        if close_full_position_market():
+                            usd_cad = get_usd_cad_rate()
+                            pnl_cad = pnl * usd_cad
+                            send_telegram_message(
+                                f"🔒 **Trade closed at market close**\n"
+                                f"Pair: {active_trade['pair']}\n"
+                                f"P&L: {pnl_cad:.2f} CAD\n"
+                                f"Reason: End of session (17:05)"
+                            )
+                            active_trade = None
+                            save_closed_trades_to_file()
+                        else:
+                            send_telegram_message(
+                                f"⚠️ **Could not close trade on {active_trade['pair']}.** Please close manually."
+                            )
+                    else:
+                        send_telegram_message(
+                            f"⏳ **Trade on {active_trade['pair']} is in loss ({pnl:.2f} USD).**\n"
+                            f"Market is now closed. Please manage manually."
+                        )
+                # Arrêt du bot (avec ou sans trade)
+                print("🕒 17:05 reached – stopping bot.")
+                BOT_STATUS = "stopped"
+                save_status_json()
+                send_telegram_message("🔴 Bot stopped – End of session (17:05).")
+                break
+
+            # =========================================================
+            # FIN DES CONDITIONS D'ARRÊT
+            # =========================================================
+
+            # ------------------------------------------------------------------
+            # Le reste de la boucle (gestion des trades, etc.) avec try/except
+            # ------------------------------------------------------------------
+            try:
                 # Réinitialisation journalière
                 today = now.date()
                 if last_trade_date != today:
@@ -1341,7 +1402,6 @@ def main():
                 manage_active_trade()
                 check_closed_trade()
 
-                # Mise à jour de late_shutdown_required
                 if (
                     now.hour >= TRADING_HOURS_END
                     and trade_opened_during_window_today
@@ -1394,72 +1454,7 @@ def main():
                                     else:
                                         send_telegram_message("⚠️ Could not move SL. Please monitor.")
 
-                # === GESTION DE FIN DE SESSION ===
-
-                # 1. Message de rappel à 16:45 (15 min avant la fermeture réelle du marché)
-                if now.hour == 16 and now.minute >= 45 and now.minute < 47:
-                    if active_trade is not None:
-                        send_telegram_message(
-                            f"⏰ **Reminder:** Trade still open on {active_trade['pair']}.\n"
-                            f"Market closes at 16:59 (NY time). Please monitor or close manually."
-                        )
-                        print("Fin de session : message de rappel envoyé à 16:45.")
-
-                # 2. Fermeture automatique à 16:50 (anticipation)
-                if now.hour == 16 and now.minute >= 50 and now.minute < 52:
-                    if active_trade is not None:
-                        # Récupérer le P&L actuel
-                        try:
-                            pair = active_trade['pair']
-                            resp = ctx.pricing.get(ACCOUNT_ID, instruments=pair)
-                            pi = resp.body['prices'][0]
-                            bid = float(pi.bids[0].price)
-                            ask = float(pi.asks[0].price)
-                            current_price = bid if active_trade['direction'] == 'sell' else ask
-                            pnl = (current_price - active_trade['entry_price']) * active_trade['units']
-                            if active_trade['direction'] == 'sell':
-                                pnl = -pnl
-                        except:
-                            pnl = 0
-
-                        if pnl > 0:
-                            if close_full_position_market():
-                                usd_cad = get_usd_cad_rate()
-                                pnl_cad = pnl * usd_cad
-                                send_telegram_message(
-                                    f"🔒 **Trade closed at market close**\n"
-                                    f"Pair: {active_trade['pair']}\n"
-                                    f"P&L: {pnl_cad:.2f} CAD\n"
-                                    f"Reason: End of session (16:50)"
-                                )
-                                active_trade = None
-                                save_closed_trades_to_file()
-                            else:
-                                send_telegram_message(
-                                    f"⚠️ **Could not close trade on {active_trade['pair']}.** "
-                                    f"Please close manually."
-                                )
-                        else:
-                            # Trade en perte : on laisse ouvert et on arrête le bot
-                            send_telegram_message(
-                                f"⏳ **Trade on {active_trade['pair']} is in loss ({pnl:.2f} USD).**\n"
-                                f"Market closes at 16:59. Please manage manually."
-                            )
-                            BOT_STATUS = "stopped"
-                            save_status_json()
-                            stop_msg = f"🔴 Bot stopped – End of session ({now.strftime('%H:%M')}), {trades_today} trade(s) taken. Trade remains open."
-                            print(stop_msg)
-                            send_telegram_message(stop_msg)
-                            break
-
-                    # Si aucun trade, arrêt normal
-                    check_future_news_and_alert()
-                    BOT_STATUS = "stopped"
-                    save_status_json()
-                    stop_msg = f"🔴 Bot stopped – End of session ({now.strftime('%H:%M')}), {trades_today} trade(s) taken."
-                    print(stop_msg)
-                    send_telegram_message(stop_msg)
-                    break
+                # (On a supprimé l'ancienne gestion de fin de session ici, car elle est maintenant en début de boucle)
 
                 # Mise à jour du sentiment (Finnhub) toutes les minutes
                 if not hasattr(main, "next_news_check"):
@@ -1765,11 +1760,9 @@ def check_closed_trade():
         resp = retry_api_call(ctx.trade.list, ACCOUNT_ID, instrument=pair, count=20, state='CLOSED')
         closed_trades = resp.body.get('trades', [])
         if not closed_trades:
-            # Aucun trade clôturé trouvé, on attend le prochain cycle
             print(f"No closed trade found for {pair} yet, will retry later.")
             return
 
-        # Prendre le plus récent
         latest = sorted(closed_trades, key=lambda t: str(getattr(t, 'closeTime', '')), reverse=True)[0]
 
         total_pnl_usd = float(latest.realizedPL)
@@ -1779,7 +1772,6 @@ def check_closed_trade():
         elif hasattr(latest, 'price') and latest.price is not None:
             close_price = float(latest.price)
         else:
-            # Fallback : calcul à partir du P&L et du volume (approximatif)
             units_abs = abs(active_trade['units'])
             if units_abs > 0:
                 close_price = active_trade['entry_price'] + (total_pnl_usd / units_abs)
@@ -1816,7 +1808,6 @@ def check_closed_trade():
                f"Time: {datetime.now(tz).strftime('%Y-%m-%d %H:%M:%S')}")
         send_telegram_message(msg)
 
-        # Enregistrement dans closed_trades_today
         closed_trades_today.append({
             "pair": pair,
             "type": "Buy" if direction == 'buy' else "Sell",
