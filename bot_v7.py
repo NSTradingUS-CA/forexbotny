@@ -208,7 +208,9 @@ def push_file_to_github(local_path, remote_path):
         if sha:
             payload["sha"] = sha
         put_resp = requests.put(url, headers=headers, json=payload, timeout=10)
-        if put_resp.status_code not in (200, 201):
+        if put_resp.status_code in (200, 201):
+            print(f"✅ Push {remote_path} réussi")
+        else:
             print(f"Push {remote_path} failed: {put_resp.status_code}")
     except Exception as e:
         print(f"Error pushing {remote_path}: {e}")
@@ -767,6 +769,7 @@ def get_account_balance(response):
         return float(response.body['account'].balance)
 
 
+# ==================== FONCTIONS CORRIGÉES ====================
 def close_partial_position(units_to_close):
     pair = active_trade['pair']
     direction = active_trade['direction']
@@ -774,7 +777,7 @@ def close_partial_position(units_to_close):
     body = {"units": str(close_units)}
     try:
         r = retry_api_call(ctx.position.close, ACCOUNT_ID, instrument=pair, data=body)
-        if r.status_code == 200:
+        if r.status == 200:  # CORRECTION : status au lieu de status_code
             print(f"Partial close: {abs(units_to_close)} units closed on {pair}")
             return True
     except Exception as e:
@@ -791,7 +794,7 @@ def close_full_position_market():
     body = {"units": str(units)}
     try:
         r = retry_api_call(ctx.position.close, ACCOUNT_ID, instrument=pair, data=body)
-        if r.status_code == 200:
+        if r.status == 200:  # CORRECTION
             print(f"Full position closed on {pair}")
             return True
     except Exception as e:
@@ -832,10 +835,11 @@ def move_sl_to_entry():
     else:
         return False
     try:
-        retry_api_call(ctx.position.close, ACCOUNT_ID, instrument=pair, data=body)
-        active_trade['sl'] = new_sl
-        print(f"SL moved to entry ({new_sl:.5f}) on {pair}")
-        return True
+        r = retry_api_call(ctx.position.close, ACCOUNT_ID, instrument=pair, data=body)
+        if r.status == 200:  # CORRECTION
+            active_trade['sl'] = new_sl
+            print(f"SL moved to entry ({new_sl:.5f}) on {pair}")
+            return True
     except Exception as e:
         print(f"Failed to move SL to entry: {e}")
         return False
@@ -1257,6 +1261,18 @@ def main():
         daily_start_balance = None
     if active_trade is None:
         load_existing_open_position()
+
+    # ---------- DETECTION DES CLOTURES MANUELLES AU DEMARRAGE ----------
+    # Si active_trade n'est pas None mais qu'il n'y a pas de position ouverte => clôture manuelle
+    if active_trade is not None:
+        pair = active_trade['pair']
+        if not has_open_position(pair):
+            print(f"Trade on {pair} was closed manually before bot start. Enregistrement en cours...")
+            check_closed_trade()  # va enregistrer et mettre active_trade à None
+        else:
+            # Vérifier si le trade a été partiellement fermé (volume différent)
+            # (on pourrait ajouter une vérification, mais c'est moins critique)
+            pass
 
     trade_opened_during_window_today = False
     if active_trade is not None:
@@ -1742,16 +1758,36 @@ def check_closed_trade():
     if has_open_position(pair):
         return
 
+    # Petit délai pour laisser le temps à l'API de synchroniser la clôture
+    time.sleep(1)
+
     try:
         resp = retry_api_call(ctx.trade.list, ACCOUNT_ID, instrument=pair, count=20, state='CLOSED')
         closed_trades = resp.body.get('trades', [])
         if not closed_trades:
+            # Aucun trade clôturé trouvé, on attend le prochain cycle
+            print(f"No closed trade found for {pair} yet, will retry later.")
             return
 
+        # Prendre le plus récent
         latest = sorted(closed_trades, key=lambda t: str(getattr(t, 'closeTime', '')), reverse=True)[0]
 
         total_pnl_usd = float(latest.realizedPL)
-        close_price = float(latest.closePrice)  # Bon prix de sortie
+        # Récupération robuste du prix de sortie
+        if hasattr(latest, 'closePrice') and latest.closePrice is not None:
+            close_price = float(latest.closePrice)
+        elif hasattr(latest, 'price') and latest.price is not None:
+            close_price = float(latest.price)
+        else:
+            # Fallback : calcul à partir du P&L et du volume (approximatif)
+            units_abs = abs(active_trade['units'])
+            if units_abs > 0:
+                close_price = active_trade['entry_price'] + (total_pnl_usd / units_abs)
+                if active_trade['direction'] == 'sell':
+                    close_price = active_trade['entry_price'] - (total_pnl_usd / units_abs)
+            else:
+                close_price = active_trade['entry_price']
+
         entry = active_trade['entry_price']
         units = active_trade['units']
         direction = active_trade.get('direction', 'buy')
@@ -1780,6 +1816,7 @@ def check_closed_trade():
                f"Time: {datetime.now(tz).strftime('%Y-%m-%d %H:%M:%S')}")
         send_telegram_message(msg)
 
+        # Enregistrement dans closed_trades_today
         closed_trades_today.append({
             "pair": pair,
             "type": "Buy" if direction == 'buy' else "Sell",
