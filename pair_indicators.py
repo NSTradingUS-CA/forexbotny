@@ -28,7 +28,7 @@ MACD_SIGNAL = 9
 REFRESH_SECONDS = 10      # collecte toutes les 10s
 PUSH_INTERVAL = 30        # push au maximum toutes les 30s
 
-# Variables Telegram (les mêmes que pour le bot)
+# Variables Telegram
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 # ============================
@@ -36,12 +36,10 @@ TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 ctx = v20.Context(OANDA_URL, token=API_KEY)
 tz = pytz.timezone(TIMEZONE)
 
-# Cache pour éviter les pushes inutiles
 _last_pushed_data = {}
-_last_push_time = None   # sera initialisé au premier push
+_last_push_time = None
 
 
-# ---------- Fonction Telegram ----------
 def send_telegram_message(text):
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
         print("Telegram not configured. Skipping notification.")
@@ -56,7 +54,6 @@ def send_telegram_message(text):
         print(f"Telegram error: {e}")
 
 
-# ---------- Fonctions existantes ----------
 def retry_api_call(func, *args, **kwargs):
     for i in range(3):
         try:
@@ -156,18 +153,15 @@ def collect_indicators(pair):
 
 
 def push_indicators_with_retry(pair_indicators):
-    """Push avec gestion de conflit 409 et comparaison de contenu."""
     global _last_pushed_data, _last_push_time
 
-    # 1. Vérifier si les données ont changé
     if pair_indicators == _last_pushed_data:
-        return  # Pas de changement, on ne pousse pas
+        return
 
-    # 2. Vérifier le délai minimum entre deux pushes
     now = datetime.now(tz)
     if _last_push_time is not None:
         if (now - _last_push_time).total_seconds() < PUSH_INTERVAL:
-            return  # On attend encore
+            return
 
     if not GH_PAT:
         return
@@ -180,7 +174,6 @@ def push_indicators_with_retry(pair_indicators):
                        "Accept": "application/vnd.github.v3+json",
                        "Cache-Control": "no-cache"}
 
-            # Récupérer le SHA actuel
             resp = requests.get(url, headers=headers, timeout=10)
             if resp.status_code == 200:
                 sha = resp.json().get("sha")
@@ -199,21 +192,17 @@ def push_indicators_with_retry(pair_indicators):
             put_resp = requests.put(url, headers=headers, json=payload, timeout=10)
 
             if put_resp.status_code in (200, 201):
-                # Succès : on met à jour le cache
                 _last_pushed_data = pair_indicators.copy()
                 _last_push_time = now
                 print(f"✅ Push pair_indicators.json réussi (tentative {attempt+1})")
                 return
-
             elif put_resp.status_code == 409:
-                # Conflit : le fichier a été modifié entre temps, on réessaie
                 print(f"⚠️ Conflit 409, nouvelle tentative {attempt+1}/{max_retries}...")
-                time.sleep(1)  # petit délai avant de récupérer le nouveau SHA
+                time.sleep(1)
                 continue
             else:
                 print(f"❌ Push échoué (status {put_resp.status_code}) : {put_resp.text}")
                 return
-
         except Exception as e:
             print(f"❌ Erreur lors du push (tentative {attempt+1}) : {e}")
             time.sleep(1)
@@ -222,36 +211,30 @@ def push_indicators_with_retry(pair_indicators):
 
 
 def should_stop(now):
-    """
-    Détermine si le script doit s'arrêter.
-    - Arrêt normal à 17:05 (peu importe le trade).
-    - Arrêt anticipé à 12:05 uniquement si AUCUN trade n'est actif.
-    """
-    # 1. Arrêt programmé à 17:05
+    # Arrêt normal à 17:05
     if now.hour > SHUTDOWN_HOUR or (now.hour == SHUTDOWN_HOUR and now.minute >= 5):
         return True
 
-    # 2. Arrêt anticipé à 12:05 si aucun trade actif
+    # Arrêt anticipé à 12:05 si aucun trade actif
     if now.hour >= EARLY_SHUTDOWN_HOUR and now.minute >= 5:
         try:
             if os.path.exists("status.json"):
                 with open("status.json", "r") as f:
                     status = json.load(f)
                     active_trade = status.get("active_trade")
-                    # On continue si un trade est actif, sinon on arrête
                     if active_trade is None:
+                        print("🔴 No active trade, stopping Pair Indicators at 12:05.")
                         return True
         except Exception as e:
-            # En cas d'erreur de lecture, on ne s'arrête pas (prudence)
             print(f"Erreur lecture status.json: {e}")
-
+            # En cas d'erreur, on continue (prudence)
+            return False
     return False
 
 
 def main():
     global _last_pushed_data, _last_push_time
 
-    # ----- Message de démarrage -----
     start_msg = (
         f"🟢 Pair Indicators started – refresh every {REFRESH_SECONDS}s, push every {PUSH_INTERVAL}s\n"
         f"   Normal shutdown at {SHUTDOWN_HOUR}:05, or at {EARLY_SHUTDOWN_HOUR}:05 if no active trade."
@@ -263,7 +246,6 @@ def main():
         while True:
             now = datetime.now(tz)
 
-            # Vérifier les conditions d'arrêt
             if should_stop(now):
                 stop_msg = f"🔴 Pair Indicators stopped – shutdown condition met at {now.strftime('%H:%M')}"
                 print(stop_msg)
