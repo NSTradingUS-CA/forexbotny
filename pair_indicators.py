@@ -7,6 +7,7 @@ import os
 import json
 import base64
 import requests
+import traceback
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -128,10 +129,14 @@ def get_spread(instrument):
 def collect_indicators(pair):
     try:
         spread = get_spread(pair)
-    except:
+    except Exception as e:
+        print(f"Spread error {pair}: {e}")
         return None
     try:
         df = get_candles(pair)
+        if df.empty:
+            print(f"Candles empty for {pair}")
+            return None
         last_candle = df.iloc[-2]
         return {
             "price": last_candle['c'],
@@ -149,6 +154,7 @@ def collect_indicators(pair):
         }
     except Exception as e:
         print(f"Erreur get_candles {pair} : {e}")
+        traceback.print_exc()
         return None
 
 
@@ -242,8 +248,9 @@ def main():
     print(start_msg)
     send_telegram_message(start_msg)
 
-    try:
-        while True:
+    error_count = 0
+    while True:
+        try:
             now = datetime.now(tz)
 
             if should_stop(now):
@@ -262,11 +269,26 @@ def main():
             if pair_indicators:
                 push_indicators_with_retry(pair_indicators)
 
+            # Réinitialiser le compteur d'erreurs après un cycle réussi
+            error_count = 0
             time.sleep(REFRESH_SECONDS)
 
-    except KeyboardInterrupt:
-        print("\nPair Indicators stopped manually.")
-        send_telegram_message("🔴 Pair Indicators stopped manually (Ctrl+C)")
+        except KeyboardInterrupt:
+            print("\nPair Indicators stopped manually.")
+            send_telegram_message("🔴 Pair Indicators stopped manually (Ctrl+C)")
+            break
+
+        except Exception as e:
+            error_count += 1
+            error_msg = f"⚠️ Pair Indicators error (count {error_count}): {str(e)[:200]}"
+            print(error_msg)
+            traceback.print_exc()
+            send_telegram_message(error_msg)
+            # Si trop d'erreurs consécutives, on arrête pour éviter une boucle infinie
+            if error_count >= 5:
+                send_telegram_message("🚨 Pair Indicators stopped after 5 consecutive errors.")
+                break
+            time.sleep(60)  # Attendre avant de réessayer
 
 
 if __name__ == "__main__":
