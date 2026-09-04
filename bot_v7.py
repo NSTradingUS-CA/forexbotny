@@ -22,6 +22,7 @@ TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 FINNHUB_API_KEY = os.getenv("FINNHUB_API_KEY")
 GH_PAT = os.getenv("GH_PAT")
+ALPHA_VANTAGE_API_KEY = os.getenv("ALPHA_VANTAGE_API_KEY")
 PAIRS = ["EUR_USD", "GBP_USD"]
 
 # Risques par setup (en %)
@@ -53,7 +54,7 @@ BREAKOUT_BUFFER_ATR = 0.10
 MIN_SL_PIPS = 8
 MAX_SL_PIPS = 35
 NEWS_BLOCK_MINUTES = 15
-HIGH_IMPACT_EVENTS = ["NFP", "CPI", "FOMC", "Interest Rate", "GDP", "Retail Sales"]
+HIGH_IMPACT_EVENTS = ["NFP", "CPI", "FOMC", "Interest Rate", "GDP", "Retail Sales", "Nonfarm Payrolls", "Employment", "Rate Decision"]
 USE_MACD_FILTER = True
 MACD_FAST = 5
 MACD_SLOW = 13
@@ -115,6 +116,9 @@ _last_status_push_time = None
 _last_rejected_data = None
 _last_rejected_push_time = None
 
+# Variables pour les messages de news
+_last_news_block_message_sent = False
+
 
 # ---------- Fichiers JSON ----------
 def get_pause_until():
@@ -141,7 +145,7 @@ def get_next_high_impact_news(now):
 def get_affected_pairs(event_title):
     """Détermine quelle(s) paire(s) sont affectées par une news."""
     title_lower = event_title.lower()
-    if any(ev.lower() in title_lower for ev in ["nfp", "cpi", "fomc", "interest rate"]):
+    if any(ev.lower() in title_lower for ev in ["nfp", "cpi", "fomc", "interest rate", "nonfarm payrolls", "employment"]):
         return PAIRS
     elif "gdp" in title_lower and "uk" not in title_lower:
         return ["GBP_USD"]
@@ -170,18 +174,20 @@ def check_and_block_news(now):
                 _current_blocked_pairs = blocked_pairs
                 _current_active_pairs = [p for p in PAIRS if p not in blocked_pairs]
                 _current_news_event = event
-                if set(affected_pairs) == set(PAIRS):
-                    msg = (f"📅 High-impact news detected: {event['title']} at "
-                           f"{event['time'].strftime('%H:%M')} – Trading paused on ALL pairs from "
-                           f"{block_start.strftime('%H:%M')} to {block_end.strftime('%H:%M')}")
-                else:
-                    active_pairs = [p for p in PAIRS if p not in affected_pairs]
-                    msg = (f"📅 High-impact news detected: {event['title']} at "
-                           f"{event['time'].strftime('%H:%M')} – Trading paused on {', '.join(affected_pairs)} from "
-                           f"{block_start.strftime('%H:%M')} to {block_end.strftime('%H:%M')}\n"
-                           f"(Active pairs: {', '.join(active_pairs)})")
-                send_telegram_message(msg)
-                print(msg)
+                # Message envoyé uniquement si un trade est ouvert (ou géré ailleurs)
+                if active_trade is not None:
+                    if set(affected_pairs) == set(PAIRS):
+                        msg = (f"📅 High-impact news detected: {event['title']} at "
+                               f"{event['time'].strftime('%H:%M')} – Trading paused on ALL pairs from "
+                               f"{block_start.strftime('%H:%M')} to {block_end.strftime('%H:%M')}")
+                    else:
+                        active_pairs = [p for p in PAIRS if p not in affected_pairs]
+                        msg = (f"📅 High-impact news detected: {event['title']} at "
+                               f"{event['time'].strftime('%H:%M')} – Trading paused on {', '.join(affected_pairs)} from "
+                               f"{block_start.strftime('%H:%M')} to {block_end.strftime('%H:%M')}\n"
+                               f"(Active pairs: {', '.join(active_pairs)})")
+                    send_telegram_message(msg)
+                    print(msg)
             return True, event, event["time"] - now, blocked_pairs
     if get_pause_until() > 0 and now.timestamp() >= get_pause_until():
         set_pause_until(0)
@@ -579,26 +585,83 @@ def get_finnhub_sentiment(pair):
 
 
 def get_high_impact_news():
+    """
+    Récupère les événements High Impact à venir (dans les prochaines 24h)
+    à partir de trois sources : faireconomy.media, Alpha Vantage, OANDA ForexLabs.
+    Retourne une liste de dict { 'time': datetime, 'title': str, 'impact': 'High' }.
+    """
     global news_cache
-    if news_cache["time"] and (datetime.now(tz) - news_cache["time"]).seconds < 3600:
+    now = datetime.now(tz)
+
+    # Vérifier le cache (TTL 1 heure)
+    if news_cache["time"] and (now - news_cache["time"]).seconds < 3600:
         return news_cache["events"]
-    url = "https://nfs.faireconomy.media/ff_calendar_thisweek.json"
-    headers = {'User-Agent': 'Mozilla/5.0'}
+
+    events = []
+
+    # ---- 1. faireconomy.media ----
     try:
+        url = "https://nfs.faireconomy.media/ff_calendar_thisweek.json"
+        headers = {'User-Agent': 'Mozilla/5.0'}
         resp = requests.get(url, headers=headers, timeout=10)
-        data = resp.json()
-        events = []
-        for item in data:
-            if item.get('impact') == 'High' and any(ev in item['title'] for ev in HIGH_IMPACT_EVENTS):
-                dt_utc = datetime.fromisoformat(item['date'].replace('Z', '+00:00'))
-                event_time = dt_utc.astimezone(tz)
-                events.append({"time": event_time, "title": item['title']})
-        news_cache = {"time": datetime.now(tz), "events": events}
-        print(f"News calendar updated: {len(events)} high-impact events found.")
-        return events
+        if resp.status_code == 200:
+            data = resp.json()
+            for item in data:
+                if item.get('impact') == 'High':
+                    title = item['title']
+                    if any(kw in title for kw in HIGH_IMPACT_EVENTS):
+                        dt_utc = datetime.fromisoformat(item['date'].replace('Z', '+00:00'))
+                        event_time = dt_utc.astimezone(tz)
+                        events.append({"time": event_time, "title": title})
     except Exception as e:
-        print(f"News fetch error: {e}. Trading allowed as fallback.")
-        return []
+        print(f"⚠️ faireconomy.media error: {e}")
+
+    # ---- 2. Alpha Vantage ----
+    if ALPHA_VANTAGE_API_KEY:
+        try:
+            url = f"https://www.alphavantage.co/query?function=CALENDAR_EVENT&apikey={ALPHA_VANTAGE_API_KEY}"
+            resp = requests.get(url, timeout=10)
+            if resp.status_code == 200:
+                data = resp.json()
+                for item in data.get('data', []):
+                    currency = item.get('currency', '')
+                    if any(c in currency for c in ['EUR', 'USD', 'GBP']):
+                        impact = item.get('impact', '')
+                        if impact.lower() == 'high':
+                            dt = datetime.fromisoformat(item['date']).astimezone(tz)
+                            events.append({"time": dt, "title": item['event_type']})
+        except Exception as e:
+            print(f"⚠️ Alpha Vantage error: {e}")
+
+    # ---- 3. OANDA ForexLabs ----
+    try:
+        url = f"https://api-fxpractice.oanda.com/labs/v1/calendar"
+        headers = {"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"}
+        params = {"instrument": "EUR_USD,GBP_USD", "period": 86400}  # 24h
+        resp = requests.get(url, headers=headers, params=params, timeout=10)
+        if resp.status_code == 200:
+            data = resp.json()
+            for item in data.get('events', []):
+                if item.get('impact') == 'High':
+                    ts = int(item['timestamp']) / 1000
+                    dt = datetime.fromtimestamp(ts, tz)
+                    events.append({"time": dt, "title": item['title']})
+    except Exception as e:
+        print(f"⚠️ OANDA ForexLabs error: {e}")
+
+    # Fusion et dédoublonnage
+    unique_events = {}
+    for e in events:
+        key = (e['time'].strftime('%Y-%m-%d %H:%M'), e['title'][:30])
+        if key not in unique_events:
+            unique_events[key] = e
+
+    final_events = list(unique_events.values())
+    final_events.sort(key=lambda x: x['time'])
+
+    news_cache = {"time": now, "events": final_events}
+    print(f"📰 News calendar updated: {len(final_events)} high-impact events found.")
+    return final_events
 
 
 def log_trade(data):
@@ -1249,7 +1312,7 @@ def main():
     global trades_today, last_trade_date, last_close_time, active_trade
     global closed_trades_today, rejected_signals
     global late_shutdown_required, trade_opened_during_window_today, daily_start_balance
-    global BOT_STATUS, orb_range
+    global BOT_STATUS, orb_range, _last_news_block_message_sent
 
     load_closed_trades_from_file()
     load_rejected_from_file()
@@ -1290,14 +1353,26 @@ def main():
         and datetime.now(tz).hour >= TRADING_HOURS_END
     )
 
+    # --- INTÉGRATION DES NEWS DANS LE MESSAGE DE DÉMARRAGE ---
+    events = get_high_impact_news()
+    now = datetime.now(tz)
+    future_events = [e for e in events if e["time"] > now and e["time"] - now < timedelta(hours=NEWS_CHECK_FUTURE_HOURS)]
+
     start_msg = (
         f"🟢 Forex Sniper 7-12 Multi-Setup started – max {MAX_TRADES_PER_DAY} trades/day, "
         f"buffer {MIN_MINUTES_BETWEEN_TRADES}min, 9 setups (incl. Trend Breakout). Quality Score selection. "
         f"({trades_today} already taken) – Using MARKET orders with dynamic SL/TP and ATR-based slippage filter."
     )
+
+    if future_events:
+        start_msg += "\n\n📰 <b>Upcoming high-impact news:</b>\n"
+        for e in future_events:
+            start_msg += f"• {e['title']} at {e['time'].strftime('%H:%M')} ({e['time'].strftime('%a %d %b')})\n"
     print(start_msg)
     send_telegram_message(start_msg)
-    check_future_news_and_alert()
+
+    # Pas besoin de check_future_news_and_alert() ici car déjà inclus.
+    # Cependant on garde la fonction pour d'autres utilisations.
 
     try:
         while True:
@@ -1315,17 +1390,17 @@ def main():
                 send_telegram_message("🔴 Bot stopped – End of session (12:05), no active trade.")
                 break
 
-            # 2. Rappel de fin de session à 16:49 (10 min avant fermeture)
-            if now.hour == 16 and now.minute >= 49 and now.minute < 51:
+            # 2. Rappel de fin de session à 16:45 (14 min avant fermeture)
+            if now.hour == 16 and now.minute >= 45 and now.minute < 47:
                 if active_trade is not None:
                     send_telegram_message(
                         f"⏰ **Reminder:** Trade still open on {active_trade['pair']}.\n"
                         f"Market closes at 16:59 (NY time). Please monitor or close manually."
                     )
-                    print("Rappel envoyé à 16:50.")
+                    print("Rappel envoyé à 16:45.")
 
-            # 3. Fermeture automatique à 16:55 si trade en profit
-            if now.hour == 16 and now.minute >= 55 and now.minute < 57:
+            # 3. Fermeture automatique à 16:50 (anticipation)
+            if now.hour == 16 and now.minute >= 50 and now.minute < 52:
                 if active_trade is not None:
                     try:
                         pair = active_trade['pair']
@@ -1409,6 +1484,34 @@ def main():
             # =========================================================
 
             # ------------------------------------------------------------------
+            # GESTION DES NEWS ET BLOCAGE DES ENTRÉES
+            # ------------------------------------------------------------------
+            blocked, news_event, time_until, blocked_pairs = check_and_block_news(now)
+
+            # Si une news est dans la fenêtre de blocage, on empêche les nouveaux trades
+            if blocked and active_trade is None:
+                if not _last_news_block_message_sent:
+                    # Message de blocage pour les nouvelles entrées
+                    if set(blocked_pairs) == set(PAIRS):
+                        msg = (f"📅 High-impact news in progress: {news_event['title']} at {news_event['time'].strftime('%H:%M')} – "
+                               f"Trading paused on ALL pairs until {datetime.fromtimestamp(get_pause_until(), tz).strftime('%H:%M')}.")
+                    else:
+                        active = [p for p in PAIRS if p not in blocked_pairs]
+                        msg = (f"📅 High-impact news in progress: {news_event['title']} at {news_event['time'].strftime('%H:%M')} – "
+                               f"Trading paused on {', '.join(blocked_pairs)} until {datetime.fromtimestamp(get_pause_until(), tz).strftime('%H:%M')}.\n"
+                               f"(Active pairs: {', '.join(active)})")
+                    send_telegram_message(msg)
+                    _last_news_block_message_sent = True
+                # On force can_trade à False
+                can_trade = False
+            else:
+                # Si la pause est levée, on envoie un message de reprise
+                if _last_news_block_message_sent:
+                    send_telegram_message("🟢 News pause lifted – trading resumed")
+                    _last_news_block_message_sent = False
+                # can_trade sera recalculé plus bas
+
+            # ------------------------------------------------------------------
             # Le reste de la boucle (gestion des trades, etc.) avec try/except
             # ------------------------------------------------------------------
             try:
@@ -1453,15 +1556,16 @@ def main():
                 ):
                     late_shutdown_required = True
 
-                # News handling with open trade
+                # News handling with open trade (déjà fait plus haut avec check_and_block_news)
+                # Mais on laisse la partie spécifique aux trades ouverts (avertissement, fermeture)
                 if active_trade is not None:
-                    blocked, event, time_until, blocked_pairs = check_and_block_news(now)
-                    if event is not None and time_until is not None:
+                    # Utiliser les résultats de check_and_block_news déjà appelés plus haut
+                    if blocked and news_event is not None and time_until is not None:
                         minutes_until = time_until.total_seconds() / 60.0
                         if minutes_until <= NEWS_WARNING_MINUTES and minutes_until > NEWS_CLOSE_BEFORE_MINUTES:
                             if active_trade['pair'] in blocked_pairs:
                                 send_telegram_message(
-                                    f"📰 <b>High-impact news in {int(minutes_until)} min:</b> {event['title']} at {event['time'].strftime('%H:%M')}\n"
+                                    f"📰 <b>High-impact news in {int(minutes_until)} min:</b> {news_event['title']} at {news_event['time'].strftime('%H:%M')}\n"
                                     f"Trade {active_trade['pair']} will be paused. Action in {NEWS_CLOSE_BEFORE_MINUTES} min."
                                 )
                         if minutes_until <= NEWS_CLOSE_BEFORE_MINUTES:
@@ -1483,7 +1587,7 @@ def main():
                                             f"🔒 Trade closed before news\n"
                                             f"Pair: {active_trade['pair']}\n"
                                             f"P&L: {pnl:.2f} USD\n"
-                                            f"Reason: '{event['title']}' in <5 min."
+                                            f"Reason: '{news_event['title']}' in <5 min."
                                         )
                                         time.sleep(2)
                                     else:
@@ -1508,30 +1612,34 @@ def main():
                             news_sentiment_filter[pair] = s
                     main.next_news_check = now + timedelta(seconds=60)
 
-                # Blocage news pour nouvelles entrées
-                blocked, _, _, blocked_pairs = check_and_block_news(now)
+                # Vérifier à nouveau le blocage pour les nouvelles entrées (on l'a déjà fait, mais on récupère les variables)
+                # Ici on utilise les variables bloquées déjà définies
+                if blocked:
+                    # Si on est bloqué, on ne trade pas du tout
+                    can_trade = False
+                else:
+                    # Sinon on recalcule can_trade normalement
+                    in_trading_hours = TRADING_HOURS_START <= now.hour < TRADING_HOURS_END
+                    can_trade_time = True
+                    if last_close_time is not None and (now - last_close_time) < timedelta(minutes=MIN_MINUTES_BETWEEN_TRADES):
+                        can_trade_time = False
 
-                in_trading_hours = TRADING_HOURS_START <= now.hour < TRADING_HOURS_END
-                can_trade_time = True
-                if last_close_time is not None and (now - last_close_time) < timedelta(minutes=MIN_MINUTES_BETWEEN_TRADES):
-                    can_trade_time = False
+                    balance = None
+                    daily_loss_blocked = False
+                    try:
+                        balance = get_account_balance(retry_api_call(ctx.account.summary, ACCOUNT_ID))
+                        _, daily_loss_blocked = get_daily_loss_status(balance)
+                    except Exception as e:
+                        print(f"Risk check failed: {e}")
+                        daily_loss_blocked = True
 
-                balance = None
-                daily_loss_blocked = False
-                try:
-                    balance = get_account_balance(retry_api_call(ctx.account.summary, ACCOUNT_ID))
-                    _, daily_loss_blocked = get_daily_loss_status(balance)
-                except Exception as e:
-                    print(f"Risk check failed: {e}")
-                    daily_loss_blocked = True
-
-                can_trade = (
-                    active_trade is None
-                    and trades_today < MAX_TRADES_PER_DAY
-                    and in_trading_hours
-                    and can_trade_time
-                    and not daily_loss_blocked
-                )
+                    can_trade = (
+                        active_trade is None
+                        and trades_today < MAX_TRADES_PER_DAY
+                        and in_trading_hours
+                        and can_trade_time
+                        and not daily_loss_blocked
+                    )
 
                 if can_trade:
                     candidates = []
