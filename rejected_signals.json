@@ -1,18 +1,6 @@
 {
   "signals": [
     {
-      "time": "10:02:07",
-      "pair": "EUR_USD",
-      "buy_reason": "Slippage 9.2pips > 2.1",
-      "sell_reason": "Slippage 9.2pips > 2.1"
-    },
-    {
-      "time": "10:02:38",
-      "pair": "EUR_USD",
-      "buy_reason": "Slippage 9.1pips > 2.1",
-      "sell_reason": "Slippage 9.1pips > 2.1"
-    },
-    {
       "time": "10:03:11",
       "pair": "EUR_USD",
       "buy_reason": "Slippage 7.9pips > 2.1",
@@ -599,6 +587,18 @@
       "pair": "EUR_USD",
       "buy_reason": "Slippage 14.1pips > 2.1",
       "sell_reason": "Slippage 14.1pips > 2.1"
+    },
+    {
+      "time": "10:56:09",
+      "pair": "EUR_USD",
+      "buy_reason": "Slippage 13.2pips > 2.1",
+      "sell_reason": "Slippage 13.2pips > 2.1"
+    },
+    {
+      "time": "10:56:40",
+      "pair": "EUR_USD",
+      "buy_reason": "Slippage 12.5pips > 2.1",
+      "sell_reason": "Slippage 12.5pips > 2.1"
     }
   ],
   "last_cleanup": "2026-09-04"
