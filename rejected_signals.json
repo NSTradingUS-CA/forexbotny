@@ -1,26 +1,6 @@
 {
   "signals": [
     {
-      "time": "09:59:55",
-      "pair": "GBP_USD",
-      "buy_reason": "H1 not up, MACD not bullish",
-      "sell_reason": "No SELL setup triggered",
-      "spread": 0.00017000000000000348,
-      "adx": 24.99387494901513,
-      "plus_di": 23.954781369620342,
-      "minus_di": 14.777948665169951,
-      "ema50": 1.3520723875460823,
-      "ema200": 1.354495004329097,
-      "rsi": 55.720550177825764,
-      "atr": 0.0008950000000000109
-    },
-    {
-      "time": "10:00:28",
-      "pair": "EUR_USD",
-      "buy_reason": "Slippage 7.5pips > 2.1",
-      "sell_reason": "Slippage 7.5pips > 2.1"
-    },
-    {
       "time": "10:01:02",
       "pair": "EUR_USD",
       "buy_reason": "Slippage 7.0pips > 2.1",
@@ -607,6 +587,18 @@
       "pair": "EUR_USD",
       "buy_reason": "Slippage 14.1pips > 2.1",
       "sell_reason": "Slippage 14.1pips > 2.1"
+    },
+    {
+      "time": "10:54:00",
+      "pair": "EUR_USD",
+      "buy_reason": "Slippage 14.7pips > 2.1",
+      "sell_reason": "Slippage 14.7pips > 2.1"
+    },
+    {
+      "time": "10:54:31",
+      "pair": "EUR_USD",
+      "buy_reason": "Slippage 13.9pips > 2.1",
+      "sell_reason": "Slippage 13.9pips > 2.1"
     }
   ],
   "last_cleanup": "2026-09-04"
