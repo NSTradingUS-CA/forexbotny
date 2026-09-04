@@ -67,9 +67,10 @@ TP_PARTIAL_RATIO = 0.33
 TRAILING_ATR_MULT = 1.8
 FIXED_TRAILING_PIPS = 20
 
-# Paramètres MARKET direct
-SLIPPAGE_ATR_FACTOR = 0.25
-SLIPPAGE_MIN_PIPS = 1.5
+# Paramètres MARKET direct (seuil de slippage ajusté)
+SLIPPAGE_ATR_FACTOR = 0.40      # plus tolérant en période volatile
+SLIPPAGE_MIN_PIPS = 2.0         # plancher relevé
+# Le plafond max est défini dans place_trade() : min(... , 8.0)
 
 NEWS_CLOSE_BEFORE_MINUTES = 5
 NEWS_WARNING_MINUTES = 15
@@ -1753,12 +1754,13 @@ def place_trade(instrument, entry_price_signal, sl_signal, tp_signal, direction,
     # 2. Calcul du slippage en pips
     slippage_pips = abs(current_price - entry_price_signal) / 0.0001
 
-    # 3. Seuil de slippage dynamique basé sur l'ATR
+    # 3. Seuil de slippage dynamique basé sur l'ATR (paramètres ajustés)
     try:
         atr = float(df['atr'].iloc[-2])
         atr_pips = atr / 0.0001
         max_slippage_pips = max(SLIPPAGE_MIN_PIPS, SLIPPAGE_ATR_FACTOR * atr_pips)
-        max_slippage_pips = min(max_slippage_pips, 5.0)
+        # Plafond relevé à 8.0 pips
+        max_slippage_pips = min(max_slippage_pips, 8.0)
     except Exception as e:
         print(f"ATR not available, using default 3 pips: {e}")
         max_slippage_pips = 3.0
