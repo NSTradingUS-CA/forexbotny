@@ -1896,7 +1896,7 @@ def place_trade(instrument, entry_price_signal, sl_signal, tp_signal, direction,
     return True
 
 
-# ---------- Fonction check_closed_trade CORRIGÉE ----------
+# ---------- Fonction check_closed_trade CORRIGÉE (prix de sortie fiable) ----------
 def check_closed_trade():
     global active_trade, last_close_time
     if active_trade is None:
@@ -1915,28 +1915,65 @@ def check_closed_trade():
             print(f"No closed trade found for {pair} yet, will retry later.")
             return
 
+        # Prendre le trade le plus récent
         latest = sorted(closed_trades, key=lambda t: str(getattr(t, 'closeTime', '')), reverse=True)[0]
 
+        trade_id = active_trade['trade_id']
         total_pnl_usd = float(latest.realizedPL)
-        # Récupération robuste du prix de sortie
-        if hasattr(latest, 'closePrice') and latest.closePrice is not None:
-            close_price = float(latest.closePrice)
-        elif hasattr(latest, 'price') and latest.price is not None:
-            close_price = float(latest.price)
-        else:
-            units_abs = abs(active_trade['units'])
-            if units_abs > 0:
-                close_price = active_trade['entry_price'] + (total_pnl_usd / units_abs)
-                if active_trade['direction'] == 'sell':
-                    close_price = active_trade['entry_price'] - (total_pnl_usd / units_abs)
-            else:
-                close_price = active_trade['entry_price']
-
         entry = active_trade['entry_price']
         units = active_trade['units']
         direction = active_trade.get('direction', 'buy')
         setup = active_trade.get('setup_type', 'unknown')
         init_risk = active_trade.get('initial_risk', 0.0)
+
+        # ---- RÉCUPÉRATION ROBUSTE DU PRIX DE SORTIE ----
+        close_price = None
+
+        # 1. closePrice (priorité absolue)
+        if hasattr(latest, 'closePrice') and latest.closePrice is not None:
+            close_price = float(latest.closePrice)
+            print(f"✅ Exit price from closePrice: {close_price:.5f}")
+
+        # 2. price (fallback)
+        if close_price is None and hasattr(latest, 'price') and latest.price is not None:
+            close_price = float(latest.price)
+            print(f"✅ Exit price from price: {close_price:.5f}")
+
+        # 3. API des transactions (si toujours None)
+        if close_price is None:
+            print("⚙️ Fetching close price from transactions...")
+            try:
+                tr_resp = retry_api_call(ctx.transaction.list, ACCOUNT_ID, since=1, to=99999, count=100)
+                for tx in tr_resp.body.get('transactions', []):
+                    if tx.type == 'ORDER_FILL' and hasattr(tx, 'tradeID') and str(tx.tradeID) == str(trade_id):
+                        if hasattr(tx, 'price'):
+                            close_price = float(tx.price)
+                            print(f"✅ Exit price from transaction: {close_price:.5f}")
+                            break
+            except Exception as e:
+                print(f"⚠️ Transaction API error: {e}")
+
+        # 4. Calcul à partir du P&L (dernier recours)
+        if close_price is None:
+            units_abs = abs(units)
+            if units_abs > 0:
+                if direction == 'buy':
+                    close_price = entry + (total_pnl_usd / units_abs)
+                else:  # sell
+                    close_price = entry - (total_pnl_usd / units_abs)
+                print(f"⚙️ Exit price calculated from P&L: {close_price:.5f}")
+            else:
+                close_price = entry
+                print(f"⚠️ Fallback to entry price (no units): {close_price:.5f}")
+
+        # 5. Vérification de cohérence : si le prix calculé est égal à l'entrée alors que le P&L est non nul, on réessaie
+        if abs(close_price - entry) < 0.000001 and abs(total_pnl_usd) > 0.1:
+            print("⚠️ Calculated close price equals entry despite non-zero P&L. Retrying after 2s...")
+            time.sleep(2)
+            # On réessaie une dernière fois en appelant la fonction récursivement (une seule fois)
+            return check_closed_trade()  # attention à la récursion, mais limité à 1
+
+        # ---- FIN DE LA RÉCUPÉRATION ----
 
         if direction == 'buy' and init_risk > 0:
             realized_r = (close_price - entry) / init_risk
