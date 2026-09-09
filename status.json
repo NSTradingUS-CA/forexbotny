@@ -1,5 +1,5 @@
 {
-  "time": "2026-09-09 11:14:56",
+  "time": "2026-09-09 11:16:01",
   "bot_status": "running",
   "session": {
     "trades_today": 1,
@@ -7,29 +7,7 @@
     "start": "07:00",
     "end": "11:00"
   },
-  "active_trade": {
-    "pair": "EUR_USD",
-    "type": "Buy",
-    "entry": 1.16473,
-    "sl": 1.16219,
-    "tp1": 1.16727,
-    "tp2": 1.16981,
-    "trailing_stop": "20 pips initial",
-    "current_price": 1.16247,
-    "unrealized_pnl_usd": -343.28,
-    "unrealized_pnl_cad": -474.09,
-    "usd_cad_rate": 1.3811,
-    "distance_to_sl_pips": 2.8,
-    "distance_to_tp2_pips": 73.4,
-    "atr": 0.0007671428571428869,
-    "be_triggered": false,
-    "tp1_hit": false,
-    "setup_type": "Momentum",
-    "risk_percent": 0.4,
-    "opened_at": "2026-09-09T09:00:21.224745-04:00",
-    "units": 151896,
-    "score": 70.5
-  },
+  "active_trade": null,
   "next_news_event": {
     "title": "GDP m/m",
     "time": "02:00",
