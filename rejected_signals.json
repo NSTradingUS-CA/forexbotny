@@ -1,46 +1,6 @@
 {
   "signals": [
     {
-      "time": "08:16:32",
-      "pair": "GBP_USD",
-      "buy_reason": "Slippage 23.2pips > 3.3",
-      "sell_reason": "Slippage 23.2pips > 3.3"
-    },
-    {
-      "time": "08:17:02",
-      "pair": "EUR_USD",
-      "buy_reason": "MACD not bullish",
-      "sell_reason": "No SELL setup triggered",
-      "spread": 0.000140000000000029,
-      "adx": 39.10509705136377,
-      "plus_di": 21.938830641027245,
-      "minus_di": 19.924215951100695,
-      "ema50": 1.1625659902662007,
-      "ema200": 1.162309613727632,
-      "rsi": 51.72210420281821,
-      "atr": 0.000660714285714316
-    },
-    {
-      "time": "08:17:03",
-      "pair": "GBP_USD",
-      "buy_reason": "Slippage 23.5pips > 3.3",
-      "sell_reason": "Slippage 23.5pips > 3.3"
-    },
-    {
-      "time": "08:17:34",
-      "pair": "EUR_USD",
-      "buy_reason": "MACD not bullish",
-      "sell_reason": "No SELL setup triggered",
-      "spread": 0.00016000000000016001,
-      "adx": 39.10509705136377,
-      "plus_di": 21.938830641027245,
-      "minus_di": 19.924215951100695,
-      "ema50": 1.1625659902662007,
-      "ema200": 1.162309613727632,
-      "rsi": 51.72210420281821,
-      "atr": 0.000660714285714316
-    },
-    {
       "time": "08:17:37",
       "pair": "GBP_USD",
       "buy_reason": "Slippage 24.3pips > 3.3",
@@ -992,6 +952,46 @@
       "buy_reason": "MACD not bullish",
       "sell_reason": "No SELL setup triggered",
       "spread": 0.000140000000000029,
+      "adx": 39.10509705136377,
+      "plus_di": 21.938830641027245,
+      "minus_di": 19.924215951100695,
+      "ema50": 1.1625659902662007,
+      "ema200": 1.162309613727632,
+      "rsi": 51.72210420281821,
+      "atr": 0.000660714285714316
+    },
+    {
+      "time": "08:44:04",
+      "pair": "GBP_USD",
+      "buy_reason": "Slippage 16.0pips > 3.3",
+      "sell_reason": "Slippage 16.0pips > 3.3"
+    },
+    {
+      "time": "08:44:35",
+      "pair": "EUR_USD",
+      "buy_reason": "MACD not bullish",
+      "sell_reason": "No SELL setup triggered",
+      "spread": 0.0001500000000000945,
+      "adx": 39.10509705136377,
+      "plus_di": 21.938830641027245,
+      "minus_di": 19.924215951100695,
+      "ema50": 1.1625659902662007,
+      "ema200": 1.162309613727632,
+      "rsi": 51.72210420281821,
+      "atr": 0.000660714285714316
+    },
+    {
+      "time": "08:44:36",
+      "pair": "GBP_USD",
+      "buy_reason": "Slippage 14.9pips > 3.3",
+      "sell_reason": "Slippage 14.9pips > 3.3"
+    },
+    {
+      "time": "08:45:07",
+      "pair": "EUR_USD",
+      "buy_reason": "MACD not bullish",
+      "sell_reason": "No SELL setup triggered",
+      "spread": 0.0001500000000000945,
       "adx": 39.10509705136377,
       "plus_di": 21.938830641027245,
       "minus_di": 19.924215951100695,
