@@ -1,33 +1,21 @@
-# .github/dependabot.yml
-version: 2
-updates:
-  # Mises à jour des dépendances Python (pip)
-  - package-ecosystem: "pip"
-    directory: "/"                     # Racine du dépôt
-    schedule:
-      interval: "weekly"               # Vérification chaque lundi
-      day: "monday"
-    target-branch: "main"              # Branche cible pour les PR
-    commit-message:
-      prefix: "deps"
-      include: "scope"
-    open-pull-requests-limit: 5        # Nombre max de PR ouvertes en simultané
-    labels:
-      - "dependencies"
-      - "python"
-    # Optionnel : ignorer certaines dépendances si besoin
-    # ignore:
-    #   - dependency-name: "v20"
-    #     versions: [">= 1.0.0"]
+name: Dependabot
 
-  # (Optionnel) Mises à jour des actions GitHub utilisées dans les workflows
-  - package-ecosystem: "github-actions"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-    target-branch: "main"
-    commit-message:
-      prefix: "ci"
-    labels:
-      - "dependencies"
-      - "github-actions"
+on:
+  schedule:
+    - cron: '0 12 * * *'   # exécution quotidienne à 12h UTC
+  workflow_dispatch:       # permet un déclenchement manuel
+
+jobs:
+  update-dependencies:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Dependabot
+        uses: github/dependabot-action@main
+        with:
+          package-manager: pip
+          directory: /                # racine du dépôt (où se trouve requirements.txt)
+          target-branch: main
+          github-token: ${{ secrets.GITHUB_TOKEN }}
