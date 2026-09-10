@@ -1,20 +1,6 @@
 {
   "signals": [
     {
-      "time": "10:32:41",
-      "pair": "GBP_USD",
-      "buy_reason": "H1 not up, RSI 29.2 outside 30-70, MACD not bullish",
-      "sell_reason": "RSI 29.2 outside 30-70",
-      "spread": 0.00017000000000000348,
-      "adx": 23.99625177502474,
-      "plus_di": 7.538971867225211,
-      "minus_di": 48.21855212578248,
-      "ema50": 1.3545672772611623,
-      "ema200": 1.354458673184598,
-      "rsi": 29.213314436451142,
-      "atr": 0.0011135714285713805
-    },
-    {
       "time": "10:33:15",
       "pair": "EUR_USD",
       "buy_reason": "H1 not up, RSI 27.7 outside 30-70, MACD not bullish",
@@ -1399,6 +1385,20 @@
       "ema200": 1.162475590729865,
       "rsi": 34.83200348946684,
       "atr": 0.0010299999999999754
+    },
+    {
+      "time": "10:59:59",
+      "pair": "GBP_USD",
+      "buy_reason": "H1 not up, MACD not bullish",
+      "sell_reason": "No SELL setup triggered",
+      "spread": 0.000180000000000069,
+      "adx": 28.892427656362425,
+      "plus_di": 6.266532941809179,
+      "minus_di": 40.08015292060887,
+      "ema50": 1.354449343158205,
+      "ema200": 1.3544171327722232,
+      "rsi": 32.62257001211327,
+      "atr": 0.001254285714285668
     }
   ],
   "last_cleanup": "2026-09-10"
