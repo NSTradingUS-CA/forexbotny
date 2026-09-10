@@ -80,9 +80,18 @@ PAIR_CONFIG = {
     "EUR_USD": {"MAX_SPREAD_PIPS": 2.5, "ADX_THRESHOLD": 16, "ATR_MULTIPLIER": 2.0},
     "GBP_USD": {"MAX_SPREAD_PIPS": 3.0, "ADX_THRESHOLD": 13, "ATR_MULTIPLIER": 2.0}
 }
+
+# === RECOMMANDATION #3 : Intervalle des pushes GitHub (en secondes) ===
+GITHUB_PUSH_MIN_INTERVAL = 300  # 5 minutes
+
+# === RECOMMANDATION #4 : TTL du cache candles (en secondes) ===
+CANDLE_CACHE_TTL_SECONDS = 120
+
+# === RECOMMANDATION #2 : Nombre de tentatives sur conflit 409 ===
+GITHUB_MAX_PUSH_ATTEMPTS = 3
 # ============================
 
-ctx = v20.Context(OANDA_URL, token=API_KEY)
+ctx = v20.Context(OANDA_URL, token=API_KEY, timeout=60)  # #4 timeout augmenté
 trades_today = 0
 last_trade_date = None
 last_close_time = None
@@ -116,6 +125,10 @@ _last_status_data = None
 _last_status_push_time = None
 _last_rejected_data = None
 _last_rejected_push_time = None
+_last_closed_trades_data = None  # #3 : détection de changement pour closed_trades
+
+# === RECOMMANDATION #4 : Cache des candles ===
+_candle_cache = {}  # {(instrument, granularity, count): {"time": datetime, "df": DataFrame}}
 
 # Variables pour les messages de news
 _last_news_block_message_sent = False
@@ -175,7 +188,6 @@ def check_and_block_news(now):
                 _current_blocked_pairs = blocked_pairs
                 _current_active_pairs = [p for p in PAIRS if p not in blocked_pairs]
                 _current_news_event = event
-                # Message envoyé uniquement si un trade est ouvert (ou géré ailleurs)
                 if active_trade is not None:
                     if set(affected_pairs) == set(PAIRS):
                         msg = (f"📅 High-impact news detected: {event['title']} at "
@@ -200,6 +212,39 @@ def check_and_block_news(now):
     return False, None, None, []
 
 
+# ============ RECOMMANDATION #2 : retry sur 409 ============
+def _github_put_with_retry(url, headers, content_b64, message, max_attempts=GITHUB_MAX_PUSH_ATTEMPTS):
+    """
+    Tente un PUT GitHub avec re-fetch du SHA en cas de 409.
+    Retourne le status_code final, ou None en cas d'erreur réseau.
+    """
+    for attempt in range(max_attempts):
+        try:
+            resp = requests.get(url, headers=headers, timeout=10)
+            sha = resp.json().get("sha") if resp.status_code == 200 else None
+            payload = {"message": message, "content": content_b64, "branch": "main"}
+            if sha:
+                payload["sha"] = sha
+            put_resp = requests.put(url, headers=headers, json=payload, timeout=10)
+            if put_resp.status_code in (200, 201):
+                return put_resp.status_code
+            if put_resp.status_code == 409:
+                if attempt < max_attempts - 1:
+                    print(f"⚠️ Conflit GitHub 409 (tentative {attempt + 1}/{max_attempts}) – re-fetch du SHA…")
+                    time.sleep(2)
+                    continue
+                return 409
+            # Autre erreur -> on renvoie tel quel
+            return put_resp.status_code
+        except Exception as e:
+            print(f"Error during GitHub PUT attempt {attempt + 1}: {e}")
+            if attempt < max_attempts - 1:
+                time.sleep(2)
+                continue
+            return None
+    return None
+
+
 def push_file_to_github(local_path, remote_path):
     if not GH_PAT:
         return
@@ -207,18 +252,14 @@ def push_file_to_github(local_path, remote_path):
         with open(local_path, 'r') as f:
             content = base64.b64encode(f.read().encode()).decode()
         url = f"https://api.github.com/repos/{os.getenv('GITHUB_REPOSITORY')}/contents/{remote_path}"
-        headers = {"Authorization": f"token {GH_PAT}", "Accept": "application/vnd.github.v3+json",
+        headers = {"Authorization": f"token {GH_PAT}",
+                   "Accept": "application/vnd.github.v3+json",
                    "Cache-Control": "no-cache"}
-        resp = requests.get(url, headers=headers, timeout=10)
-        sha = resp.json().get("sha") if resp.status_code == 200 else None
-        payload = {"message": f"Update {remote_path}", "content": content, "branch": "main"}
-        if sha:
-            payload["sha"] = sha
-        put_resp = requests.put(url, headers=headers, json=payload, timeout=10)
-        if put_resp.status_code in (200, 201):
+        status = _github_put_with_retry(url, headers, content, f"Update {remote_path}")
+        if status in (200, 201):
             print(f"✅ Push {remote_path} réussi")
         else:
-            print(f"Push {remote_path} failed: {put_resp.status_code}")
+            print(f"Push {remote_path} failed after retries: {status}")
     except Exception as e:
         print(f"Error pushing {remote_path}: {e}")
 
@@ -226,7 +267,9 @@ def push_file_to_github(local_path, remote_path):
 def cleanup_if_new_day(data, today_str, label):
     if data.get("last_cleanup") != today_str:
         print(f"New day detected – resetting {label}.")
-        data = {"trades": [] if "trades" in data else [], "signals": [] if "signals" in data else [], "last_cleanup": today_str}
+        data = {"trades": [] if "trades" in data else [],
+                "signals": [] if "signals" in data else [],
+                "last_cleanup": today_str}
         return True, data
     return False, data
 
@@ -254,7 +297,9 @@ def load_closed_trades_from_file():
         closed_trades_today = []
 
 
+# ============ RECOMMANDATION #3 : ne pousser closed_trades qu'en cas de changement ============
 def save_closed_trades_to_file():
+    global _last_closed_trades_data
     try:
         data = {
             "trades": closed_trades_today,
@@ -262,7 +307,13 @@ def save_closed_trades_to_file():
         }
         with open(CLOSED_TRADES_FILE, 'w') as f:
             json.dump(data, f, indent=2)
+
+        # Ne pousse que si le contenu "trades" a changé (ignore last_cleanup pour la comparaison)
+        current_trades_snapshot = json.dumps(closed_trades_today, sort_keys=True, default=str)
+        if _last_closed_trades_data == current_trades_snapshot:
+            return
         push_file_to_github(CLOSED_TRADES_FILE, CLOSED_TRADES_FILE)
+        _last_closed_trades_data = current_trades_snapshot
     except Exception as e:
         print(f"Error saving closed trades file: {e}")
 
@@ -299,7 +350,8 @@ def save_rejected_to_file():
     }
     if data == _last_rejected_data:
         return
-    if _last_rejected_push_time is not None and (now - _last_rejected_push_time).total_seconds() < 60:
+    # #3 : intervalle porté à 300 s
+    if _last_rejected_push_time is not None and (now - _last_rejected_push_time).total_seconds() < GITHUB_PUSH_MIN_INTERVAL:
         return
     if not GH_PAT:
         return
@@ -318,27 +370,25 @@ def push_status_json(data_dict):
     now = datetime.now(tz)
     if data_dict == _last_status_data:
         return
-    if _last_status_push_time is not None and (now - _last_status_push_time).total_seconds() < 60:
+    # #3 : intervalle porté à 300 s
+    if _last_status_push_time is not None and (now - _last_status_push_time).total_seconds() < GITHUB_PUSH_MIN_INTERVAL:
         return
     if not GH_PAT:
         return
     try:
         url = f"https://api.github.com/repos/{os.getenv('GITHUB_REPOSITORY')}/contents/status.json"
-        headers = {"Authorization": f"token {GH_PAT}", "Accept": "application/vnd.github.v3+json",
+        headers = {"Authorization": f"token {GH_PAT}",
+                   "Accept": "application/vnd.github.v3+json",
                    "Cache-Control": "no-cache"}
-        resp = requests.get(url, headers=headers, timeout=10)
-        sha = resp.json().get("sha") if resp.status_code == 200 else None
         content = json.dumps(data_dict, indent=2, default=str).encode()
-        payload = {"message": "Update status", "content": base64.b64encode(content).decode(), "branch": "main"}
-        if sha:
-            payload["sha"] = sha
-        put_resp = requests.put(url, headers=headers, json=payload, timeout=10)
-        if put_resp.status_code in (200, 201):
+        content_b64 = base64.b64encode(content).decode()
+        status = _github_put_with_retry(url, headers, content_b64, "Update status")
+        if status in (200, 201):
             _last_status_data = data_dict.copy()
             _last_status_push_time = now
             print(f"✅ Status pushed successfully")
         else:
-            print(f"Status push failed: {put_resp.status_code} {put_resp.text}")
+            print(f"Status push failed after retries: {status}")
     except Exception as e:
         print(f"Error pushing status.json: {e}")
 
@@ -407,12 +457,10 @@ def save_status_json():
         sl_distance = abs(current_price - active_trade['sl'])
         tp_distance = abs(active_trade['tp2'] - current_price) if active_trade.get('tp2') else 0
 
-        # P&L en USD
         unrealized_pnl_usd = (current_price - active_trade['entry_price']) * abs(active_trade['units'])
         if active_trade['direction'] == 'sell':
             unrealized_pnl_usd = -unrealized_pnl_usd
 
-        # Conversion en CAD
         usd_cad = get_usd_cad_rate()
         unrealized_pnl_cad = unrealized_pnl_usd * usd_cad
 
@@ -594,7 +642,6 @@ def get_high_impact_news():
     global news_cache
     now = datetime.now(tz)
 
-    # Vérifier le cache (TTL 1 heure)
     if news_cache["time"] and (now - news_cache["time"]).seconds < 3600:
         return news_cache["events"]
 
@@ -638,7 +685,7 @@ def get_high_impact_news():
     try:
         url = f"https://api-fxpractice.oanda.com/labs/v1/calendar"
         headers = {"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"}
-        params = {"instrument": "EUR_USD,GBP_USD", "period": 86400}  # 24h
+        params = {"instrument": "EUR_USD,GBP_USD", "period": 86400}
         resp = requests.get(url, headers=headers, params=params, timeout=10)
         if resp.status_code == 200:
             data = resp.json()
@@ -650,7 +697,6 @@ def get_high_impact_news():
     except Exception as e:
         print(f"⚠️ OANDA ForexLabs error: {e}")
 
-    # Fusion et dédoublonnage
     unique_events = {}
     for e in events:
         key = (e['time'].strftime('%Y-%m-%d %H:%M'), e['title'][:30])
@@ -686,7 +732,8 @@ def retry_api_call(func, *args, **kwargs):
                     send_telegram_message(f"⚠️ API error after 3 attempts: {str(e)[:100]}")
                 else:
                     print("Network timeout detected - skipping Telegram alert.")
-            time.sleep(5)
+            # Backoff exponentiel : 5s, 10s, 20s
+            time.sleep(5 * (2 ** i))
     raise Exception("API call failed after 3 attempts")
 
 
@@ -714,7 +761,8 @@ def compute_macd(df, fast=12, slow=26, signal=9):
     return df
 
 
-def get_candles(instrument, count=300, granularity=EXECUTION_GRANULARITY):
+# ============ RECOMMANDATION #4 : cache candles ============
+def _build_candles_df(instrument, count, granularity):
     params = {"count": count, "granularity": granularity, "price": "M"}
     response = retry_api_call(ctx.instrument.candles, instrument, **params)
     candles = response.body['candles']
@@ -747,6 +795,22 @@ def get_candles(instrument, count=300, granularity=EXECUTION_GRANULARITY):
     df['body_ratio'] = df['body'] / df['range'].replace(0, pd.NA)
     if USE_VOLUME_FILTER:
         df['volume_ma'] = df['volume'].rolling(window=20).mean()
+    return df
+
+
+def get_candles(instrument, count=300, granularity=EXECUTION_GRANULARITY):
+    """
+    Retourne les candles. Utilise un cache mémoire avec TTL pour éviter les appels
+    API redondants (les candles H1 ne changent qu'une fois par heure).
+    """
+    now = datetime.now(tz)
+    cache_key = (instrument, granularity, count)
+    if cache_key in _candle_cache:
+        cached = _candle_cache[cache_key]
+        if (now - cached["time"]).total_seconds() < CANDLE_CACHE_TTL_SECONDS:
+            return cached["df"]
+    df = _build_candles_df(instrument, count, granularity)
+    _candle_cache[cache_key] = {"time": now, "df": df}
     return df
 
 
@@ -991,8 +1055,6 @@ def compute_quality_score(signal, c, df, instrument, config, atr):
     signal est un tuple: (price, sl, tp, sl_pips, direction, setup_type, risk_pct)
     """
     price, sl, tp, sl_pips, direction, setup_type, risk_pct = signal
-    h1_up = c['ema50'] > c['ema200'] and c['c'] > c['ema50']
-    h1_down = c['ema50'] < c['ema200'] and c['c'] < c['ema50']
 
     # 1. ADX (0-20)
     adx_score = min(c['adx'] / 50.0, 1.0) * 20
@@ -1004,22 +1066,22 @@ def compute_quality_score(signal, c, df, instrument, config, atr):
     # 3. RSI optimal (0-15)
     if direction == 'buy':
         ideal_low, ideal_high = 55, 65
-    else:  # sell
+    else:
         ideal_low, ideal_high = 35, 45
     rsi = c['rsi']
     if ideal_low <= rsi <= ideal_high:
         rsi_score = 15
     elif rsi < ideal_low:
         rsi_score = max(0, (rsi / ideal_low) * 15)
-    else:  # rsi > ideal_high
+    else:
         rsi_score = max(0, ((100 - rsi) / (100 - ideal_high)) * 15)
 
     # 4. Body ratio (0-20)
     body_ratio = c['body_ratio'] if not pd.isna(c['body_ratio']) else 0.0
     body_score = min(body_ratio, 1.0) * 20
 
-    # 5. Force du rejet (0-10) pour les setups avec rejet
-    rejection_score = 5  # valeur par défaut pour les setups sans rejet
+    # 5. Force du rejet (0-10)
+    rejection_score = 5
     if setup_type in ['Pullback', 'Pin Bar', 'Support', 'Resistance']:
         if direction == 'buy':
             rejection = (c['o'] - c['l']) / c['range'] if c['range'] > 0 else 0
@@ -1031,7 +1093,7 @@ def compute_quality_score(signal, c, df, instrument, config, atr):
     elif setup_type == 'Breakout':
         rejection_score = 6
 
-    # 6. Proximité de l'EMA50 (0-10) pour les Pullback, Sinon valeur par défaut
+    # 6. Proximité EMA50 (0-10)
     ema_proximity_score = 5
     if setup_type == 'Pullback':
         dist_ema = abs(c['c'] - c['ema50']) / atr if atr > 0 else 99
@@ -1041,7 +1103,7 @@ def compute_quality_score(signal, c, df, instrument, config, atr):
             ema_proximity_score = max(0, 10 * (1 - (dist_ema - 0.2) / 5))
         ema_proximity_score = min(ema_proximity_score, 10)
 
-    # 7. SL en pips (0-10) - plus petit = meilleur
+    # 7. SL en pips (0-10)
     sl_score = 0
     if MIN_SL_PIPS < MAX_SL_PIPS:
         norm = (sl_pips - MIN_SL_PIPS) / (MAX_SL_PIPS - MIN_SL_PIPS)
@@ -1052,6 +1114,48 @@ def compute_quality_score(signal, c, df, instrument, config, atr):
     total_score = adx_score + di_score + rsi_score + body_score + rejection_score + ema_proximity_score + sl_score
     total_score = min(max(total_score, 0), 100)
     return total_score
+
+
+# ============ RECOMMANDATION #6 : diagnostic des quasi-candidats ============
+def _best_hypothetical_setup(c, df, instrument, config, atr, h1_up, h1_down, sentiment):
+    """
+    Calcule le meilleur score de qualité parmi les setups qui pourraient exister
+    dans le sens de la tendance H1 (et du sentiment), en utilisant les niveaux SL/TP
+    générés par setup_stop_and_target. Sert à des fins de diagnostic uniquement.
+
+    Retourne (score, setup_name, direction) ou None.
+    """
+    best = None
+    setup_catalog = [
+        ('Pullback', RISK_PULLBACK, 'pullback'),
+        ('Breakout', RISK_BREAKOUT, 'breakout'),
+        ('Pin Bar', RISK_PINBAR, 'pinbar'),
+        ('Inside Bar', RISK_INSIDE_BAR, 'insidebar'),
+        ('Engulfing', RISK_ENGULFING, 'engulfing'),
+        ('Momentum', RISK_MOMENTUM_CONTINU, 'momentum'),
+        ('Trend Breakout', RISK_TREND_BREAKOUT, 'trendbreakout'),
+        ('ORB', RISK_ORB, 'orb'),
+        ('Support', RISK_SUPPORT_RESISTANCE, 'sr'),
+        ('Resistance', RISK_SUPPORT_RESISTANCE, 'sr'),
+    ]
+    for direction in ('buy', 'sell'):
+        if direction == 'buy' and not (h1_up and sentiment != 'bearish'):
+            continue
+        if direction == 'sell' and not (h1_down and sentiment != 'bullish'):
+            continue
+        for name, risk, key in setup_catalog:
+            try:
+                levels = setup_stop_and_target(df, direction, c['c'], config, key)
+                if not levels:
+                    continue
+                sl, tp, sl_pips, _ = levels
+                sig = (c['c'], sl, tp, sl_pips, direction, name, risk)
+                score = compute_quality_score(sig, c, df, instrument, config, atr)
+                if best is None or score > best[0]:
+                    best = (score, name, direction)
+            except Exception:
+                continue
+    return best
 
 
 # ================== COEUR DE LA STRATÉGIE ==================
@@ -1074,7 +1178,6 @@ def check_signal(df, instrument):
     h1_up = c['ema50'] > c['ema200'] and c['c'] > c['ema50']
     h1_down = c['ema50'] < c['ema200'] and c['c'] < c['ema50']
 
-    # Filtres communs (MACD avec tolérance)
     MACD_TOLERANCE = 0.0001
     macd_bullish = c['macd_line'] > c['macd_signal'] - MACD_TOLERANCE
     macd_bearish = c['macd_line'] < c['macd_signal'] + MACD_TOLERANCE
@@ -1083,11 +1186,9 @@ def check_signal(df, instrument):
     rsi_bear = 30 < c['rsi'] < 70
     sentiment = news_sentiment_filter.get(instrument, 'neutral')
 
-    # Support / Résistance (20 bougies)
     support = df['l'].tail(20).min()
     resistance = df['h'].tail(20).max()
 
-    # --- Vérification de l'ORB ---
     global orb_range
     now = datetime.now(tz)
     if TRADING_HOURS_START <= now.hour < TRADING_HOURS_START + 1:
@@ -1099,7 +1200,6 @@ def check_signal(df, instrument):
     else:
         orb_range["recorded"] = False
 
-    # Dictionnaire pour collecter les signaux (sous forme de tuples)
     signals = []
 
     # --- 1. ENGULFING ---
@@ -1207,7 +1307,7 @@ def check_signal(df, instrument):
                     sl, tp, sl_pips, atr_val = levels
                     signals.append((c['c'], sl, tp, sl_pips, 'sell', 'Inside Bar', RISK_INSIDE_BAR))
 
-    # --- 7. MOMENTUM CONTINU (assoupli) ---
+    # --- 7. MOMENTUM CONTINU ---
     if h1_up and sentiment != 'bearish':
         mom_buy = c['c'] > c['ema50'] and c['adx'] > 25
         if mom_buy and adx_ok and macd_bullish and rsi_bull:
@@ -1254,7 +1354,7 @@ def check_signal(df, instrument):
                 sl, tp, sl_pips, atr_val = levels
                 signals.append((c['c'], sl, tp, sl_pips, 'sell', 'Trend Breakout', RISK_TREND_BREAKOUT))
 
-    # --- Sélection du meilleur signal basé sur le score de qualité ---
+    # --- Sélection du meilleur signal ---
     if signals:
         scored_signals = []
         for sig in signals:
@@ -1265,14 +1365,15 @@ def check_signal(df, instrument):
         price, sl, tp, sl_pips, direction, setup_type, risk_pct = best_signal
         return True, price, sl, tp, sl_pips, direction, setup_type, risk_pct, f"{setup_type} selected (score {best_score:.1f})"
     else:
-        # Construire les raisons de rejet
+        # ---- Construction des raisons de rejet ----
         buy_reasons = []
         sell_reasons = []
         if not h1_up:
             buy_reasons.append("H1 not up")
         if h1_up and sentiment == 'bearish':
             buy_reasons.append("Sentiment bearish")
-        if h1_down:
+        # === RECOMMANDATION #1 : CORRECTION DU BUG ===
+        if not h1_down:
             sell_reasons.append("H1 not down")
         if h1_down and sentiment == 'bullish':
             sell_reasons.append("Sentiment bullish")
@@ -1291,7 +1392,21 @@ def check_signal(df, instrument):
             buy_reasons.append("No BUY setup triggered")
         if not sell_reasons:
             sell_reasons.append("No SELL setup triggered")
-        return False, 0, 0, 0, 0, None, None, 0, f"{', '.join(buy_reasons)} | {', '.join(sell_reasons)}"
+
+        # === RECOMMANDATION #6 : diagnostic quasi-candidat ===
+        diag_str = ""
+        try:
+            diag = _best_hypothetical_setup(
+                c, df, instrument, config, atr, h1_up, h1_down, sentiment
+            )
+            if diag is not None:
+                diag_score, diag_name, diag_dir = diag
+                diag_str = f" [Best hypothetical: {diag_name} {diag_dir.upper()} score={diag_score:.1f}]"
+        except Exception as e:
+            diag_str = f" [Diagnostic error: {e}]"
+
+        reason = f"{', '.join(buy_reasons)} | {', '.join(sell_reasons)}{diag_str}"
+        return False, 0, 0, 0, 0, None, None, 0, reason
 
 
 # ---------- News alert ----------
@@ -1326,14 +1441,11 @@ def main():
     if active_trade is None:
         load_existing_open_position()
 
-    # ---------- DETECTION DES CLOTURES MANUELLES AU DEMARRAGE ----------
     if active_trade is not None:
         pair = active_trade['pair']
         if not has_open_position(pair):
             print(f"Trade on {pair} was closed manually before bot start. Enregistrement en cours...")
             check_closed_trade()
-        else:
-            pass
 
     trade_opened_during_window_today = False
     if active_trade is not None:
@@ -1354,7 +1466,6 @@ def main():
         and datetime.now(tz).hour >= TRADING_HOURS_END
     )
 
-    # --- INTÉGRATION DES NEWS DANS LE MESSAGE DE DÉMARRAGE ---
     events = get_high_impact_news()
     now = datetime.now(tz)
     future_events = [e for e in events if e["time"] > now and e["time"] - now < timedelta(hours=NEWS_CHECK_FUTURE_HOURS)]
@@ -1372,18 +1483,11 @@ def main():
     print(start_msg)
     send_telegram_message(start_msg)
 
-    # Pas besoin de check_future_news_and_alert() ici car déjà inclus.
-    # Cependant on garde la fonction pour d'autres utilisations.
-
     try:
         while True:
             now = datetime.now(tz)
 
-            # =========================================================
-            # VÉRIFICATION DES CONDITIONS D'ARRÊT (EN DÉBUT DE BOUCLE)
-            # =========================================================
-
-            # 1. Arrêt anticipé à 12:05 si aucun trade actif
+            # =========================== ARRÊTS ===========================
             if now.hour == 12 and now.minute >= 5 and active_trade is None:
                 print("🕒 12:05 reached with no active trade – stopping bot.")
                 BOT_STATUS = "stopped"
@@ -1391,7 +1495,6 @@ def main():
                 send_telegram_message("🔴 Bot stopped – End of session (12:05), no active trade.")
                 break
 
-            # 2. Rappel de fin de session à 16:45 (14 min avant fermeture)
             if now.hour == 16 and now.minute >= 45 and now.minute < 47:
                 if active_trade is not None:
                     send_telegram_message(
@@ -1400,7 +1503,6 @@ def main():
                     )
                     print("Rappel envoyé à 16:45.")
 
-            # 3. Fermeture automatique à 16:50 (anticipation)
             if now.hour == 16 and now.minute >= 50 and now.minute < 52:
                 if active_trade is not None:
                     try:
@@ -1436,9 +1538,7 @@ def main():
                             f"Market closes at 16:59. Please manage manually."
                         )
 
-            # 4. Arrêt normal à 17:05 (toujours, même avec trade)
             if now.hour > BOT_SHUTDOWN_HOUR or (now.hour == BOT_SHUTDOWN_HOUR and now.minute >= 5):
-                # Si un trade est ouvert, on essaie de le fermer en profit (si pas déjà fait)
                 if active_trade is not None:
                     try:
                         pair = active_trade['pair']
@@ -1473,26 +1573,17 @@ def main():
                             f"⏳ **Trade on {active_trade['pair']} is in loss ({pnl:.2f} USD).**\n"
                             f"Market is now closed. Please manage manually."
                         )
-                # Arrêt du bot (avec ou sans trade)
                 print("🕒 17:05 reached – stopping bot.")
                 BOT_STATUS = "stopped"
                 save_status_json()
                 send_telegram_message("🔴 Bot stopped – End of session (17:05).")
                 break
 
-            # =========================================================
-            # FIN DES CONDITIONS D'ARRÊT
-            # =========================================================
-
-            # ------------------------------------------------------------------
-            # GESTION DES NEWS ET BLOCAGE DES ENTRÉES
-            # ------------------------------------------------------------------
+            # =========================== NEWS ===========================
             blocked, news_event, time_until, blocked_pairs = check_and_block_news(now)
 
-            # Si une news est dans la fenêtre de blocage, on empêche les nouveaux trades
             if blocked and active_trade is None:
                 if not _last_news_block_message_sent:
-                    # Message de blocage pour les nouvelles entrées
                     if set(blocked_pairs) == set(PAIRS):
                         msg = (f"📅 High-impact news in progress: {news_event['title']} at {news_event['time'].strftime('%H:%M')} – "
                                f"Trading paused on ALL pairs until {datetime.fromtimestamp(get_pause_until(), tz).strftime('%H:%M')}.")
@@ -1503,20 +1594,14 @@ def main():
                                f"(Active pairs: {', '.join(active)})")
                     send_telegram_message(msg)
                     _last_news_block_message_sent = True
-                # On force can_trade à False
                 can_trade = False
             else:
-                # Si la pause est levée, on envoie un message de reprise
                 if _last_news_block_message_sent:
                     send_telegram_message("🟢 News pause lifted – trading resumed")
                     _last_news_block_message_sent = False
-                # can_trade sera recalculé plus bas
 
-            # ------------------------------------------------------------------
-            # Le reste de la boucle (gestion des trades, etc.) avec try/except
-            # ------------------------------------------------------------------
+            # =========================== BOUCLE PRINCIPALE ===========================
             try:
-                # Réinitialisation journalière
                 today = now.date()
                 if last_trade_date != today:
                     trades_today = count_all_trades_today()
@@ -1527,6 +1612,8 @@ def main():
                     late_shutdown_required = False
                     trade_opened_during_window_today = False
                     orb_range = {"high": None, "low": None, "recorded": False}
+                    # Vider aussi le cache de candles pour la nouvelle journée
+                    _candle_cache.clear()
                     load_closed_trades_from_file()
                     load_rejected_from_file()
                     if active_trade is None:
@@ -1557,10 +1644,7 @@ def main():
                 ):
                     late_shutdown_required = True
 
-                # News handling with open trade (déjà fait plus haut avec check_and_block_news)
-                # Mais on laisse la partie spécifique aux trades ouverts (avertissement, fermeture)
                 if active_trade is not None:
-                    # Utiliser les résultats de check_and_block_news déjà appelés plus haut
                     if blocked and news_event is not None and time_until is not None:
                         minutes_until = time_until.total_seconds() / 60.0
                         if minutes_until <= NEWS_WARNING_MINUTES and minutes_until > NEWS_CLOSE_BEFORE_MINUTES:
@@ -1603,7 +1687,6 @@ def main():
                                     else:
                                         send_telegram_message("⚠️ Could not move SL. Please monitor.")
 
-                # Mise à jour du sentiment (Finnhub) toutes les minutes
                 if not hasattr(main, "next_news_check"):
                     main.next_news_check = now
                 if now >= main.next_news_check:
@@ -1613,13 +1696,9 @@ def main():
                             news_sentiment_filter[pair] = s
                     main.next_news_check = now + timedelta(seconds=60)
 
-                # Vérifier à nouveau le blocage pour les nouvelles entrées (on l'a déjà fait, mais on récupère les variables)
-                # Ici on utilise les variables bloquées déjà définies
                 if blocked:
-                    # Si on est bloqué, on ne trade pas du tout
                     can_trade = False
                 else:
-                    # Sinon on recalcule can_trade normalement
                     in_trading_hours = TRADING_HOURS_START <= now.hour < TRADING_HOURS_END
                     can_trade_time = True
                     if last_close_time is not None and (now - last_close_time) < timedelta(minutes=MIN_MINUTES_BETWEEN_TRADES):
@@ -1678,7 +1757,22 @@ def main():
                             c = df.iloc[-2]
                             parts = reason.split("|")
                             buy_reason = parts[0].strip() if len(parts) > 0 else reason
-                            sell_reason = parts[1].strip() if len(parts) > 1 else ""
+                            # Le diagnostic est après le dernier '|', on l'isole pour ne pas le mettre dans sell_reason
+                            if len(parts) > 1:
+                                sell_reason = parts[1].strip()
+                                # Séparer le diagnostic du sell_reason
+                                diag_idx = sell_reason.rfind(' [Best hypothetical')
+                                if diag_idx == -1:
+                                    diag_idx = sell_reason.rfind(' [Diagnostic error')
+                                if diag_idx > 0:
+                                    diagnostic = sell_reason[diag_idx:].strip()
+                                    sell_reason = sell_reason[:diag_idx].strip()
+                                else:
+                                    diagnostic = ""
+                            else:
+                                sell_reason = ""
+                                diagnostic = ""
+
                             rejected_signals.append({
                                 "time": now.strftime("%H:%M:%S"),
                                 "pair": pair,
@@ -1691,10 +1785,11 @@ def main():
                                 "ema50": c['ema50'] if not pd.isna(c['ema50']) else None,
                                 "ema200": c['ema200'] if not pd.isna(c['ema200']) else None,
                                 "rsi": c['rsi'] if not pd.isna(c['rsi']) else None,
-                                "atr": c['atr'] if not pd.isna(c['atr']) else None
+                                "atr": c['atr'] if not pd.isna(c['atr']) else None,
+                                "diagnostic": diagnostic if diagnostic else None
                             })
                             save_rejected_to_file()
-                            print(f" -> REJECTED {pair}: {reason[:80]}...")
+                            print(f" -> REJECTED {pair}: {reason[:160]}...")
 
                     if candidates:
                         best = candidates[0]
@@ -1717,7 +1812,6 @@ def main():
                 time.sleep(30)
 
             except Exception as inner_e:
-                # En cas d'erreur, on log et on continue (pas de plantage)
                 print(f"⚠️ Error in main loop: {inner_e}")
                 traceback.print_exc()
                 time.sleep(60)
@@ -1729,18 +1823,13 @@ def main():
         send_telegram_message("🔴 Bot stopped manually (Ctrl+C)")
 
 
-# ---------- NOUVELLE FONCTION PLACE_TRADE (MARKET direct) ----------
+# ---------- PLACE_TRADE (MARKET direct) ----------
 def place_trade(instrument, entry_price_signal, sl_signal, tp_signal, direction, setup_type, risk_percent, reason, df, balance):
-    """
-    Place un ordre MARKET directement, avec recalcul dynamique du SL/TP et du volume,
-    et un filtre de slippage basé sur l'ATR.
-    """
     global active_trade, trades_today, rejected_signals
 
     if active_trade is not None:
         return False
 
-    # 1. Récupération du prix actuel (bid pour sell, ask pour buy)
     try:
         resp = ctx.pricing.get(ACCOUNT_ID, instruments=instrument)
         price_info = resp.body['prices'][0]
@@ -1751,15 +1840,12 @@ def place_trade(instrument, entry_price_signal, sl_signal, tp_signal, direction,
         send_telegram_message(f"⚠️ Could not get current price for {instrument}: {e}")
         return False
 
-    # 2. Calcul du slippage en pips
     slippage_pips = abs(current_price - entry_price_signal) / 0.0001
 
-    # 3. Seuil de slippage dynamique basé sur l'ATR (paramètres ajustés)
     try:
         atr = float(df['atr'].iloc[-2])
         atr_pips = atr / 0.0001
         max_slippage_pips = max(SLIPPAGE_MIN_PIPS, SLIPPAGE_ATR_FACTOR * atr_pips)
-        # Plafond relevé à 8.0 pips
         max_slippage_pips = min(max_slippage_pips, 8.0)
     except Exception as e:
         print(f"ATR not available, using default 3 pips: {e}")
@@ -1777,7 +1863,6 @@ def place_trade(instrument, entry_price_signal, sl_signal, tp_signal, direction,
         save_rejected_to_file()
         return False
 
-    # 4. Recalcul du SL et TP en fonction du prix actuel
     config = PAIR_CONFIG[instrument]
     levels = setup_stop_and_target(df, direction, current_price, config, setup_type)
     if not levels:
@@ -1793,7 +1878,6 @@ def place_trade(instrument, entry_price_signal, sl_signal, tp_signal, direction,
 
     new_sl, new_tp, sl_pips, atr_val = levels
 
-    # 5. Recalcul du volume (units) avec la nouvelle distance SL
     sl_distance = abs(current_price - new_sl)
     if sl_distance <= 0:
         return False
@@ -1803,7 +1887,6 @@ def place_trade(instrument, entry_price_signal, sl_signal, tp_signal, direction,
         print(msg)
         return False
 
-    # 6. Placement de l'ordre MARKET
     signed_units = -abs(new_units) if direction == 'sell' else abs(new_units)
     order = {
         "type": "MARKET",
@@ -1826,14 +1909,12 @@ def place_trade(instrument, entry_price_signal, sl_signal, tp_signal, direction,
         save_rejected_to_file()
         return False
 
-    # 7. Récupération des détails du trade
     try:
         fill = r.body.get('orderFillTransaction', r.body.get('orderCreateTransaction'))
         if not fill:
             print(f"Market order created but not filled immediately for {instrument}")
             return False
         trade = fill.tradeOpened
-        import re
         score_match = re.search(r'score\s+([\d.]+)', reason, re.IGNORECASE)
         quality_score = float(score_match.group(1)) if score_match else None
 
@@ -1896,7 +1977,7 @@ def place_trade(instrument, entry_price_signal, sl_signal, tp_signal, direction,
     return True
 
 
-# ---------- Fonction check_closed_trade CORRIGÉE (prix de sortie fiable) ----------
+# ---------- CLOTURE ----------
 def check_closed_trade():
     global active_trade, last_close_time
     if active_trade is None:
@@ -1905,7 +1986,6 @@ def check_closed_trade():
     if has_open_position(pair):
         return
 
-    # Petit délai pour laisser le temps à l'API de synchroniser la clôture
     time.sleep(1)
 
     try:
@@ -1915,7 +1995,6 @@ def check_closed_trade():
             print(f"No closed trade found for {pair} yet, will retry later.")
             return
 
-        # Prendre le trade le plus récent
         latest = sorted(closed_trades, key=lambda t: str(getattr(t, 'closeTime', '')), reverse=True)[0]
 
         trade_id = active_trade['trade_id']
@@ -1926,20 +2005,16 @@ def check_closed_trade():
         setup = active_trade.get('setup_type', 'unknown')
         init_risk = active_trade.get('initial_risk', 0.0)
 
-        # ---- RÉCUPÉRATION ROBUSTE DU PRIX DE SORTIE ----
         close_price = None
 
-        # 1. closePrice (priorité absolue)
         if hasattr(latest, 'closePrice') and latest.closePrice is not None:
             close_price = float(latest.closePrice)
             print(f"✅ Exit price from closePrice: {close_price:.5f}")
 
-        # 2. price (fallback)
         if close_price is None and hasattr(latest, 'price') and latest.price is not None:
             close_price = float(latest.price)
             print(f"✅ Exit price from price: {close_price:.5f}")
 
-        # 3. API des transactions (si toujours None)
         if close_price is None:
             print("⚙️ Fetching close price from transactions...")
             try:
@@ -1953,27 +2028,22 @@ def check_closed_trade():
             except Exception as e:
                 print(f"⚠️ Transaction API error: {e}")
 
-        # 4. Calcul à partir du P&L (dernier recours)
         if close_price is None:
             units_abs = abs(units)
             if units_abs > 0:
                 if direction == 'buy':
                     close_price = entry + (total_pnl_usd / units_abs)
-                else:  # sell
+                else:
                     close_price = entry - (total_pnl_usd / units_abs)
                 print(f"⚙️ Exit price calculated from P&L: {close_price:.5f}")
             else:
                 close_price = entry
                 print(f"⚠️ Fallback to entry price (no units): {close_price:.5f}")
 
-        # 5. Vérification de cohérence : si le prix calculé est égal à l'entrée alors que le P&L est non nul, on réessaie
         if abs(close_price - entry) < 0.000001 and abs(total_pnl_usd) > 0.1:
             print("⚠️ Calculated close price equals entry despite non-zero P&L. Retrying after 2s...")
             time.sleep(2)
-            # On réessaie une dernière fois en appelant la fonction récursivement (une seule fois)
-            return check_closed_trade()  # attention à la récursion, mais limité à 1
-
-        # ---- FIN DE LA RÉCUPÉRATION ----
+            return check_closed_trade()
 
         if direction == 'buy' and init_risk > 0:
             realized_r = (close_price - entry) / init_risk
