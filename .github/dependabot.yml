@@ -1,0 +1,42 @@
+# .github/dependabot.yml
+version: 2
+updates:
+  # Mises à jour pour les dépendances Python (requirements.txt ou setup.py)
+  - package-ecosystem: "pip"
+    directory: "/"  # Racine du dépôt, là où se trouve le fichier requirements.txt
+    schedule:
+      interval: "daily"
+      time: "06:00"
+      timezone: "America/Toronto"
+    open-pull-requests-limit: 5
+    reviewers:
+      - "NSTradingUS-CA"  # Remplace par ton nom d'utilisateur GitHub
+    labels:
+      - "dependencies"
+      - "python"
+    commit-message:
+      prefix: "⬆️ "
+      include: "scope"
+    ignore:
+      # Exemple : ignore les mises à jour majeures de pandas (si tu veux rester sur une version stable)
+      - dependency-name: "pandas"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "v20"
+        update-types: ["version-update:semver-major"]
+
+  # Mises à jour pour GitHub Actions (les workflows)
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "daily"
+      time: "06:00"
+      timezone: "America/Toronto"
+    open-pull-requests-limit: 2
+    reviewers:
+      - "NSTradingUS-CA"
+    labels:
+      - "dependencies"
+      - "github-actions"
+    commit-message:
+      prefix: "⬆️ "
+      include: "scope"
