@@ -2,22 +2,20 @@ name: 💹 Forex Sniper 7-12
 
 on:
   workflow_dispatch:
-  repository_dispatch:
-    # ⚠️ IMPORTANT : ce workflow est plafonné à 6h par GitHub.
-    # Configurez Cron-job.org pour dispatcher DEUX fois par jour :
-    #   - 1er dispatch : 07:00 ET  (démarre la session)
-    #   - 2e  dispatch : 12:30 ET  (reprend la session avant coupure)
-    # Le bot reprend automatiquement via status.json + load_existing_open_position().
+  repository_dispatch:        # déclenché par Cron-job.org à 07:00 ET
+  schedule:
+    # 2e déclenchement automatique à 12:30 ET (16:30 UTC)
+    # Prend le relais avant que GitHub ne tue le 1er run à 13:00 ET (limite 6h)
+    - cron: '30 16 * * 1-5'   # 12:30 ET, du lundi au vendredi
 
-# Empêche deux runs simultanés (le 2e attendrait sinon le 1er éternellement)
 concurrency:
   group: forex-sniper
-  cancel-in-progress: false
+  cancel-in-progress: false   # le 2e run ATTEND la fin du 1er, ne l'annule pas
 
 jobs:
   run-bot:
     runs-on: ubuntu-latest
-    timeout-minutes: 360          # 6h = plafond GitHub, inutile de mettre plus
+    timeout-minutes: 360
     permissions:
       contents: write
 
