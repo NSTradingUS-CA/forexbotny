@@ -1,0 +1,32 @@
+name: 🛡️ Trade Guardian
+
+on:
+  schedule:
+    # Toutes les 5 min, 20h00–22h00 UTC = 16h00–18h00 ET (approximatif)
+    - cron: '*/5 20-22 * * 1-5'
+  workflow_dispatch:
+
+concurrency:
+  group: trade-guardian
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    env:
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      GH_PAT: ${{ secrets.GH_PAT }}
+      GITHUB_REPOSITORY: ${{ github.repository }}
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install requests pytz
+      - name: Run guardian
+        run: python guardian.py
