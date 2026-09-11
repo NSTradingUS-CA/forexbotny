@@ -92,7 +92,7 @@ GITHUB_MAX_PUSH_ATTEMPTS = 3
 # ============================
 
 # #4 : timeout augmenté via le paramètre supporté par la librairie v20
-ctx = v20.Context(OANDA_URL, token=API_KEY, request_timeout=60)
+ctx = v20.Context(OANDA_URL, token=API_KEY)
 trades_today = 0
 last_trade_date = None
 last_close_time = None
