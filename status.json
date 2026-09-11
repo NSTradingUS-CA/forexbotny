@@ -1,5 +1,5 @@
 {
-  "time": "2026-09-11 08:57:26",
+  "time": "2026-09-11 09:02:32",
   "bot_status": "running",
   "session": {
     "trades_today": 1,
@@ -15,13 +15,13 @@
     "tp1": 1.1576699999999998,
     "tp2": 1.1559499999999996,
     "trailing_stop": "1.8x H1 ATR",
-    "current_price": 1.15998,
-    "unrealized_pnl_usd": -180.98,
-    "unrealized_pnl_cad": -250.93,
-    "usd_cad_rate": 1.3865,
-    "distance_to_sl_pips": 16.4,
-    "distance_to_tp2_pips": 40.3,
-    "atr": 0.000702857142857148,
+    "current_price": 1.16035,
+    "unrealized_pnl_usd": -294.47,
+    "unrealized_pnl_cad": -408.24,
+    "usd_cad_rate": 1.3863,
+    "distance_to_sl_pips": 20.1,
+    "distance_to_tp2_pips": 44.0,
+    "atr": 0.0006949999999999853,
     "be_triggered": true,
     "tp1_hit": false,
     "setup_type": "Pin Bar",
@@ -30,11 +30,7 @@
     "units": -306743,
     "score": 69.0
   },
-  "next_news_event": {
-    "title": "Core CPI m/m",
-    "time": "08:30",
-    "impact": "High"
-  },
+  "next_news_event": null,
   "strategy": "H1 Multi-Setup (9 types) - Quality Score based",
   "max_risk_per_trade_percent": 0.65,
   "daily_loss_limit_percent": 2.0,
