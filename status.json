@@ -1,5 +1,5 @@
 {
-  "time": "2026-09-11 08:11:36",
+  "time": "2026-09-11 08:16:42",
   "bot_status": "running",
   "session": {
     "trades_today": 1,
@@ -15,12 +15,12 @@
     "tp1": 1.1576699999999998,
     "tp2": 1.1559499999999996,
     "trailing_stop": "20 pips initial",
-    "current_price": 1.15921,
-    "unrealized_pnl_usd": 55.21,
-    "unrealized_pnl_cad": 76.51,
-    "usd_cad_rate": 1.3857,
-    "distance_to_sl_pips": 19.0,
-    "distance_to_tp2_pips": 32.6,
+    "current_price": 1.15919,
+    "unrealized_pnl_usd": 61.35,
+    "unrealized_pnl_cad": 85.03,
+    "usd_cad_rate": 1.386,
+    "distance_to_sl_pips": 19.2,
+    "distance_to_tp2_pips": 32.4,
     "atr": 0.0006757142857143032,
     "be_triggered": false,
     "tp1_hit": false,
@@ -38,6 +38,9 @@
   "strategy": "H1 Multi-Setup (9 types) - Quality Score based",
   "max_risk_per_trade_percent": 0.65,
   "daily_loss_limit_percent": 2.0,
-  "blocked_pairs": [],
+  "blocked_pairs": [
+    "EUR_USD",
+    "GBP_USD"
+  ],
   "active_pairs": []
 }
