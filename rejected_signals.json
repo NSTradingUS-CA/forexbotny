@@ -434,6 +434,21 @@
       "rsi": 43.58357378323255,
       "atr": 0.0010078571428571,
       "diagnostic": "[Best hypothetical: Pullback SELL score=58.7]"
+    },
+    {
+      "time": "10:00:16",
+      "pair": "GBP_USD",
+      "buy_reason": "H1 not up",
+      "sell_reason": "MACD not bearish",
+      "spread": 0.000220000000000109,
+      "adx": 31.55491164625933,
+      "plus_di": 10.369493558017846,
+      "minus_di": 31.11169421660287,
+      "ema50": 1.3525114951069317,
+      "ema200": 1.3538134700463735,
+      "rsi": 53.77103247364634,
+      "atr": 0.0012878571428571104,
+      "diagnostic": "[Best hypothetical: Pullback SELL score=68.0]"
     }
   ],
   "last_cleanup": "2026-09-11"
