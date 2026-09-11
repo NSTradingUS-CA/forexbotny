@@ -68,9 +68,8 @@ TRAILING_ATR_MULT = 1.8
 FIXED_TRAILING_PIPS = 20
 
 # Paramètres MARKET direct (seuil de slippage ajusté)
-SLIPPAGE_ATR_FACTOR = 0.40      # plus tolérant en période volatile
-SLIPPAGE_MIN_PIPS = 2.0         # plancher relevé
-# Le plafond max est défini dans place_trade() : min(... , 8.0)
+SLIPPAGE_ATR_FACTOR = 0.40
+SLIPPAGE_MIN_PIPS = 2.0
 
 NEWS_CLOSE_BEFORE_MINUTES = 5
 NEWS_WARNING_MINUTES = 15
@@ -81,15 +80,22 @@ PAIR_CONFIG = {
     "GBP_USD": {"MAX_SPREAD_PIPS": 3.0, "ADX_THRESHOLD": 13, "ATR_MULTIPLIER": 2.0}
 }
 
-# === RECOMMANDATION #3 : Intervalle des pushes GitHub (en secondes) ===
-GITHUB_PUSH_MIN_INTERVAL = 300  # 5 minutes
+# === FIX R/R : multiplier par setup (compense le taux de perte structurel) ===
+SETUP_RR = {
+    "pullback":      1.5,
+    "engulfing":     1.8,
+    "pinbar":        2.0,
+    "insidebar":     2.0,
+    "sr":            2.0,
+    "momentum":      2.2,
+    "orb":           2.5,
+    "breakout":      2.5,
+    "trendbreakout": 3.0,
+}
 
-# === RECOMMANDATION #4 : TTL du cache candles (en secondes) ===
+GITHUB_PUSH_MIN_INTERVAL = 300
 CANDLE_CACHE_TTL_SECONDS = 120
-
-# === RECOMMANDATION #2 : Nombre de tentatives sur conflit 409 ===
 GITHUB_MAX_PUSH_ATTEMPTS = 3
-# ============================
 
 ctx = v20.Context(OANDA_URL, token=API_KEY)
 trades_today = 0
@@ -127,10 +133,8 @@ _last_rejected_data = None
 _last_rejected_push_time = None
 _last_closed_trades_data = None
 
-# === RECOMMANDATION #4 : Cache des candles ===
 _candle_cache = {}
 
-# Variables pour les messages de news
 _last_news_block_message_sent = False
 
 
@@ -157,7 +161,6 @@ def get_next_high_impact_news(now):
 
 
 def get_affected_pairs(event_title):
-    """Détermine quelle(s) paire(s) sont affectées par une news."""
     title_lower = event_title.lower()
     if any(ev.lower() in title_lower for ev in ["nfp", "cpi", "fomc", "interest rate", "nonfarm payrolls", "employment"]):
         return PAIRS
@@ -212,7 +215,6 @@ def check_and_block_news(now):
     return False, None, None, []
 
 
-# ============ RECOMMANDATION #2 : retry sur 409 ============
 def _github_put_with_retry(url, headers, content_b64, message, max_attempts=GITHUB_MAX_PUSH_ATTEMPTS):
     for attempt in range(max_attempts):
         try:
@@ -623,12 +625,7 @@ def get_finnhub_sentiment(pair):
         return 'neutral'
 
 
-# === FIX DOUBLONS NEWS : normalisation des titres ===
 def _normalize_news_title(title):
-    """
-    Normalise un titre de news pour fusionner les variantes d'une même publication.
-    Ex : "Core CPI m/m", "Core CPI y/y", "CPI m/m", "CPI y/y" → tous → "CPI".
-    """
     if not title:
         return title
     t = title.strip().lower()
@@ -664,7 +661,6 @@ def get_high_impact_news():
 
     events = []
 
-    # ---- 1. faireconomy.media ----
     try:
         url = "https://nfs.faireconomy.media/ff_calendar_thisweek.json"
         headers = {'User-Agent': 'Mozilla/5.0'}
@@ -681,7 +677,6 @@ def get_high_impact_news():
     except Exception as e:
         print(f"⚠️ faireconomy.media error: {e}")
 
-    # ---- 2. Alpha Vantage ----
     if ALPHA_VANTAGE_API_KEY:
         try:
             url = f"https://www.alphavantage.co/query?function=CALENDAR_EVENT&apikey={ALPHA_VANTAGE_API_KEY}"
@@ -698,7 +693,6 @@ def get_high_impact_news():
         except Exception as e:
             print(f"⚠️ Alpha Vantage error: {e}")
 
-    # ---- 3. OANDA ForexLabs ----
     try:
         url = f"https://api-fxpractice.oanda.com/labs/v1/calendar"
         headers = {"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"}
@@ -714,7 +708,6 @@ def get_high_impact_news():
     except Exception as e:
         print(f"⚠️ OANDA ForexLabs error: {e}")
 
-    # === FIX DOUBLONS : fusion avec normalisation des titres ===
     unique_events = {}
     for e in events:
         canonical_title = _normalize_news_title(e['title'])
@@ -850,23 +843,28 @@ def get_daily_loss_status(balance):
     return loss_pct, loss_pct >= DAILY_LOSS_LIMIT_PERCENT
 
 
+# ============ FIX R/R : TP dépend du setup ============
 def setup_stop_and_target(df, direction, entry, pair_config, setup_type):
     atr = float(df['atr'].iloc[-2])
     swing = df.iloc[-4:-1]
+
+    rr = SETUP_RR.get(setup_type.lower(), 2.0)
+
     if direction == 'buy':
         structure_sl = float(swing['l'].min())
         raw_sl = min(structure_sl, entry - pair_config['ATR_MULTIPLIER'] * atr)
         if setup_type == 'breakout':
             raw_sl = min(structure_sl, entry - 1.15 * atr)
         risk = entry - raw_sl
-        tp = entry + 2.0 * risk
+        tp = entry + rr * risk
     else:
         structure_sl = float(swing['h'].max())
         raw_sl = max(structure_sl, entry + pair_config['ATR_MULTIPLIER'] * atr)
         if setup_type == 'breakout':
             raw_sl = max(structure_sl, entry + 1.15 * atr)
         risk = raw_sl - entry
-        tp = entry - 2.0 * risk
+        tp = entry - rr * risk
+
     sl_pips = risk / 0.0001
     if sl_pips < MIN_SL_PIPS or sl_pips > MAX_SL_PIPS:
         return None
@@ -943,6 +941,31 @@ def close_full_position_market():
     return False
 
 
+# ============ FIX BE/TRAILING : vraie modification SL via set_dependent_orders ============
+def update_trade_sl_tp(trade_id, sl_price=None, tp_price=None):
+    """
+    Modifie SL/TP d'un trade ouvert.
+    ctx.position.close avec seulement stopLoss NE MODIFIE RIEN côté OANDA.
+    Il faut ctx.trade.set_dependent_orders.
+    """
+    body = {}
+    if sl_price is not None:
+        body["stopLoss"] = {"price": f"{sl_price:.5f}"}
+    if tp_price is not None:
+        body["takeProfit"] = {"price": f"{tp_price:.5f}"}
+    if not body:
+        return False
+    try:
+        r = retry_api_call(ctx.trade.set_dependent_orders, ACCOUNT_ID, trade_id, **body)
+        if getattr(r, "status", None) == 200:
+            return True
+        print(f"⚠️ set_dependent_orders status={getattr(r,'status',None)} body={getattr(r,'body',None)}")
+        return False
+    except Exception as e:
+        print(f"❌ set_dependent_orders failed: {e}")
+        return False
+
+
 def move_sl_to_entry():
     global active_trade
     if active_trade is None:
@@ -969,19 +992,18 @@ def move_sl_to_entry():
     else:
         return False
     if direction == 'buy' and new_sl > current_sl:
-        body = {"stopLoss": {"price": f"{new_sl:.5f}"}}
+        pass
     elif direction == 'sell' and new_sl < current_sl:
-        body = {"stopLoss": {"price": f"{new_sl:.5f}"}}
+        pass
     else:
         return False
-    try:
-        r = retry_api_call(ctx.position.close, ACCOUNT_ID, instrument=pair, data=body)
-        if r.status == 200:
-            active_trade['sl'] = new_sl
-            print(f"SL moved to entry ({new_sl:.5f}) on {pair}")
-            return True
-    except Exception as e:
-        print(f"Failed to move SL to entry: {e}")
+
+    if update_trade_sl_tp(active_trade['trade_id'], sl_price=new_sl):
+        active_trade['sl'] = new_sl
+        print(f"SL moved to entry ({new_sl:.5f}) on {pair}")
+        return True
+    else:
+        print(f"⚠️ SL move FAILED on {pair} – OANDA still at {active_trade['sl']:.5f}")
         return False
 
 
@@ -1005,21 +1027,24 @@ def manage_active_trade():
     move = (current_price - entry) if direction == 'buy' else (entry - current_price)
     r_multiple = move / initial_risk if initial_risk > 0 else 0
 
+    # --- BE ---
     if not active_trade.get('be_triggered') and r_multiple >= BE_R_MULT:
         offset = 0.5 * 0.0001
         new_sl = entry + offset if direction == 'buy' else entry - offset
         old_sl = active_trade['sl']
         if (direction == 'buy' and new_sl > old_sl) or (direction == 'sell' and new_sl < old_sl):
             try:
-                body = {"stopLoss": {"price": f"{new_sl:.5f}"}}
-                retry_api_call(ctx.position.close, ACCOUNT_ID, instrument=pair, data=body)
-                active_trade['sl'] = new_sl
-                active_trade['be_triggered'] = True
-                print(f"Break-even triggered on {pair} at +{r_multiple:.2f}R")
-                send_telegram_message(f"🛡️ BE triggered on {pair} at +{r_multiple:.2f}R.")
+                if update_trade_sl_tp(active_trade['trade_id'], sl_price=new_sl):
+                    active_trade['sl'] = new_sl
+                    active_trade['be_triggered'] = True
+                    print(f"Break-even triggered on {pair} at +{r_multiple:.2f}R")
+                    send_telegram_message(f"🛡️ BE triggered on {pair} at +{r_multiple:.2f}R.")
+                else:
+                    send_telegram_message(f"⚠️ ÉCHEC BE sur {pair} – SL reste à {old_sl:.5f}")
             except Exception as e:
                 print(f"Break-even update failed: {e}")
 
+    # --- TP1 partial ---
     tp1 = active_trade.get('tp1')
     units = abs(int(active_trade['units']))
     if tp1 is not None and not active_trade.get('tp1_hit'):
@@ -1032,6 +1057,7 @@ def manage_active_trade():
                 print(f"TP1 hit on {pair}, {partial_units} units closed")
                 send_telegram_message(f"🎯 TP1 reached on {pair}: {partial_units} units closed, runner kept.")
 
+    # --- Trailing ATR ---
     if active_trade.get('be_triggered') or active_trade.get('tp1_hit'):
         try:
             df = get_candles(pair, count=ATR_PERIOD + 30, granularity=EXECUTION_GRANULARITY)
@@ -1041,21 +1067,23 @@ def manage_active_trade():
             if direction == 'buy':
                 new_sl = current_price - trail_distance
                 if new_sl > active_trade['sl']:
-                    body = {"stopLoss": {"price": f"{new_sl:.5f}"}}
-                    retry_api_call(ctx.position.close, ACCOUNT_ID, instrument=pair, data=body)
-                    active_trade['sl'] = new_sl
-                    active_trade['trailing_distance'] = f"{TRAILING_ATR_MULT}x H1 ATR"
-                    print(f"Trailing SL updated on {pair} to {new_sl:.5f}")
-                    send_telegram_message(f"📈 Trailing SL updated on {pair} to {new_sl:.5f}")
+                    if update_trade_sl_tp(active_trade['trade_id'], sl_price=new_sl):
+                        active_trade['sl'] = new_sl
+                        active_trade['trailing_distance'] = f"{TRAILING_ATR_MULT}x H1 ATR"
+                        print(f"Trailing SL updated on {pair} to {new_sl:.5f}")
+                        send_telegram_message(f"📈 Trailing SL updated on {pair} to {new_sl:.5f}")
+                    else:
+                        send_telegram_message(f"⚠️ ÉCHEC trailing sur {pair}")
             else:
                 new_sl = current_price + trail_distance
                 if new_sl < active_trade['sl']:
-                    body = {"stopLoss": {"price": f"{new_sl:.5f}"}}
-                    retry_api_call(ctx.position.close, ACCOUNT_ID, instrument=pair, data=body)
-                    active_trade['sl'] = new_sl
-                    active_trade['trailing_distance'] = f"{TRAILING_ATR_MULT}x H1 ATR"
-                    print(f"Trailing SL updated on {pair} to {new_sl:.5f}")
-                    send_telegram_message(f"📈 Trailing SL updated on {pair} to {new_sl:.5f}")
+                    if update_trade_sl_tp(active_trade['trade_id'], sl_price=new_sl):
+                        active_trade['sl'] = new_sl
+                        active_trade['trailing_distance'] = f"{TRAILING_ATR_MULT}x H1 ATR"
+                        print(f"Trailing SL updated on {pair} to {new_sl:.5f}")
+                        send_telegram_message(f"📈 Trailing SL updated on {pair} to {new_sl:.5f}")
+                    else:
+                        send_telegram_message(f"⚠️ ÉCHEC trailing sur {pair}")
         except Exception as e:
             print(f"Trailing update failed: {e}")
 
@@ -1396,6 +1424,91 @@ def check_future_news_and_alert():
         print("Future news alert sent.")
 
 
+def recover_recent_closed_trades(hours=24):
+    global closed_trades_today
+    try:
+        resp = retry_api_call(ctx.trade.list, ACCOUNT_ID, state='CLOSED', count=100)
+        closed = resp.body.get('trades', [])
+    except Exception as e:
+        print(f"⚠️ Recovery: could not fetch closed trades: {e}")
+        return
+
+    now_utc = datetime.now(pytz.utc)
+    cutoff = now_utc - timedelta(hours=hours)
+
+    existing_keys = set()
+    for t in closed_trades_today:
+        existing_keys.add((t.get('pair'), t.get('time'), t.get('entry')))
+
+    added = 0
+    for t in closed:
+        try:
+            close_time_str = str(getattr(t, 'closeTime', ''))
+            if not close_time_str:
+                continue
+            close_time = datetime.fromisoformat(close_time_str.replace('Z', '+00:00'))
+            if close_time < cutoff:
+                continue
+
+            pair = t.instrument
+            entry = float(t.price)
+            units = int(getattr(t, 'initialUnits', getattr(t, 'currentUnits', 0)))
+            realized_pl_usd = float(getattr(t, 'realizedPL', 0))
+            direction = 'buy' if units > 0 else 'sell'
+            units_abs = abs(units)
+
+            close_price = None
+            if getattr(t, 'closePrice', None):
+                close_price = float(t.closePrice)
+            elif units_abs > 0:
+                if direction == 'buy':
+                    close_price = entry + (realized_pl_usd / units_abs)
+                else:
+                    close_price = entry - (realized_pl_usd / units_abs)
+
+            sl_price = float(t.stopLossOrder.price) if getattr(t, 'stopLossOrder', None) else None
+            init_risk = abs(entry - sl_price) if sl_price else 0
+            if direction == 'buy' and init_risk > 0:
+                r_mult = (close_price - entry) / init_risk
+            elif direction == 'sell' and init_risk > 0:
+                r_mult = (entry - close_price) / init_risk
+            else:
+                r_mult = 0
+
+            usd_cad = get_usd_cad_rate()
+            pnl_cad = realized_pl_usd * usd_cad
+
+            time_str = close_time.astimezone(tz).strftime("%H:%M:%S")
+            key = (pair, time_str, entry)
+            if key in existing_keys:
+                continue
+
+            closed_trades_today.append({
+                "pair": pair,
+                "type": "Buy" if direction == 'buy' else "Sell",
+                "setup": "recovered",
+                "pnl": round(pnl_cad, 2),
+                "pnl_usd": round(realized_pl_usd, 2),
+                "time": time_str,
+                "r_multiple": round(r_mult, 2),
+                "units": units_abs,
+                "entry": entry,
+                "exit": close_price,
+                "score": None
+            })
+            existing_keys.add(key)
+            added += 1
+        except Exception as e:
+            print(f"⚠️ Recovery: error parsing trade: {e}")
+            continue
+
+    if added:
+        print(f"♻️ Recovered {added} closed trade(s) from OANDA history.")
+        save_closed_trades_to_file()
+    else:
+        print("♻️ Recovery: no missing closed trade found.")
+
+
 def main():
     global trades_today, last_trade_date, last_close_time, active_trade
     global closed_trades_today, rejected_signals
@@ -1404,6 +1517,7 @@ def main():
 
     load_closed_trades_from_file()
     load_rejected_from_file()
+    recover_recent_closed_trades(hours=24)
 
     trades_today = count_all_trades_today()
     try:
@@ -1584,6 +1698,7 @@ def main():
                     _candle_cache.clear()
                     load_closed_trades_from_file()
                     load_rejected_from_file()
+                    recover_recent_closed_trades(hours=24)
                     if active_trade is None:
                         load_existing_open_position()
                     try:
@@ -1912,6 +2027,8 @@ def place_trade(instrument, entry_price_signal, sl_signal, tp_signal, direction,
     if direction == 'sell':
         pnl_cad = -pnl_cad
 
+    rr_ratio = SETUP_RR.get(setup_type.lower(), 2.0)
+
     msg = (f"<b>✅ Trade opened ({trades_today}/{MAX_TRADES_PER_DAY})</b>\n"
            f"Pair: {instrument}\n"
            f"Setup: {setup_type.upper()}\n"
@@ -1921,10 +2038,10 @@ def place_trade(instrument, entry_price_signal, sl_signal, tp_signal, direction,
            f"Entry: {current_price:.5f} (market, slippage {slippage_pips:.1f} pips)\n"
            f"SL: {new_sl:.5f}\n"
            f"TP1: {active_trade['tp1']:.5f} (1R, {TP_PARTIAL_RATIO:.0%})\n"
-           f"TP2: {new_tp:.5f} (2R)\n"
-           f"R/R: 1:2\n"
+           f"TP2: {new_tp:.5f} ({rr_ratio:.1f}R)\n"
+           f"R/R: 1:{rr_ratio:.1f}\n"
            f"Quality score: {quality_score:.1f}\n"
-           f"Time: {datetime.now(tz).strftime('%Y-%m-%d %H:%M:%S')}")    
+           f"Time: {datetime.now(tz).strftime('%Y-%m-%d %H:%M:%S')}")
     send_telegram_message(msg)
     log_trade({
         "time": datetime.now(tz).isoformat(),
@@ -1972,7 +2089,6 @@ def check_closed_trade():
         close_price = None
         source = None
 
-        # 1. closePrice (source fiable)
         if hasattr(latest, 'closePrice') and latest.closePrice is not None:
             try:
                 cp = float(latest.closePrice)
@@ -1982,7 +2098,6 @@ def check_closed_trade():
             except (ValueError, TypeError):
                 pass
 
-        # 2. Transactions API (source fiable) — on saute `latest.price` qui renvoie l'entrée
         if close_price is None:
             try:
                 tr_resp = retry_api_call(ctx.transaction.list, ACCOUNT_ID, since=1, to=99999, count=100)
@@ -1997,7 +2112,6 @@ def check_closed_trade():
             except Exception as e:
                 print(f"⚠️ Transaction API error: {e}")
 
-        # 3. Calcul fiable depuis le P&L
         if close_price is None and abs(units) > 0:
             units_abs = abs(units)
             if direction == 'buy':
@@ -2006,13 +2120,11 @@ def check_closed_trade():
                 close_price = entry - (total_pnl_usd / units_abs)
             source = "calculated_from_pnl"
 
-        # 4. Dernier recours : entry
         if close_price is None:
             close_price = entry
             source = "fallback_entry"
             print(f"⚠️ Fallback to entry price (no other source): {close_price:.5f}")
 
-        # 5. Correction forcée si on retombe sur l'entrée alors que le P&L est non nul
         if abs(close_price - entry) < 0.000001 and abs(total_pnl_usd) > 0.1 and abs(units) > 0:
             units_abs = abs(units)
             if direction == 'buy':
