@@ -1,6 +1,6 @@
 {
-  "time": "2026-09-10 12:05:18",
-  "bot_status": "stopped",
+  "time": "2026-09-11 07:20:46",
+  "bot_status": "running",
   "session": {
     "trades_today": 0,
     "max_trades": 3,
@@ -9,8 +9,8 @@
   },
   "active_trade": null,
   "next_news_event": {
-    "title": "GDP m/m",
-    "time": "02:00",
+    "title": "Core CPI m/m",
+    "time": "08:30",
     "impact": "High"
   },
   "strategy": "H1 Multi-Setup (9 types) - Quality Score based",
