@@ -4,17 +4,23 @@ on:
   workflow_dispatch:
   repository_dispatch:
 
+concurrency:
+  group: pair-indicators
+  cancel-in-progress: false
+
 jobs:
   update:
     runs-on: ubuntu-latest
-    timeout-minutes: 660
+    timeout-minutes: 360
+    permissions:
+      contents: write
 
     env:
       OANDA_API_KEY: ${{ secrets.OANDA_API_KEY }}
       OANDA_ACCOUNT_ID: ${{ secrets.OANDA_ACCOUNT_ID }}
       GH_PAT: ${{ secrets.GH_PAT }}
-      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}   # <--- AJOUT
-      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}       # <--- AJOUT
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
 
     steps:
       - name: Checkout repository
