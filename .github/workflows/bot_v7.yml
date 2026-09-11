@@ -1,15 +1,25 @@
 name: 💹 Forex Sniper 7-12
 
 on:
-  workflow_dispatch:          # permet le test manuel
-  repository_dispatch:        # déclenché par Cron-job.org
+  workflow_dispatch:
+  repository_dispatch:
+    # ⚠️ IMPORTANT : ce workflow est plafonné à 6h par GitHub.
+    # Configurez Cron-job.org pour dispatcher DEUX fois par jour :
+    #   - 1er dispatch : 07:00 ET  (démarre la session)
+    #   - 2e  dispatch : 12:30 ET  (reprend la session avant coupure)
+    # Le bot reprend automatiquement via status.json + load_existing_open_position().
+
+# Empêche deux runs simultanés (le 2e attendrait sinon le 1er éternellement)
+concurrency:
+  group: forex-sniper
+  cancel-in-progress: false
 
 jobs:
   run-bot:
     runs-on: ubuntu-latest
-    timeout-minutes: 660
+    timeout-minutes: 360          # 6h = plafond GitHub, inutile de mettre plus
     permissions:
-      contents: write         # ✅ permet de pusher status.json dans le dépôt
+      contents: write
 
     env:
       OANDA_API_KEY: ${{ secrets.OANDA_API_KEY }}
@@ -17,14 +27,14 @@ jobs:
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
       TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
       FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
-      GH_PAT: ${{ secrets.GH_PAT }}   # ✅ token pour l'écriture du fichier
+      GH_PAT: ${{ secrets.GH_PAT }}
       ALPHA_VANTAGE_API_KEY: ${{ secrets.ALPHA_VANTAGE_API_KEY }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GH_PAT }}   # ✅ utilise le token pour le checkout (optionnel mais sécurisé)
+          token: ${{ secrets.GH_PAT }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
