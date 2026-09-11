@@ -10,6 +10,7 @@ import base64
 import requests
 import re
 import traceback
+import signal
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -67,7 +68,6 @@ TP_PARTIAL_RATIO = 0.33
 TRAILING_ATR_MULT = 1.8
 FIXED_TRAILING_PIPS = 20
 
-# Paramètres MARKET direct (seuil de slippage ajusté)
 SLIPPAGE_ATR_FACTOR = 0.40
 SLIPPAGE_MIN_PIPS = 2.0
 
@@ -80,7 +80,7 @@ PAIR_CONFIG = {
     "GBP_USD": {"MAX_SPREAD_PIPS": 3.0, "ADX_THRESHOLD": 13, "ATR_MULTIPLIER": 2.0}
 }
 
-# === FIX R/R : multiplier par setup (compense le taux de perte structurel) ===
+# === FIX R/R : multiplier par setup ===
 SETUP_RR = {
     "pullback":      1.5,
     "engulfing":     1.8,
@@ -359,12 +359,13 @@ def save_rejected_to_file():
         print(f"Error saving rejected signals file: {e}")
 
 
-def push_status_json(data_dict):
+# === FIX : force param pour push fréquent avant coupure GitHub ===
+def push_status_json(data_dict, force=False):
     global _last_status_data, _last_status_push_time
     now = datetime.now(tz)
-    if data_dict == _last_status_data:
+    if not force and data_dict == _last_status_data:
         return
-    if _last_status_push_time is not None and (now - _last_status_push_time).total_seconds() < GITHUB_PUSH_MIN_INTERVAL:
+    if not force and _last_status_push_time is not None and (now - _last_status_push_time).total_seconds() < GITHUB_PUSH_MIN_INTERVAL:
         return
     if not GH_PAT:
         return
@@ -379,7 +380,7 @@ def push_status_json(data_dict):
         if status in (200, 201):
             _last_status_data = data_dict.copy()
             _last_status_push_time = now
-            print(f"✅ Status pushed successfully")
+            print(f"✅ Status pushed successfully" + (" (forced)" if force else ""))
         else:
             print(f"Status push failed after retries: {status}")
     except Exception as e:
@@ -395,7 +396,8 @@ def get_usd_cad_rate():
         return 1.0
 
 
-def save_status_json():
+# === FIX : force param pour push fréquent avant coupure GitHub ===
+def save_status_json(force=False):
     global BOT_STATUS, _current_blocked_pairs, _current_active_pairs, _current_news_event
     now = datetime.now(tz)
     status = {
@@ -480,7 +482,7 @@ def save_status_json():
             "score": active_trade.get('quality_score')
         }
 
-    push_status_json(status)
+    push_status_json(status, force=force)
 
 
 # ---------- Fonctions de trading ----------
@@ -843,7 +845,6 @@ def get_daily_loss_status(balance):
     return loss_pct, loss_pct >= DAILY_LOSS_LIMIT_PERCENT
 
 
-# ============ FIX R/R : TP dépend du setup ============
 def setup_stop_and_target(df, direction, entry, pair_config, setup_type):
     atr = float(df['atr'].iloc[-2])
     swing = df.iloc[-4:-1]
@@ -941,13 +942,7 @@ def close_full_position_market():
     return False
 
 
-# ============ FIX BE/TRAILING : vraie modification SL via set_dependent_orders ============
 def update_trade_sl_tp(trade_id, sl_price=None, tp_price=None):
-    """
-    Modifie SL/TP d'un trade ouvert.
-    ctx.position.close avec seulement stopLoss NE MODIFIE RIEN côté OANDA.
-    Il faut ctx.trade.set_dependent_orders.
-    """
     body = {}
     if sl_price is not None:
         body["stopLoss"] = {"price": f"{sl_price:.5f}"}
@@ -1027,7 +1022,6 @@ def manage_active_trade():
     move = (current_price - entry) if direction == 'buy' else (entry - current_price)
     r_multiple = move / initial_risk if initial_risk > 0 else 0
 
-    # --- BE ---
     if not active_trade.get('be_triggered') and r_multiple >= BE_R_MULT:
         offset = 0.5 * 0.0001
         new_sl = entry + offset if direction == 'buy' else entry - offset
@@ -1044,7 +1038,6 @@ def manage_active_trade():
             except Exception as e:
                 print(f"Break-even update failed: {e}")
 
-    # --- TP1 partial ---
     tp1 = active_trade.get('tp1')
     units = abs(int(active_trade['units']))
     if tp1 is not None and not active_trade.get('tp1_hit'):
@@ -1057,7 +1050,6 @@ def manage_active_trade():
                 print(f"TP1 hit on {pair}, {partial_units} units closed")
                 send_telegram_message(f"🎯 TP1 reached on {pair}: {partial_units} units closed, runner kept.")
 
-    # --- Trailing ATR ---
     if active_trade.get('be_triggered') or active_trade.get('tp1_hit'):
         try:
             df = get_candles(pair, count=ATR_PERIOD + 30, granularity=EXECUTION_GRANULARITY)
@@ -1881,7 +1873,14 @@ def main():
                         if success:
                             trade_opened_during_window_today = True
 
-                save_status_json()
+                # === FIX 1 : push forcé entre 12:50 et 12:59 pour minimiser la perte d'état avant coupure GitHub ===
+                if now.hour == 12 and now.minute >= 50:
+                    save_status_json(force=True)
+                    save_closed_trades_to_file()
+                    save_rejected_to_file()
+                    main.next_trade_save = now + timedelta(seconds=30)
+                else:
+                    save_status_json()
 
                 if not hasattr(main, "next_trade_save"):
                     main.next_trade_save = now
@@ -2179,6 +2178,21 @@ def check_closed_trade():
         last_close_time = datetime.now(tz)
 
     active_trade = None
+
+
+# === FIX 2 : handler SIGTERM pour push final avant coupure GitHub ===
+def _handle_sigterm(signum, frame):
+    print("⚠️ SIGTERM reçu – push final avant arrêt.")
+    try:
+        save_status_json(force=True)
+        save_closed_trades_to_file()
+        save_rejected_to_file()
+    except Exception as e:
+        print(f"Erreur push final : {e}")
+    raise SystemExit(0)
+
+
+signal.signal(signal.SIGTERM, _handle_sigterm)
 
 
 if __name__ == "__main__":
