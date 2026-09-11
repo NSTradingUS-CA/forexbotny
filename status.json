@@ -1,5 +1,5 @@
 {
-  "time": "2026-09-11 09:38:07",
+  "time": "2026-09-11 10:00:19",
   "bot_status": "running",
   "session": {
     "trades_today": 1,
@@ -7,36 +7,11 @@
     "start": "07:00",
     "end": "11:00"
   },
-  "active_trade": {
-    "pair": "EUR_USD",
-    "type": "Sell",
-    "entry": 1.15939,
-    "sl": 1.158335142857143,
-    "tp1": 1.1576699999999998,
-    "tp2": 1.1559499999999996,
-    "trailing_stop": "1.8x H1 ATR",
-    "current_price": 1.16044,
-    "unrealized_pnl_usd": -322.08,
-    "unrealized_pnl_cad": -446.63,
-    "usd_cad_rate": 1.3867,
-    "distance_to_sl_pips": 21.0,
-    "distance_to_tp2_pips": 44.9,
-    "atr": 0.0006949999999999853,
-    "be_triggered": true,
-    "tp1_hit": false,
-    "setup_type": "Pin Bar",
-    "risk_percent": 0.55,
-    "opened_at": "2026-09-11T07:31:01.770628-04:00",
-    "units": -306743,
-    "score": 69.0
-  },
+  "active_trade": null,
   "next_news_event": null,
   "strategy": "H1 Multi-Setup (9 types) - Quality Score based",
   "max_risk_per_trade_percent": 0.65,
   "daily_loss_limit_percent": 2.0,
   "blocked_pairs": [],
-  "active_pairs": [
-    "EUR_USD",
-    "GBP_USD"
-  ]
+  "active_pairs": []
 }
