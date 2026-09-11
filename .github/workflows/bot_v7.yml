@@ -2,11 +2,14 @@ name: 💹 Forex Sniper 7-12
 
 on:
   workflow_dispatch:
-  repository_dispatch:        # déclenché par Cron-job.org à 07:00 ET
+  repository_dispatch:        # déclenché par Cron-job.org à 06:30 ET
   schedule:
-    # 2e déclenchement automatique à 12:30 ET (16:30 UTC)
-    # Prend le relais avant que GitHub ne tue le 1er run à 13:00 ET (limite 6h)
-    - cron: '30 16 * * 1-5'   # 12:30 ET, du lundi au vendredi
+    # 2e déclenchement automatique à 12:30 ET, couverture été + hiver :
+    #   - '30 16' = 12:30 EDT (heure d'été, UTC-4) → actif de mars à novembre
+    #   - '30 17' = 12:30 EST (heure d'hiver, UTC-5) → actif de novembre à mars
+    # Prend le relais avant que GitHub ne tue le 1er run à 12:30 ET (limite 6h après 06:30)
+    - cron: '30 16 * * 1-5'   # 12:30 EDT (été)
+    - cron: '30 17 * * 1-5'   # 12:30 EST (hiver)
 
 concurrency:
   group: forex-sniper
