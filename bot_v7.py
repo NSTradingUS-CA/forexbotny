@@ -909,39 +909,70 @@ def get_account_balance(response):
         return float(response.body['account'].balance)
 
 
-def close_partial_position(units_to_close):
+# ============ FIX : close_partial_position avec longUnits/shortUnits + vérif serveur ============
+def close_partial_position(units_to_close, expected_remaining=None):
+    """
+    Ferme une partie de la position courante.
+    API v20 : PUT /positions/{instrument}/close attend 'longUnits' (buy) ou 'shortUnits' (sell),
+    PAS le champ 'units' (qui était invalide et faisait échouer silencieusement tous les partials).
+    """
     pair = active_trade['pair']
     direction = active_trade['direction']
-    close_units = -units_to_close if direction == 'buy' else units_to_close
-    body = {"units": str(close_units)}
+    field = "longUnits" if direction == 'buy' else "shortUnits"
+    body = {field: str(abs(int(units_to_close)))}
     try:
         r = retry_api_call(ctx.position.close, ACCOUNT_ID, instrument=pair, data=body)
-        if r.status == 200:
-            print(f"Partial close: {abs(units_to_close)} units closed on {pair}")
-            return True
+        if getattr(r, 'status', None) != 200:
+            print(f"⚠️ Partial close rejected: status={getattr(r,'status',None)} body={getattr(r,'body',None)}")
+            return False
     except Exception as e:
-        print(f"Partial close failed: {e}")
-    return False
+        print(f"❌ Partial close failed: {e}")
+        return False
+
+    # Vérification serveur : currentUnits a bien diminué
+    if expected_remaining is not None:
+        try:
+            check = retry_api_call(ctx.trade.get, ACCOUNT_ID, active_trade['trade_id'])
+            server_units = int(check.body['trade'].currentUnits)
+            if abs(server_units) != expected_remaining:
+                print(f"❌ VÉRIF PARTIAL ÉCHOUÉE : serveur={server_units}, attendu=±{expected_remaining}")
+                send_telegram_message(f"🚨 Partial close non appliqué sur {pair} : serveur={server_units} attendu=±{expected_remaining}")
+                return False
+            print(f"🔍 Vérifié serveur après partial : {server_units} units restants")
+        except Exception as e:
+            print(f"⚠️ Vérif partial impossible : {e}")
+
+    print(f"Partial close OK: {units_to_close} units on {pair} ({field})")
+    return True
 
 
+# ============ FIX : close_full_position_market avec longUnits/shortUnits="ALL" ============
 def close_full_position_market():
+    """
+    Ferme la totalité de la position courante.
+    API v20 : PUT /positions/{instrument}/close attend 'longUnits' (buy) ou 'shortUnits' (sell)
+    avec la valeur "ALL".
+    """
     global active_trade
     if active_trade is None:
         return False
     pair = active_trade['pair']
-    units = -active_trade['units']
-    body = {"units": str(units)}
+    direction = active_trade['direction']
+    field = "longUnits" if direction == 'buy' else "shortUnits"
+    body = {field: "ALL"}
     try:
         r = retry_api_call(ctx.position.close, ACCOUNT_ID, instrument=pair, data=body)
-        if r.status == 200:
-            print(f"Full position closed on {pair}")
+        if getattr(r, 'status', None) == 200:
+            print(f"Full close OK on {pair} ({field}=ALL)")
             return True
-    except Exception as e:
-        print(f"Full close failed: {e}")
+        print(f"⚠️ Full close rejected: status={getattr(r,'status',None)} body={getattr(r,'body',None)}")
         return False
-    return False
+    except Exception as e:
+        print(f"❌ Full close failed: {e}")
+        return False
 
 
+# ============ FIX : update_trade_sl_tp avec vérification serveur ============
 def update_trade_sl_tp(trade_id, sl_price=None, tp_price=None):
     body = {}
     if sl_price is not None:
@@ -952,13 +983,30 @@ def update_trade_sl_tp(trade_id, sl_price=None, tp_price=None):
         return False
     try:
         r = retry_api_call(ctx.trade.set_dependent_orders, ACCOUNT_ID, trade_id, **body)
-        if getattr(r, "status", None) == 200:
-            return True
-        print(f"⚠️ set_dependent_orders status={getattr(r,'status',None)} body={getattr(r,'body',None)}")
-        return False
+        if getattr(r, "status", None) != 200:
+            print(f"⚠️ set_dependent_orders status={getattr(r,'status',None)} body={getattr(r,'body',None)}")
+            return False
     except Exception as e:
         print(f"❌ set_dependent_orders failed: {e}")
         return False
+
+    # Vérification serveur : le SL a bien été modifié côté OANDA
+    if sl_price is not None:
+        try:
+            check = retry_api_call(ctx.trade.get, ACCOUNT_ID, trade_id)
+            trade = check.body['trade']
+            server_sl = None
+            if getattr(trade, 'stopLossOrder', None) and trade.stopLossOrder:
+                server_sl = float(trade.stopLossOrder.price)
+            if server_sl is None or abs(server_sl - sl_price) > 0.00005:
+                print(f"❌ VÉRIF SL ÉCHOUÉE : serveur={server_sl}, attendu={sl_price:.5f}")
+                send_telegram_message(f"🚨 SL non transmis sur trade {trade_id} : serveur={server_sl} attendu={sl_price:.5f}")
+                return False
+            print(f"🔍 Vérifié serveur : SL={server_sl:.5f}")
+        except Exception as e:
+            print(f"⚠️ Vérif SL impossible : {e}")
+
+    return True
 
 
 def move_sl_to_entry():
@@ -1038,17 +1086,19 @@ def manage_active_trade():
             except Exception as e:
                 print(f"Break-even update failed: {e}")
 
+    # === FIX : préservation du signe de active_trade['units'] après partial ===
     tp1 = active_trade.get('tp1')
     units = abs(int(active_trade['units']))
     if tp1 is not None and not active_trade.get('tp1_hit'):
         if (direction == 'buy' and current_price >= tp1) or (direction == 'sell' and current_price <= tp1):
             partial_units = max(1000, int(units * TP_PARTIAL_RATIO))
-            if partial_units < units and close_partial_position(partial_units):
-                active_trade['units'] = units - partial_units
+            if partial_units < units and close_partial_position(partial_units, expected_remaining=units - partial_units):
+                remaining = units - partial_units
+                active_trade['units'] = remaining if direction == 'buy' else -remaining
                 active_trade['tp1_hit'] = True
                 active_trade['tp1'] = None
-                print(f"TP1 hit on {pair}, {partial_units} units closed")
-                send_telegram_message(f"🎯 TP1 reached on {pair}: {partial_units} units closed, runner kept.")
+                print(f"TP1 hit on {pair}, {partial_units} units closed, {remaining} remaining (sign={active_trade['units']})")
+                send_telegram_message(f"🎯 TP1 reached on {pair}: {partial_units} units closed, {remaining} runner kept.")
 
     if active_trade.get('be_triggered') or active_trade.get('tp1_hit'):
         try:
