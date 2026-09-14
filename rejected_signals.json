@@ -14,6 +14,21 @@
       "rsi": 22.843585466071204,
       "atr": 0.000955714285714282,
       "diagnostic": "[Best hypothetical: Pin Bar SELL score=72.9]"
+    },
+    {
+      "time": "10:32:18",
+      "pair": "EUR_USD",
+      "buy_reason": "H1 not up, RSI 24.7 outside 30-70",
+      "sell_reason": "RSI 24.7 outside 30-70",
+      "spread": 0.00017000000000000348,
+      "adx": 66.54648289579856,
+      "plus_di": 9.045891906529379,
+      "minus_di": 39.99740766046847,
+      "ema50": 1.1588094965975055,
+      "ema200": 1.1611323801808253,
+      "rsi": 24.66113125193978,
+      "atr": 0.001065714285714289,
+      "diagnostic": "[Best hypothetical: Engulfing SELL score=77.3]"
     }
   ],
   "last_cleanup": "2026-09-14"
