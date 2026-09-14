@@ -1,4 +1,20 @@
 {
-  "signals": [],
+  "signals": [
+    {
+      "time": "07:00:19",
+      "pair": "EUR_USD",
+      "buy_reason": "H1 not up, RSI 22.8 outside 30-70, MACD not bullish",
+      "sell_reason": "RSI 22.8 outside 30-70",
+      "spread": 0.000140000000000029,
+      "adx": 66.53606513198703,
+      "plus_di": 3.7055197107971214,
+      "minus_di": 44.68710073355806,
+      "ema50": 1.1594211914943668,
+      "ema200": 1.1613610398358418,
+      "rsi": 22.843585466071204,
+      "atr": 0.000955714285714282,
+      "diagnostic": "[Best hypothetical: Pin Bar SELL score=72.9]"
+    }
+  ],
   "last_cleanup": "2026-09-14"
 }
