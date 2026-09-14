@@ -359,7 +359,6 @@ def save_rejected_to_file():
         print(f"Error saving rejected signals file: {e}")
 
 
-# === FIX : force param pour push fréquent avant coupure GitHub ===
 def push_status_json(data_dict, force=False):
     global _last_status_data, _last_status_push_time
     now = datetime.now(tz)
@@ -396,7 +395,6 @@ def get_usd_cad_rate():
         return 1.0
 
 
-# === FIX : force param pour push fréquent avant coupure GitHub ===
 def save_status_json(force=False):
     global BOT_STATUS, _current_blocked_pairs, _current_active_pairs, _current_news_event
     now = datetime.now(tz)
@@ -909,13 +907,7 @@ def get_account_balance(response):
         return float(response.body['account'].balance)
 
 
-# ============ FIX : close_partial_position avec longUnits/shortUnits + vérif serveur ============
 def close_partial_position(units_to_close, expected_remaining=None):
-    """
-    Ferme une partie de la position courante.
-    API v20 : PUT /positions/{instrument}/close attend 'longUnits' (buy) ou 'shortUnits' (sell),
-    PAS le champ 'units' (qui était invalide et faisait échouer silencieusement tous les partials).
-    """
     pair = active_trade['pair']
     direction = active_trade['direction']
     field = "longUnits" if direction == 'buy' else "shortUnits"
@@ -929,7 +921,6 @@ def close_partial_position(units_to_close, expected_remaining=None):
         print(f"❌ Partial close failed: {e}")
         return False
 
-    # Vérification serveur : currentUnits a bien diminué
     if expected_remaining is not None:
         try:
             check = retry_api_call(ctx.trade.get, ACCOUNT_ID, active_trade['trade_id'])
@@ -946,13 +937,7 @@ def close_partial_position(units_to_close, expected_remaining=None):
     return True
 
 
-# ============ FIX : close_full_position_market avec longUnits/shortUnits="ALL" ============
 def close_full_position_market():
-    """
-    Ferme la totalité de la position courante.
-    API v20 : PUT /positions/{instrument}/close attend 'longUnits' (buy) ou 'shortUnits' (sell)
-    avec la valeur "ALL".
-    """
     global active_trade
     if active_trade is None:
         return False
@@ -972,7 +957,6 @@ def close_full_position_market():
         return False
 
 
-# ============ FIX : update_trade_sl_tp avec vérification serveur ============
 def update_trade_sl_tp(trade_id, sl_price=None, tp_price=None):
     body = {}
     if sl_price is not None:
@@ -990,7 +974,6 @@ def update_trade_sl_tp(trade_id, sl_price=None, tp_price=None):
         print(f"❌ set_dependent_orders failed: {e}")
         return False
 
-    # Vérification serveur : le SL a bien été modifié côté OANDA
     if sl_price is not None:
         try:
             check = retry_api_call(ctx.trade.get, ACCOUNT_ID, trade_id)
@@ -1086,7 +1069,6 @@ def manage_active_trade():
             except Exception as e:
                 print(f"Break-even update failed: {e}")
 
-    # === FIX : préservation du signe de active_trade['units'] après partial ===
     tp1 = active_trade.get('tp1')
     units = abs(int(active_trade['units']))
     if tp1 is not None and not active_trade.get('tp1_hit'):
@@ -1500,7 +1482,9 @@ def recover_recent_closed_trades(hours=24):
             units_abs = abs(units)
 
             close_price = None
-            if getattr(t, 'closePrice', None):
+            if getattr(t, 'averageClosePrice', None):
+                close_price = float(t.averageClosePrice)
+            elif getattr(t, 'closePrice', None):
                 close_price = float(t.closePrice)
             elif units_abs > 0:
                 if direction == 'buy':
@@ -1923,7 +1907,6 @@ def main():
                         if success:
                             trade_opened_during_window_today = True
 
-                # === FIX 1 : push forcé entre 12:50 et 12:59 pour minimiser la perte d'état avant coupure GitHub ===
                 if now.hour == 12 and now.minute >= 50:
                     save_status_json(force=True)
                     save_closed_trades_to_file()
@@ -2108,6 +2091,7 @@ def place_trade(instrument, entry_price_signal, sl_signal, tp_signal, direction,
     return True
 
 
+# ============ FIX CRITIQUE : check_closed_trade filtré par trade_id ============
 def check_closed_trade():
     global active_trade, last_close_time
     if active_trade is None:
@@ -2119,15 +2103,25 @@ def check_closed_trade():
     time.sleep(1)
 
     try:
-        resp = retry_api_call(ctx.trade.list, ACCOUNT_ID, instrument=pair, count=20, state='CLOSED')
+        resp = retry_api_call(ctx.trade.list, ACCOUNT_ID, instrument=pair, count=50, state='CLOSED')
         closed_trades = resp.body.get('trades', [])
         if not closed_trades:
             print(f"No closed trade found for {pair} yet, will retry later.")
             return
 
-        latest = sorted(closed_trades, key=lambda t: str(getattr(t, 'closeTime', '')), reverse=True)[0]
+        # === FIX : identifier NOTRE trade par ID (au lieu de prendre le plus récent) ===
+        our_trade_id = str(active_trade['trade_id'])
+        our_trade = None
+        for t in closed_trades:
+            if str(getattr(t, 'id', '')) == our_trade_id:
+                our_trade = t
+                break
 
-        trade_id = active_trade['trade_id']
+        if our_trade is None:
+            print(f"⚠️ Trade {our_trade_id} pas encore dans la liste CLOSED pour {pair} – retry au prochain cycle.")
+            return
+
+        latest = our_trade
         total_pnl_usd = float(latest.realizedPL)
         entry = active_trade['entry_price']
         units = active_trade['units']
@@ -2138,7 +2132,18 @@ def check_closed_trade():
         close_price = None
         source = None
 
-        if hasattr(latest, 'closePrice') and latest.closePrice is not None:
+        # 1. averageClosePrice (source la plus fiable en v20 pour un trade fermé, gère les partials)
+        if hasattr(latest, 'averageClosePrice') and latest.averageClosePrice is not None:
+            try:
+                cp = float(latest.averageClosePrice)
+                if cp > 0:
+                    close_price = cp
+                    source = "averageClosePrice"
+            except (ValueError, TypeError):
+                pass
+
+        # 2. closePrice (si présent sur cette version)
+        if close_price is None and hasattr(latest, 'closePrice') and latest.closePrice is not None:
             try:
                 cp = float(latest.closePrice)
                 if cp > 0:
@@ -2147,11 +2152,12 @@ def check_closed_trade():
             except (ValueError, TypeError):
                 pass
 
+        # 3. Transactions API — sans 'since=1' (bug : ne renvoyait que les 100 plus anciennes)
         if close_price is None:
             try:
-                tr_resp = retry_api_call(ctx.transaction.list, ACCOUNT_ID, since=1, to=99999, count=100)
+                tr_resp = retry_api_call(ctx.transaction.list, ACCOUNT_ID, count=500)
                 for tx in tr_resp.body.get('transactions', []):
-                    if tx.type == 'ORDER_FILL' and hasattr(tx, 'tradeID') and str(tx.tradeID) == str(trade_id):
+                    if getattr(tx, 'type', '') == 'ORDER_FILL' and hasattr(tx, 'tradeID') and str(tx.tradeID) == our_trade_id:
                         if hasattr(tx, 'price') and tx.price is not None:
                             cp = float(tx.price)
                             if cp > 0:
@@ -2161,6 +2167,7 @@ def check_closed_trade():
             except Exception as e:
                 print(f"⚠️ Transaction API error: {e}")
 
+        # 4. Calcul depuis le P&L (fallback fiable uniquement si pas de partial close)
         if close_price is None and abs(units) > 0:
             units_abs = abs(units)
             if direction == 'buy':
@@ -2169,11 +2176,13 @@ def check_closed_trade():
                 close_price = entry - (total_pnl_usd / units_abs)
             source = "calculated_from_pnl"
 
+        # 5. Dernier recours : entry
         if close_price is None:
             close_price = entry
             source = "fallback_entry"
             print(f"⚠️ Fallback to entry price (no other source): {close_price:.5f}")
 
+        # Sanity check : si P&L non nul mais close_price == entry, forcer le recalcul
         if abs(close_price - entry) < 0.000001 and abs(total_pnl_usd) > 0.1 and abs(units) > 0:
             units_abs = abs(units)
             if direction == 'buy':
@@ -2182,7 +2191,7 @@ def check_closed_trade():
                 close_price = entry - (total_pnl_usd / units_abs)
             source = "forced_from_pnl"
 
-        print(f"✅ Exit price from {source}: {close_price:.5f}")
+        print(f"✅ Trade {our_trade_id} fermé – Exit price from {source}: {close_price:.5f}")
 
         if direction == 'buy' and init_risk > 0:
             realized_r = (close_price - entry) / init_risk
@@ -2230,7 +2239,6 @@ def check_closed_trade():
     active_trade = None
 
 
-# === FIX 2 : handler SIGTERM pour push final avant coupure GitHub ===
 def _handle_sigterm(signum, frame):
     print("⚠️ SIGTERM reçu – push final avant arrêt.")
     try:
