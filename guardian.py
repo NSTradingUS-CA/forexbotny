@@ -1,6 +1,9 @@
 """
 Guardian : lit status.json distant et envoie les rappels Telegram critiques
 avant la fin de session NY, même si le workflow principal a été tué.
+
+Fenêtre utile réelle : 16:40 → 17:15 ET (après mort du bot principal à 13:00,
+avant/après la clôture OANDA à 16:59 ET).
 """
 import os
 import json
@@ -50,6 +53,18 @@ def fetch_status():
 
 def main():
     now = datetime.now(tz)
+
+    # === FILTRE DE FENÊTRE : on sort immédiatement si on n'est pas dans
+    # 16:40 → 17:15 ET. Ça évite tout appel API inutile si GitHub déclenche
+    # le workflow hors créneau (retard, fuseau, ajustement YAML manqué).
+    in_window = (
+        (now.hour == 16 and now.minute >= 40) or
+        (now.hour == 17 and now.minute <= 15)
+    )
+    if not in_window:
+        print(f"{now.strftime('%H:%M')} – Hors fenêtre utile (16:40–17:15 ET), sortie sans action.")
+        return
+
     status = fetch_status()
     if status is None:
         print("status.json introuvable – rien à faire.")
@@ -89,7 +104,7 @@ def main():
         print("Rappel 16:55 envoyé.")
 
     # 17:10 → post-mortem
-    elif now.hour == 17 and now.minute >= 10 and now.minute < 15:
+    elif now.hour == 17 and 10 <= now.minute <= 15:
         send_telegram(
             f"🕒 <b>Guardian 17:10</b> – Session NY fermée.\n"
             f"Trade {pair} : P&L final inconnu. Vérifiez OANDA."
