@@ -80,7 +80,6 @@ PAIR_CONFIG = {
     "GBP_USD": {"MAX_SPREAD_PIPS": 3.0, "ADX_THRESHOLD": 13, "ATR_MULTIPLIER": 2.0}
 }
 
-# === FIX R/R : multiplier par setup ===
 SETUP_RR = {
     "pullback":      1.5,
     "engulfing":     1.8,
@@ -1559,6 +1558,15 @@ def main():
             print(f"Trade on {pair} was closed manually before bot start. Enregistrement en cours...")
             check_closed_trade()
 
+    # === FIX CRITIQUE : sortie immédiate si le bot démarre après 12:05 sans trade actif ===
+    _now_check = datetime.now(tz)
+    _after_1205 = _now_check.hour > 12 or (_now_check.hour == 12 and _now_check.minute >= 5)
+    if _after_1205 and active_trade is None:
+        print(f"🕒 Bot démarré à {_now_check.strftime('%H:%M')} sans trade actif – sortie immédiate (aucune notification).")
+        BOT_STATUS = "stopped"
+        save_status_json()
+        return
+
     trade_opened_during_window_today = False
     if active_trade is not None:
         opened_at = active_trade.get("opened_at")
@@ -1599,11 +1607,12 @@ def main():
         while True:
             now = datetime.now(tz)
 
-            if now.hour == 12 and now.minute >= 5 and active_trade is None:
-                print("🕒 12:05 reached with no active trade – stopping bot.")
+            # === FIX : élargir la condition pour attraper tout démarrage tardif ===
+            if (now.hour > 12 or (now.hour == 12 and now.minute >= 5)) and active_trade is None:
+                print("🕒 Après 12:05 sans trade actif – arrêt du bot.")
                 BOT_STATUS = "stopped"
                 save_status_json()
-                send_telegram_message("🔴 Bot stopped – End of session (12:05), no active trade.")
+                send_telegram_message("🔴 Bot stopped – End of session (past 12:05), no active trade.")
                 break
 
             if now.hour == 16 and now.minute >= 45 and now.minute < 47:
@@ -2109,7 +2118,6 @@ def check_closed_trade():
             print(f"No closed trade found for {pair} yet, will retry later.")
             return
 
-        # === FIX : identifier NOTRE trade par ID (au lieu de prendre le plus récent) ===
         our_trade_id = str(active_trade['trade_id'])
         our_trade = None
         for t in closed_trades:
@@ -2132,7 +2140,6 @@ def check_closed_trade():
         close_price = None
         source = None
 
-        # 1. averageClosePrice (source la plus fiable en v20 pour un trade fermé, gère les partials)
         if hasattr(latest, 'averageClosePrice') and latest.averageClosePrice is not None:
             try:
                 cp = float(latest.averageClosePrice)
@@ -2142,7 +2149,6 @@ def check_closed_trade():
             except (ValueError, TypeError):
                 pass
 
-        # 2. closePrice (si présent sur cette version)
         if close_price is None and hasattr(latest, 'closePrice') and latest.closePrice is not None:
             try:
                 cp = float(latest.closePrice)
@@ -2152,7 +2158,6 @@ def check_closed_trade():
             except (ValueError, TypeError):
                 pass
 
-        # 3. Transactions API — sans 'since=1' (bug : ne renvoyait que les 100 plus anciennes)
         if close_price is None:
             try:
                 tr_resp = retry_api_call(ctx.transaction.list, ACCOUNT_ID, count=500)
@@ -2167,7 +2172,6 @@ def check_closed_trade():
             except Exception as e:
                 print(f"⚠️ Transaction API error: {e}")
 
-        # 4. Calcul depuis le P&L (fallback fiable uniquement si pas de partial close)
         if close_price is None and abs(units) > 0:
             units_abs = abs(units)
             if direction == 'buy':
@@ -2176,13 +2180,11 @@ def check_closed_trade():
                 close_price = entry - (total_pnl_usd / units_abs)
             source = "calculated_from_pnl"
 
-        # 5. Dernier recours : entry
         if close_price is None:
             close_price = entry
             source = "fallback_entry"
             print(f"⚠️ Fallback to entry price (no other source): {close_price:.5f}")
 
-        # Sanity check : si P&L non nul mais close_price == entry, forcer le recalcul
         if abs(close_price - entry) < 0.000001 and abs(total_pnl_usd) > 0.1 and abs(units) > 0:
             units_abs = abs(units)
             if direction == 'buy':
