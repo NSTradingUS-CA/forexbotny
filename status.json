@@ -1,5 +1,5 @@
 {
-  "time": "2026-09-14 09:58:17",
+  "time": "2026-09-14 10:03:23",
   "bot_status": "running",
   "session": {
     "trades_today": 1,
@@ -17,11 +17,11 @@
     "trailing_stop": "1.8x H1 ATR",
     "current_price": 1.34645,
     "unrealized_pnl_usd": 377.36,
-    "unrealized_pnl_cad": 525.51,
-    "usd_cad_rate": 1.3926,
+    "unrealized_pnl_cad": 525.58,
+    "usd_cad_rate": 1.3928,
     "distance_to_sl_pips": 17.7,
     "distance_to_tp2_pips": 25.1,
-    "atr": 0.0010635714285714018,
+    "atr": 0.0011964285714285428,
     "be_triggered": true,
     "tp1_hit": false,
     "setup_type": "Momentum",
