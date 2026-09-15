@@ -26,7 +26,6 @@ GH_PAT = os.getenv("GH_PAT")
 ALPHA_VANTAGE_API_KEY = os.getenv("ALPHA_VANTAGE_API_KEY")
 PAIRS = ["EUR_USD", "GBP_USD"]
 
-# Risques par setup (en %)
 RISK_PULLBACK = 0.65
 RISK_BREAKOUT = 0.35
 RISK_PINBAR = 0.55
@@ -64,7 +63,7 @@ MACD_TOLERANCE = 0.0001
 USE_VOLUME_FILTER = False
 
 BE_R_MULT = 1.0
-TP1_R_MULT = 0.8   # === FIX : TP1 découplé du BE (0.8R au lieu de 1.0R) ===
+TP1_R_MULT = 0.8
 TP_PARTIAL_RATIO = 0.33
 TRAILING_ATR_MULT = 1.8
 FIXED_TRAILING_PIPS = 20
@@ -138,7 +137,6 @@ _candle_cache = {}
 _last_news_block_message_sent = False
 
 
-# ---------- Fichiers JSON ----------
 def get_pause_until():
     if os.path.exists(PAUSE_FILE):
         with open(PAUSE_FILE, 'r') as f:
@@ -483,7 +481,6 @@ def save_status_json(force=False):
     push_status_json(status, force=force)
 
 
-# ---------- Fonctions de trading ----------
 def count_all_trades_today():
     today_str = datetime.now(tz).strftime("%Y-%m-%d")
     count = 0
@@ -544,7 +541,6 @@ def load_existing_open_position():
                     tp_price = float(trade.takeProfitOrder.price) if trade.takeProfitOrder else None
                     direction = 'buy' if int(trade.currentUnits) > 0 else 'sell'
                     initial_risk = abs(entry_price - sl_price) if sl_price is not None else saved_flags.get("initial_risk", 0.0)
-                    # === FIX : TP1 calculé avec TP1_R_MULT (0.8R), pas à 1R ===
                     _tp1_dist = initial_risk * TP1_R_MULT
                     active_trade = {
                         'trade_id': trade.id,
@@ -1055,7 +1051,6 @@ def manage_active_trade():
     move = (current_price - entry) if direction == 'buy' else (entry - current_price)
     r_multiple = move / initial_risk if initial_risk > 0 else 0
 
-    # --- BE (déclenché à BE_R_MULT = 1.0R) ---
     if not active_trade.get('be_triggered') and r_multiple >= BE_R_MULT:
         offset = 0.5 * 0.0001
         new_sl = entry + offset if direction == 'buy' else entry - offset
@@ -1072,7 +1067,6 @@ def manage_active_trade():
             except Exception as e:
                 print(f"Break-even update failed: {e}")
 
-    # --- TP1 (déclenché à TP1_R_MULT = 0.8R, découplé du BE) ---
     tp1 = active_trade.get('tp1')
     units = abs(int(active_trade['units']))
     if tp1 is not None and not active_trade.get('tp1_hit'):
@@ -1452,7 +1446,13 @@ def check_future_news_and_alert():
         print("Future news alert sent.")
 
 
+# ============ FIX RECOVERY : cutoff à minuit heure de Montréal ============
 def recover_recent_closed_trades(hours=24):
+    """
+    Récupère les trades fermés sur OANDA depuis MINUIT heure de Montréal aujourd'hui
+    et les ajoute à closed_trades_today s'ils ne sont pas déjà enregistrés.
+    Évite de polluer la journée en cours avec les trades de la veille.
+    """
     global closed_trades_today
     try:
         resp = retry_api_call(ctx.trade.list, ACCOUNT_ID, state='CLOSED', count=100)
@@ -1461,8 +1461,9 @@ def recover_recent_closed_trades(hours=24):
         print(f"⚠️ Recovery: could not fetch closed trades: {e}")
         return
 
-    now_utc = datetime.now(pytz.utc)
-    cutoff = now_utc - timedelta(hours=hours)
+    now_mtl = datetime.now(tz)
+    start_of_today_mtl = now_mtl.replace(hour=0, minute=0, second=0, microsecond=0)
+    cutoff = start_of_today_mtl.astimezone(pytz.utc)
 
     existing_keys = set()
     for t in closed_trades_today:
@@ -1481,7 +1482,8 @@ def recover_recent_closed_trades(hours=24):
             pair = t.instrument
             entry = float(t.price)
             units = int(getattr(t, 'initialUnits', getattr(t, 'currentUnits', 0)))
-            realized_pl_usd = float(getattr(t, 'realizedPL', 0))
+            # realizedPL est déjà en devise du compte (CAD)
+            realized_pl_cad = float(getattr(t, 'realizedPL', 0))
             direction = 'buy' if units > 0 else 'sell'
             units_abs = abs(units)
 
@@ -1492,9 +1494,9 @@ def recover_recent_closed_trades(hours=24):
                 close_price = float(t.closePrice)
             elif units_abs > 0:
                 if direction == 'buy':
-                    close_price = entry + (realized_pl_usd / units_abs)
+                    close_price = entry + (realized_pl_cad / units_abs)
                 else:
-                    close_price = entry - (realized_pl_usd / units_abs)
+                    close_price = entry - (realized_pl_cad / units_abs)
 
             sl_price = float(t.stopLossOrder.price) if getattr(t, 'stopLossOrder', None) else None
             init_risk = abs(entry - sl_price) if sl_price else 0
@@ -1506,7 +1508,9 @@ def recover_recent_closed_trades(hours=24):
                 r_mult = 0
 
             usd_cad = get_usd_cad_rate()
-            pnl_cad = realized_pl_usd * usd_cad
+            # Pas de double conversion : realizedPL est déjà en CAD
+            pnl_cad = realized_pl_cad
+            pnl_usd = pnl_cad / usd_cad if usd_cad > 0 else pnl_cad
 
             time_str = close_time.astimezone(tz).strftime("%H:%M:%S")
             key = (pair, time_str, entry)
@@ -1518,7 +1522,7 @@ def recover_recent_closed_trades(hours=24):
                 "type": "Buy" if direction == 'buy' else "Sell",
                 "setup": "recovered",
                 "pnl": round(pnl_cad, 2),
-                "pnl_usd": round(realized_pl_usd, 2),
+                "pnl_usd": round(pnl_usd, 2),
                 "time": time_str,
                 "r_multiple": round(r_mult, 2),
                 "units": units_abs,
@@ -1533,10 +1537,10 @@ def recover_recent_closed_trades(hours=24):
             continue
 
     if added:
-        print(f"♻️ Recovered {added} closed trade(s) from OANDA history.")
+        print(f"♻️ Recovered {added} closed trade(s) from OANDA history (since midnight Montreal).")
         save_closed_trades_to_file()
     else:
-        print("♻️ Recovery: no missing closed trade found.")
+        print("♻️ Recovery: no missing closed trade found since midnight Montreal.")
 
 
 def main():
@@ -2042,7 +2046,6 @@ def place_trade(instrument, entry_price_signal, sl_signal, tp_signal, direction,
         score_match = re.search(r'score\s+([\d.]+)', reason, re.IGNORECASE)
         quality_score = float(score_match.group(1)) if score_match else None
 
-        # === FIX : TP1 calculé avec TP1_R_MULT (0.8R) au lieu de 1R, découplé du BE ===
         _tp1_dist = sl_distance * TP1_R_MULT
 
         active_trade = {
@@ -2076,7 +2079,6 @@ def place_trade(instrument, entry_price_signal, sl_signal, tp_signal, direction,
 
     rr_ratio = SETUP_RR.get(setup_type.lower(), 2.0)
 
-    # === FIX : message affiche le vrai niveau TP1 (TP1_R_MULT R) ===
     msg = (f"<b>✅ Trade opened ({trades_today}/{MAX_TRADES_PER_DAY})</b>\n"
            f"Pair: {instrument}\n"
            f"Setup: {setup_type.upper()}\n"
@@ -2107,6 +2109,7 @@ def place_trade(instrument, entry_price_signal, sl_signal, tp_signal, direction,
     return True
 
 
+# ============ FIX P&L : realizedPL est déjà en CAD, pas de double conversion ============
 def check_closed_trade():
     global active_trade, last_close_time
     if active_trade is None:
@@ -2136,7 +2139,8 @@ def check_closed_trade():
             return
 
         latest = our_trade
-        total_pnl_usd = float(latest.realizedPL)
+        # realizedPL est en devise du compte (CAD), PAS en USD
+        total_pnl_cad = float(latest.realizedPL)
         entry = active_trade['entry_price']
         units = active_trade['units']
         direction = active_trade.get('direction', 'buy')
@@ -2181,9 +2185,9 @@ def check_closed_trade():
         if close_price is None and abs(units) > 0:
             units_abs = abs(units)
             if direction == 'buy':
-                close_price = entry + (total_pnl_usd / units_abs)
+                close_price = entry + (total_pnl_cad / units_abs)
             else:
-                close_price = entry - (total_pnl_usd / units_abs)
+                close_price = entry - (total_pnl_cad / units_abs)
             source = "calculated_from_pnl"
 
         if close_price is None:
@@ -2191,12 +2195,12 @@ def check_closed_trade():
             source = "fallback_entry"
             print(f"⚠️ Fallback to entry price (no other source): {close_price:.5f}")
 
-        if abs(close_price - entry) < 0.000001 and abs(total_pnl_usd) > 0.1 and abs(units) > 0:
+        if abs(close_price - entry) < 0.000001 and abs(total_pnl_cad) > 0.1 and abs(units) > 0:
             units_abs = abs(units)
             if direction == 'buy':
-                close_price = entry + (total_pnl_usd / units_abs)
+                close_price = entry + (total_pnl_cad / units_abs)
             else:
-                close_price = entry - (total_pnl_usd / units_abs)
+                close_price = entry - (total_pnl_cad / units_abs)
             source = "forced_from_pnl"
 
         print(f"✅ Trade {our_trade_id} fermé – Exit price from {source}: {close_price:.5f}")
@@ -2208,8 +2212,9 @@ def check_closed_trade():
         else:
             realized_r = 0.0
 
+        # Conversion inverse pour affichage USD (pas de double comptage)
         usd_cad = get_usd_cad_rate()
-        total_pnl_cad = total_pnl_usd * usd_cad
+        total_pnl_usd = total_pnl_cad / usd_cad if usd_cad > 0 else total_pnl_cad
 
         msg = (f"<b>🔴 Trade closed ({trades_today}/{MAX_TRADES_PER_DAY})</b>\n"
                f"Pair: {pair}\n"
