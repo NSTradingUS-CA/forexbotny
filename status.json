@@ -1,13 +1,35 @@
 {
-  "time": "2026-09-15 07:00:54",
+  "time": "2026-09-15 07:05:58",
   "bot_status": "running",
   "session": {
-    "trades_today": 0,
+    "trades_today": 1,
     "max_trades": 3,
     "start": "07:00",
     "end": "11:00"
   },
-  "active_trade": null,
+  "active_trade": {
+    "pair": "EUR_USD",
+    "type": "Sell",
+    "entry": 1.15354,
+    "sl": 1.1547014285714285,
+    "tp1": 1.1526108571428573,
+    "tp2": 1.1509848571428571,
+    "trailing_stop": "20 pips initial",
+    "current_price": 1.15348,
+    "unrealized_pnl_usd": 19.73,
+    "unrealized_pnl_cad": 27.45,
+    "usd_cad_rate": 1.3917,
+    "distance_to_sl_pips": 12.2,
+    "distance_to_tp2_pips": 25.0,
+    "atr": 0.0005807142857142836,
+    "be_triggered": false,
+    "tp1_hit": false,
+    "setup_type": "Momentum",
+    "risk_percent": 0.4,
+    "opened_at": "2026-09-15T07:01:25.210426-04:00",
+    "units": -328772,
+    "score": 69.3
+  },
   "next_news_event": {
     "title": "CPI",
     "time": "02:00",
