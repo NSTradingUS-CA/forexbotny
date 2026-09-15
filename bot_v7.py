@@ -64,6 +64,7 @@ MACD_TOLERANCE = 0.0001
 USE_VOLUME_FILTER = False
 
 BE_R_MULT = 1.0
+TP1_R_MULT = 0.8   # === FIX : TP1 découplé du BE (0.8R au lieu de 1.0R) ===
 TP_PARTIAL_RATIO = 0.33
 TRAILING_ATR_MULT = 1.8
 FIXED_TRAILING_PIPS = 20
@@ -543,13 +544,15 @@ def load_existing_open_position():
                     tp_price = float(trade.takeProfitOrder.price) if trade.takeProfitOrder else None
                     direction = 'buy' if int(trade.currentUnits) > 0 else 'sell'
                     initial_risk = abs(entry_price - sl_price) if sl_price is not None else saved_flags.get("initial_risk", 0.0)
+                    # === FIX : TP1 calculé avec TP1_R_MULT (0.8R), pas à 1R ===
+                    _tp1_dist = initial_risk * TP1_R_MULT
                     active_trade = {
                         'trade_id': trade.id,
                         'pair': instrument,
                         'units': saved_flags.get("units", int(trade.currentUnits)),
                         'entry_price': entry_price,
                         'sl': sl_price,
-                        'tp1': (entry_price + initial_risk) if direction == 'buy' else (entry_price - initial_risk),
+                        'tp1': (entry_price + _tp1_dist) if direction == 'buy' else (entry_price - _tp1_dist),
                         'tp2': tp_price,
                         'tp': tp_price,
                         'direction': direction,
@@ -1052,6 +1055,7 @@ def manage_active_trade():
     move = (current_price - entry) if direction == 'buy' else (entry - current_price)
     r_multiple = move / initial_risk if initial_risk > 0 else 0
 
+    # --- BE (déclenché à BE_R_MULT = 1.0R) ---
     if not active_trade.get('be_triggered') and r_multiple >= BE_R_MULT:
         offset = 0.5 * 0.0001
         new_sl = entry + offset if direction == 'buy' else entry - offset
@@ -1068,6 +1072,7 @@ def manage_active_trade():
             except Exception as e:
                 print(f"Break-even update failed: {e}")
 
+    # --- TP1 (déclenché à TP1_R_MULT = 0.8R, découplé du BE) ---
     tp1 = active_trade.get('tp1')
     units = abs(int(active_trade['units']))
     if tp1 is not None and not active_trade.get('tp1_hit'):
@@ -1558,7 +1563,6 @@ def main():
             print(f"Trade on {pair} was closed manually before bot start. Enregistrement en cours...")
             check_closed_trade()
 
-    # === FIX CRITIQUE : sortie immédiate si le bot démarre après 12:05 sans trade actif ===
     _now_check = datetime.now(tz)
     _after_1205 = _now_check.hour > 12 or (_now_check.hour == 12 and _now_check.minute >= 5)
     if _after_1205 and active_trade is None:
@@ -1607,7 +1611,6 @@ def main():
         while True:
             now = datetime.now(tz)
 
-            # === FIX : élargir la condition pour attraper tout démarrage tardif ===
             if (now.hour > 12 or (now.hour == 12 and now.minute >= 5)) and active_trade is None:
                 print("🕒 Après 12:05 sans trade actif – arrêt du bot.")
                 BOT_STATUS = "stopped"
@@ -2039,13 +2042,16 @@ def place_trade(instrument, entry_price_signal, sl_signal, tp_signal, direction,
         score_match = re.search(r'score\s+([\d.]+)', reason, re.IGNORECASE)
         quality_score = float(score_match.group(1)) if score_match else None
 
+        # === FIX : TP1 calculé avec TP1_R_MULT (0.8R) au lieu de 1R, découplé du BE ===
+        _tp1_dist = sl_distance * TP1_R_MULT
+
         active_trade = {
             'trade_id': trade.tradeID,
             'pair': instrument,
             'units': int(trade.units),
             'entry_price': float(trade.price),
             'sl': new_sl,
-            'tp1': (current_price + sl_distance) if direction == 'buy' else (current_price - sl_distance),
+            'tp1': (current_price + _tp1_dist) if direction == 'buy' else (current_price - _tp1_dist),
             'tp2': new_tp,
             'direction': direction,
             'setup_type': setup_type,
@@ -2070,6 +2076,7 @@ def place_trade(instrument, entry_price_signal, sl_signal, tp_signal, direction,
 
     rr_ratio = SETUP_RR.get(setup_type.lower(), 2.0)
 
+    # === FIX : message affiche le vrai niveau TP1 (TP1_R_MULT R) ===
     msg = (f"<b>✅ Trade opened ({trades_today}/{MAX_TRADES_PER_DAY})</b>\n"
            f"Pair: {instrument}\n"
            f"Setup: {setup_type.upper()}\n"
@@ -2078,7 +2085,7 @@ def place_trade(instrument, entry_price_signal, sl_signal, tp_signal, direction,
            f"Volume: {abs(active_trade['units'])} units\n"
            f"Entry: {current_price:.5f} (market, slippage {slippage_pips:.1f} pips)\n"
            f"SL: {new_sl:.5f}\n"
-           f"TP1: {active_trade['tp1']:.5f} (1R, {TP_PARTIAL_RATIO:.0%})\n"
+           f"TP1: {active_trade['tp1']:.5f} ({TP1_R_MULT:.1f}R, {TP_PARTIAL_RATIO:.0%})\n"
            f"TP2: {new_tp:.5f} ({rr_ratio:.1f}R)\n"
            f"R/R: 1:{rr_ratio:.1f}\n"
            f"Quality score: {quality_score:.1f}\n"
@@ -2100,7 +2107,6 @@ def place_trade(instrument, entry_price_signal, sl_signal, tp_signal, direction,
     return True
 
 
-# ============ FIX CRITIQUE : check_closed_trade filtré par trade_id ============
 def check_closed_trade():
     global active_trade, last_close_time
     if active_trade is None:
