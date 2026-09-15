@@ -77,6 +77,75 @@
       "pair": "EUR_USD",
       "buy_reason": "Slippage 12.1pips > 2.3",
       "sell_reason": "Slippage 12.1pips > 2.3"
+    },
+    {
+      "time": "08:56:51",
+      "pair": "EUR_USD",
+      "buy_reason": "Slippage 11.4pips > 2.3",
+      "sell_reason": "Slippage 11.4pips > 2.3"
+    },
+    {
+      "time": "08:57:22",
+      "pair": "EUR_USD",
+      "buy_reason": "Slippage 10.7pips > 2.3",
+      "sell_reason": "Slippage 10.7pips > 2.3"
+    },
+    {
+      "time": "08:57:53",
+      "pair": "EUR_USD",
+      "buy_reason": "Slippage 10.7pips > 2.3",
+      "sell_reason": "Slippage 10.7pips > 2.3"
+    },
+    {
+      "time": "08:58:23",
+      "pair": "EUR_USD",
+      "buy_reason": "Slippage 11.1pips > 2.3",
+      "sell_reason": "Slippage 11.1pips > 2.3"
+    },
+    {
+      "time": "08:58:54",
+      "pair": "EUR_USD",
+      "buy_reason": "Slippage 11.1pips > 2.3",
+      "sell_reason": "Slippage 11.1pips > 2.3"
+    },
+    {
+      "time": "08:59:24",
+      "pair": "EUR_USD",
+      "buy_reason": "Slippage 11.1pips > 2.3",
+      "sell_reason": "Slippage 11.1pips > 2.3"
+    },
+    {
+      "time": "08:59:54",
+      "pair": "EUR_USD",
+      "buy_reason": "Slippage 10.8pips > 2.3",
+      "sell_reason": "Slippage 10.8pips > 2.3"
+    },
+    {
+      "time": "09:00:26",
+      "pair": "EUR_USD",
+      "buy_reason": "Slippage 11.2pips > 2.3",
+      "sell_reason": "Slippage 11.2pips > 2.3"
+    },
+    {
+      "time": "09:00:56",
+      "pair": "EUR_USD",
+      "buy_reason": "Slippage 11.1pips > 2.3",
+      "sell_reason": "Slippage 11.1pips > 2.3"
+    },
+    {
+      "time": "09:01:26",
+      "pair": "EUR_USD",
+      "buy_reason": "H1 not up",
+      "sell_reason": "MACD not bearish",
+      "spread": 0.0001500000000000945,
+      "adx": 34.589612904528956,
+      "plus_di": 16.418075209069418,
+      "minus_di": 22.60997815090708,
+      "ema50": 1.1560159307700646,
+      "ema200": 1.1597044891747992,
+      "rsi": 44.134287097079344,
+      "atr": 0.0006071428571428537,
+      "diagnostic": "[Best hypothetical: Pin Bar SELL score=65.9]"
     }
   ],
   "last_cleanup": "2026-09-15"
