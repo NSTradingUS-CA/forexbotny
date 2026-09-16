@@ -1,46 +1,17 @@
 {
-  "time": "2026-09-16 14:05:45",
-  "bot_status": "running",
+  "time": "2026-09-16 15:38:07",
+  "bot_status": "stopped",
   "session": {
     "trades_today": 1,
     "max_trades": 3,
     "start": "07:00",
     "end": "11:00"
   },
-  "active_trade": {
-    "pair": "EUR_USD",
-    "type": "Sell",
-    "entry": 1.15367,
-    "sl": 1.1524285714285716,
-    "tp1": 1.152078,
-    "tp2": 1.14969,
-    "trailing_stop": "1.8x H1 ATR",
-    "current_price": 1.15155,
-    "unrealized_pnl_usd": 556.23,
-    "unrealized_pnl_cad": 776.24,
-    "usd_cad_rate": 1.3955,
-    "distance_to_sl_pips": 8.8,
-    "distance_to_tp2_pips": 18.6,
-    "atr": 0.0007714285714285816,
-    "be_triggered": true,
-    "tp1_hit": false,
-    "setup_type": "Pin Bar",
-    "risk_percent": 0.55,
-    "opened_at": "2026-09-16T07:26:50.574965-04:00",
-    "units": -262373,
-    "score": 47.8
-  },
-  "next_news_event": {
-    "title": "FOMC",
-    "time": "14:00",
-    "impact": "High"
-  },
+  "active_trade": null,
+  "next_news_event": null,
   "strategy": "H1 Multi-Setup (9 types) - Quality Score based",
   "max_risk_per_trade_percent": 0.65,
   "daily_loss_limit_percent": 2.0,
-  "blocked_pairs": [
-    "EUR_USD",
-    "GBP_USD"
-  ],
+  "blocked_pairs": [],
   "active_pairs": []
 }
