@@ -1812,6 +1812,7 @@ def main():
                                 )
                         if minutes_until <= NEWS_CLOSE_BEFORE_MINUTES:
                             if active_trade['pair'] in blocked_pairs:
+                                # P&L courant
                                 try:
                                     resp = ctx.pricing.get(ACCOUNT_ID, instruments=active_trade['pair'])
                                     pi = resp.body['prices'][0]
@@ -1823,26 +1824,51 @@ def main():
                                         pnl = -pnl
                                 except:
                                     pnl = 0
+
+                                pair = active_trade['pair']
+                                news_title = news_event['title']
+                                news_time = news_event['time'].strftime('%H:%M')
+
                                 if pnl > 0:
-                                    if close_full_position_market():
+                                    # === PROFIT : fermer 50 %, garder le runner avec trailing OANDA ===
+                                    units_abs = abs(int(active_trade['units']))
+                                    partial_units = max(1000, int(units_abs * 0.5))
+                                    remaining = units_abs - partial_units
+
+                                    if partial_units < units_abs and close_partial_position(partial_units, expected_remaining=remaining):
+                                        active_trade['units'] = remaining if active_trade['direction'] == 'buy' else -remaining
                                         send_telegram_message(
-                                            f"🔒 Trade closed before news\n"
-                                            f"Pair: {active_trade['pair']}\n"
-                                            f"P&L: {pnl:.2f} USD\n"
-                                            f"Reason: '{news_event['title']}' in <5 min."
+                                            f"📰 <b>Imminent News – 50 % secured</b>\n"
+                                            f"Pair: {pair}\n"
+                                            f"News: {news_title} à {news_time}\n"
+                                            f"Units fermées: {partial_units}\n"
+                                            f"Runner gardé: {remaining} (Trailing OANDA)\n"
+                                            f"P&L sécurisé: {pnl * (partial_units / units_abs):.2f} USD"
                                         )
+                                        print(f"News imminent – {pair} en profit : 50 % fermé ({partial_units} units), trailing conserve {remaining}.")
+                                    else:
+                                        send_telegram_message(
+                                            f"⚠️ 50 % reduction failed before news on {pair}. Please monitor."
+                                        )
+                                else:
+                                    # === PERTE ou BE : fermer 100 % ===
+                                    if close_full_position_market():
+                                        usd_cad = get_usd_cad_rate()
+                                        pnl_cad = pnl * usd_cad
+                                        send_telegram_message(
+                                            f"📰 <b>Imminent News – Complete closure (trade in loss)</b>\n"
+                                            f"Pair: {pair}\n"
+                                            f"News: {news_title} à {news_time}\n"
+                                            f"P&L: {pnl_cad:.2f} CAD"
+                                        )
+                                        print(f"News imminent – {pair} en perte : clôture complète.")
+                                        active_trade = None
+                                        save_closed_trades_to_file()
                                         time.sleep(2)
                                     else:
-                                        send_telegram_message("⚠️ Failed to close. Please monitor.")
-                                else:
-                                    if move_sl_to_entry():
                                         send_telegram_message(
-                                            f"🛡️ SL moved to entry before news\n"
-                                            f"Pair: {active_trade['pair']}\n"
-                                            f"New SL: {active_trade['sl']:.5f}"
+                                            f"Closing failed {pair} before news. Please monitor."
                                         )
-                                    else:
-                                        send_telegram_message("⚠️ Could not move SL. Please monitor.")
 
                 if not hasattr(main, "next_news_check"):
                     main.next_news_check = now
