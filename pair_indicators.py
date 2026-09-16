@@ -216,28 +216,28 @@ def push_indicators_with_retry(pair_indicators):
     print("❌ Échec définitif du push après 3 tentatives.")
 
 
-# ============ FIX : lecture distante de status.json ============
-def fetch_remote_status():
+# ============ FIX : vérification directe chez OANDA ============
+def has_open_position_any_pair():
     """
-    Lit status.json depuis GitHub (source de vérité), PAS depuis le fichier local
-    qui est figé au moment du checkout du runner.
+    Interroge OANDA directement pour savoir s'il y a une position ouverte
+    sur une des paires suivies. Source de vérité absolue : ne dépend ni du bot
+    principal, ni de status.json, ni du timing de push.
+    Retourne (has_position: bool, instrument: str | None).
     """
-    if not GH_PAT:
-        return None
     try:
-        url = f"https://api.github.com/repos/{os.getenv('GITHUB_REPOSITORY')}/contents/status.json"
-        headers = {"Authorization": f"token {GH_PAT}",
-                   "Accept": "application/vnd.github.v3+json",
-                   "Cache-Control": "no-cache"}
-        r = requests.get(url, headers=headers, timeout=10)
-        if r.status_code == 200:
-            content = base64.b64decode(r.json()["content"]).decode()
-            return json.loads(content)
-        else:
-            print(f"⚠️ fetch_remote_status: HTTP {r.status_code}")
+        response = retry_api_call(ctx.position.list, ACCOUNT_ID)
+        for pos in response.body['positions']:
+            if pos.instrument not in PAIRS:
+                continue
+            long_units = int(pos.long.units)
+            short_units = int(pos.short.units)
+            if long_units != 0 or short_units != 0:
+                return True, pos.instrument
+        return False, None
     except Exception as e:
-        print(f"⚠️ fetch_remote_status error: {e}")
-    return None
+        print(f"⚠️ Position check failed: {e}")
+        # En cas d'échec réseau, on suppose qu'il y a peut-être un trade (prudence)
+        return True, "unknown"
 
 
 def should_stop(now):
@@ -245,18 +245,15 @@ def should_stop(now):
     if now.hour > SHUTDOWN_HOUR or (now.hour == SHUTDOWN_HOUR and now.minute >= 5):
         return True
 
-    # Arrêt anticipé à 12:05 si aucun trade actif (lecture DISTANTE)
+    # Arrêt anticipé après 12:05 si AUCUNE position ouverte chez OANDA
     if now.hour >= EARLY_SHUTDOWN_HOUR and now.minute >= 5:
-        status = fetch_remote_status()
-        if status is None:
-            print("⚠️ status.json distant indisponible – pas d'arrêt anticipé (prudence).")
+        has_pos, pair = has_open_position_any_pair()
+        if has_pos:
+            print(f"🟢 Active position detected on {pair} (via OANDA API) – Pair Indicators continues.")
             return False
-        active_trade = status.get("active_trade")
-        if active_trade is None:
-            print("🔴 No active trade (statut distant), stopping Pair Indicators at 12:05.")
-            return True
         else:
-            print(f"🟢 Active trade detected on {active_trade.get('pair', '?')} – Pair Indicators continues.")
+            print("🔴 No active position on any pair (via OANDA API) – stopping Pair Indicators.")
+            return True
     return False
 
 
