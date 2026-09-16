@@ -216,25 +216,47 @@ def push_indicators_with_retry(pair_indicators):
     print("❌ Échec définitif du push après 3 tentatives.")
 
 
+# ============ FIX : lecture distante de status.json ============
+def fetch_remote_status():
+    """
+    Lit status.json depuis GitHub (source de vérité), PAS depuis le fichier local
+    qui est figé au moment du checkout du runner.
+    """
+    if not GH_PAT:
+        return None
+    try:
+        url = f"https://api.github.com/repos/{os.getenv('GITHUB_REPOSITORY')}/contents/status.json"
+        headers = {"Authorization": f"token {GH_PAT}",
+                   "Accept": "application/vnd.github.v3+json",
+                   "Cache-Control": "no-cache"}
+        r = requests.get(url, headers=headers, timeout=10)
+        if r.status_code == 200:
+            content = base64.b64decode(r.json()["content"]).decode()
+            return json.loads(content)
+        else:
+            print(f"⚠️ fetch_remote_status: HTTP {r.status_code}")
+    except Exception as e:
+        print(f"⚠️ fetch_remote_status error: {e}")
+    return None
+
+
 def should_stop(now):
     # Arrêt normal à 17:05
     if now.hour > SHUTDOWN_HOUR or (now.hour == SHUTDOWN_HOUR and now.minute >= 5):
         return True
 
-    # Arrêt anticipé à 12:05 si aucun trade actif
+    # Arrêt anticipé à 12:05 si aucun trade actif (lecture DISTANTE)
     if now.hour >= EARLY_SHUTDOWN_HOUR and now.minute >= 5:
-        try:
-            if os.path.exists("status.json"):
-                with open("status.json", "r") as f:
-                    status = json.load(f)
-                    active_trade = status.get("active_trade")
-                    if active_trade is None:
-                        print("🔴 No active trade, stopping Pair Indicators at 12:05.")
-                        return True
-        except Exception as e:
-            print(f"Erreur lecture status.json: {e}")
-            # En cas d'erreur, on continue (prudence)
+        status = fetch_remote_status()
+        if status is None:
+            print("⚠️ status.json distant indisponible – pas d'arrêt anticipé (prudence).")
             return False
+        active_trade = status.get("active_trade")
+        if active_trade is None:
+            print("🔴 No active trade (statut distant), stopping Pair Indicators at 12:05.")
+            return True
+        else:
+            print(f"🟢 Active trade detected on {active_trade.get('pair', '?')} – Pair Indicators continues.")
     return False
 
 
@@ -269,7 +291,6 @@ def main():
             if pair_indicators:
                 push_indicators_with_retry(pair_indicators)
 
-            # Réinitialiser le compteur d'erreurs après un cycle réussi
             error_count = 0
             time.sleep(REFRESH_SECONDS)
 
@@ -284,11 +305,10 @@ def main():
             print(error_msg)
             traceback.print_exc()
             send_telegram_message(error_msg)
-            # Si trop d'erreurs consécutives, on arrête pour éviter une boucle infinie
             if error_count >= 5:
                 send_telegram_message("🚨 Pair Indicators stopped after 5 consecutive errors.")
                 break
-            time.sleep(60)  # Attendre avant de réessayer
+            time.sleep(60)
 
 
 if __name__ == "__main__":
