@@ -62,11 +62,9 @@ MACD_SIGNAL = 9
 MACD_TOLERANCE = 0.0001
 USE_VOLUME_FILTER = False
 
-BE_R_MULT = 1.0
 TP1_R_MULT = 0.8
 TP_PARTIAL_RATIO = 0.33
 TRAILING_ATR_MULT = 1.8
-FIXED_TRAILING_PIPS = 20
 
 SLIPPAGE_ATR_FACTOR = 0.40
 SLIPPAGE_MIN_PIPS = 2.0
@@ -137,6 +135,29 @@ _candle_cache = {}
 _last_news_block_message_sent = False
 
 
+# ============ HTTP HELPERS (bypass v20 pour position.close) ============
+def _oanda_headers():
+    return {"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"}
+
+
+def _oanda_http_retry(method, url, json_body=None, max_attempts=3):
+    """Retry HTTP générique pour OANDA. Retourne la réponse ou None."""
+    for i in range(max_attempts):
+        try:
+            r = requests.request(method, url, headers=_oanda_headers(), json=json_body, timeout=15)
+            if r.status_code in (200, 201):
+                return r
+            if r.status_code in (400, 404):
+                return r
+            print(f"⚠️ HTTP {r.status_code}: {r.text[:200]}")
+        except Exception as e:
+            print(f"HTTP attempt {i+1}/{max_attempts} failed: {e}")
+        if i < max_attempts - 1:
+            time.sleep(3 * (i + 1))
+    return None
+
+
+# ---------- Fichiers JSON ----------
 def get_pause_until():
     if os.path.exists(PAUSE_FILE):
         with open(PAUSE_FILE, 'r') as f:
@@ -461,7 +482,7 @@ def save_status_json(force=False):
             "sl": active_trade['sl'],
             "tp1": active_trade.get('tp1'),
             "tp2": active_trade.get('tp2'),
-            "trailing_stop": active_trade.get('trailing_distance', '20 pips'),
+            "trailing_stop": "server-side (OANDA)",
             "current_price": current_price,
             "unrealized_pnl_usd": round(unrealized_pnl_usd, 2),
             "unrealized_pnl_cad": round(unrealized_pnl_cad, 2),
@@ -516,7 +537,7 @@ def load_existing_open_position():
                         "risk_percent": saved_trade.get("risk_percent"),
                         "initial_risk": saved_trade.get("initial_risk"),
                         "opened_at": saved_trade.get("opened_at"),
-                        "trailing_distance": saved_trade.get("trailing_stop", "20 pips"),
+                        "trailing_distance": saved_trade.get("trailing_stop", "server-side"),
                         "atr": saved_trade.get("atr"),
                         "units": saved_trade.get("units"),
                         "quality_score": saved_trade.get("score")
@@ -537,7 +558,18 @@ def load_existing_open_position():
                 if open_trades:
                     trade = open_trades[0]
                     entry_price = float(trade.price)
-                    sl_price = float(trade.stopLossOrder.price) if trade.stopLossOrder else None
+                    # SL effectif : trailing en priorité, sinon fixe
+                    sl_price = None
+                    if getattr(trade, 'trailingStopLossOrder', None) and trade.trailingStopLossOrder:
+                        try:
+                            sl_price = float(trade.trailingStopLossOrder.price)
+                        except Exception:
+                            sl_price = None
+                    if sl_price is None and getattr(trade, 'stopLossOrder', None) and trade.stopLossOrder:
+                        try:
+                            sl_price = float(trade.stopLossOrder.price)
+                        except Exception:
+                            sl_price = None
                     tp_price = float(trade.takeProfitOrder.price) if trade.takeProfitOrder else None
                     direction = 'buy' if int(trade.currentUnits) > 0 else 'sell'
                     initial_risk = abs(entry_price - sl_price) if sl_price is not None else saved_flags.get("initial_risk", 0.0)
@@ -545,7 +577,7 @@ def load_existing_open_position():
                     active_trade = {
                         'trade_id': trade.id,
                         'pair': instrument,
-                        'units': saved_flags.get("units", int(trade.currentUnits)),
+                        'units': int(trade.currentUnits),
                         'entry_price': entry_price,
                         'sl': sl_price,
                         'tp1': (entry_price + _tp1_dist) if direction == 'buy' else (entry_price - _tp1_dist),
@@ -558,7 +590,7 @@ def load_existing_open_position():
                         'be_triggered': saved_flags.get("be_triggered", False),
                         'tp1_hit': saved_flags.get("tp1_hit", False),
                         'opened_at': saved_flags.get("opened_at", str(trade.openTime) if getattr(trade, 'openTime', None) else None),
-                        'trailing_distance': saved_flags.get("trailing_distance", "20 pips"),
+                        'trailing_distance': saved_flags.get("trailing_distance", "server-side"),
                         'atr': saved_flags.get("atr"),
                         'quality_score': saved_flags.get("quality_score")
                     }
@@ -905,18 +937,30 @@ def get_account_balance(response):
         return float(response.body['account'].balance)
 
 
+# ============ FIX PARTIAL CLOSE : HTTP direct avec fallback ============
 def close_partial_position(units_to_close, expected_remaining=None):
+    """
+    Ferme une partie de la position courante via HTTP direct (bypass v20 Python wrapper bugué).
+    Tente d'abord longUnits/shortUnits, puis fallback units si OANDA refuse.
+    """
     pair = active_trade['pair']
     direction = active_trade['direction']
+    url = f"https://{OANDA_URL}/v3/accounts/{ACCOUNT_ID}/positions/{pair}/close"
+    units_abs = str(abs(int(units_to_close)))
+
+    # Tentative 1 : longUnits/shortUnits
     field = "longUnits" if direction == 'buy' else "shortUnits"
-    body = {field: str(abs(int(units_to_close)))}
-    try:
-        r = retry_api_call(ctx.position.close, ACCOUNT_ID, instrument=pair, data=body)
-        if getattr(r, 'status', None) != 200:
-            print(f"⚠️ Partial close rejected: status={getattr(r,'status',None)} body={getattr(r,'body',None)}")
-            return False
-    except Exception as e:
-        print(f"❌ Partial close failed: {e}")
+    r = _oanda_http_retry("PUT", url, json_body={field: units_abs})
+
+    # Fallback : units générique
+    if r is None or r.status_code != 200:
+        if r is not None:
+            print(f"⚠️ {field} refusé (status={r.status_code}): {r.text[:150]}")
+        print(f"↻ Fallback sur 'units' pour le partial close de {pair}")
+        r = _oanda_http_retry("PUT", url, json_body={"units": units_abs})
+
+    if r is None or r.status_code != 200:
+        print(f"❌ Partial close définitivement échoué sur {pair}")
         return False
 
     if expected_remaining is not None:
@@ -941,18 +985,22 @@ def close_full_position_market():
         return False
     pair = active_trade['pair']
     direction = active_trade['direction']
+    url = f"https://{OANDA_URL}/v3/accounts/{ACCOUNT_ID}/positions/{pair}/close"
+
     field = "longUnits" if direction == 'buy' else "shortUnits"
-    body = {field: "ALL"}
-    try:
-        r = retry_api_call(ctx.position.close, ACCOUNT_ID, instrument=pair, data=body)
-        if getattr(r, 'status', None) == 200:
-            print(f"Full close OK on {pair} ({field}=ALL)")
-            return True
-        print(f"⚠️ Full close rejected: status={getattr(r,'status',None)} body={getattr(r,'body',None)}")
-        return False
-    except Exception as e:
-        print(f"❌ Full close failed: {e}")
-        return False
+    r = _oanda_http_retry("PUT", url, json_body={field: "ALL"})
+
+    if r is None or r.status_code != 200:
+        if r is not None:
+            print(f"⚠️ {field}=ALL refusé (status={r.status_code}): {r.text[:150]}")
+        print(f"↻ Fallback sur 'units'=ALL pour {pair}")
+        r = _oanda_http_retry("PUT", url, json_body={"units": "ALL"})
+
+    if r is not None and r.status_code == 200:
+        print(f"Full close OK on {pair}")
+        return True
+    print(f"❌ Full close échoué sur {pair}")
+    return False
 
 
 def update_trade_sl_tp(trade_id, sl_price=None, tp_price=None):
@@ -1031,10 +1079,51 @@ def move_sl_to_entry():
         return False
 
 
+# ============ MANAGE ACTIVE TRADE : trailing server-side + TP1 ============
 def manage_active_trade():
+    """
+    Le trailing stop loss est géré nativement par OANDA (server-side).
+    Le bot ne fait plus que :
+      1. Rafraîchir l'état local depuis OANDA (SL effectif, unités)
+      2. Détecter et exécuter le partial close TP1
+    """
     global active_trade
     if active_trade is None:
         return
+
+    # 1. Rafraîchir l'état local depuis OANDA
+    try:
+        r = retry_api_call(ctx.trade.get, ACCOUNT_ID, active_trade['trade_id'])
+        trade = r.body['trade']
+        # SL effectif : trailing en priorité, sinon fixe
+        new_sl = None
+        if getattr(trade, 'trailingStopLossOrder', None) and trade.trailingStopLossOrder:
+            try:
+                new_sl = float(trade.trailingStopLossOrder.price)
+            except Exception:
+                new_sl = None
+        if new_sl is None and getattr(trade, 'stopLossOrder', None) and trade.stopLossOrder:
+            try:
+                new_sl = float(trade.stopLossOrder.price)
+            except Exception:
+                new_sl = None
+        if new_sl is not None:
+            active_trade['sl'] = new_sl
+        # Units réelles
+        try:
+            active_trade['units'] = int(trade.currentUnits)
+        except Exception:
+            pass
+        # BE = trailing SL a dépassé l'entrée
+        entry = active_trade['entry_price']
+        direction = active_trade['direction']
+        if new_sl is not None:
+            if (direction == 'buy' and new_sl >= entry) or (direction == 'sell' and new_sl <= entry):
+                active_trade['be_triggered'] = True
+    except Exception as e:
+        print(f"⚠️ refresh state failed: {e}")
+
+    # 2. Prix actuel
     pair = active_trade['pair']
     direction = active_trade['direction']
     try:
@@ -1046,27 +1135,7 @@ def manage_active_trade():
     except Exception:
         return
 
-    entry = active_trade['entry_price']
-    initial_risk = active_trade.get('initial_risk', abs(entry - active_trade['sl']))
-    move = (current_price - entry) if direction == 'buy' else (entry - current_price)
-    r_multiple = move / initial_risk if initial_risk > 0 else 0
-
-    if not active_trade.get('be_triggered') and r_multiple >= BE_R_MULT:
-        offset = 0.5 * 0.0001
-        new_sl = entry + offset if direction == 'buy' else entry - offset
-        old_sl = active_trade['sl']
-        if (direction == 'buy' and new_sl > old_sl) or (direction == 'sell' and new_sl < old_sl):
-            try:
-                if update_trade_sl_tp(active_trade['trade_id'], sl_price=new_sl):
-                    active_trade['sl'] = new_sl
-                    active_trade['be_triggered'] = True
-                    print(f"Break-even triggered on {pair} at +{r_multiple:.2f}R")
-                    send_telegram_message(f"🛡️ BE triggered on {pair} at +{r_multiple:.2f}R.")
-                else:
-                    send_telegram_message(f"⚠️ ÉCHEC BE sur {pair} – SL reste à {old_sl:.5f}")
-            except Exception as e:
-                print(f"Break-even update failed: {e}")
-
+    # 3. Partial close TP1
     tp1 = active_trade.get('tp1')
     units = abs(int(active_trade['units']))
     if tp1 is not None and not active_trade.get('tp1_hit'):
@@ -1077,37 +1146,8 @@ def manage_active_trade():
                 active_trade['units'] = remaining if direction == 'buy' else -remaining
                 active_trade['tp1_hit'] = True
                 active_trade['tp1'] = None
-                print(f"TP1 hit on {pair}, {partial_units} units closed, {remaining} remaining (sign={active_trade['units']})")
+                print(f"TP1 hit on {pair}, {partial_units} units closed, {remaining} remaining")
                 send_telegram_message(f"🎯 TP1 reached on {pair}: {partial_units} units closed, {remaining} runner kept.")
-
-    if active_trade.get('be_triggered') or active_trade.get('tp1_hit'):
-        try:
-            df = get_candles(pair, count=ATR_PERIOD + 30, granularity=EXECUTION_GRANULARITY)
-            atr_val = float(df['atr'].iloc[-2])
-            active_trade['atr'] = atr_val
-            trail_distance = atr_val * TRAILING_ATR_MULT
-            if direction == 'buy':
-                new_sl = current_price - trail_distance
-                if new_sl > active_trade['sl']:
-                    if update_trade_sl_tp(active_trade['trade_id'], sl_price=new_sl):
-                        active_trade['sl'] = new_sl
-                        active_trade['trailing_distance'] = f"{TRAILING_ATR_MULT}x H1 ATR"
-                        print(f"Trailing SL updated on {pair} to {new_sl:.5f}")
-                        send_telegram_message(f"📈 Trailing SL updated on {pair} to {new_sl:.5f}")
-                    else:
-                        send_telegram_message(f"⚠️ ÉCHEC trailing sur {pair}")
-            else:
-                new_sl = current_price + trail_distance
-                if new_sl < active_trade['sl']:
-                    if update_trade_sl_tp(active_trade['trade_id'], sl_price=new_sl):
-                        active_trade['sl'] = new_sl
-                        active_trade['trailing_distance'] = f"{TRAILING_ATR_MULT}x H1 ATR"
-                        print(f"Trailing SL updated on {pair} to {new_sl:.5f}")
-                        send_telegram_message(f"📈 Trailing SL updated on {pair} to {new_sl:.5f}")
-                    else:
-                        send_telegram_message(f"⚠️ ÉCHEC trailing sur {pair}")
-        except Exception as e:
-            print(f"Trailing update failed: {e}")
 
 
 def compute_quality_score(signal, c, df, instrument, config, atr):
@@ -1446,13 +1486,7 @@ def check_future_news_and_alert():
         print("Future news alert sent.")
 
 
-# ============ FIX RECOVERY : cutoff à minuit heure de Montréal ============
 def recover_recent_closed_trades(hours=24):
-    """
-    Récupère les trades fermés sur OANDA depuis MINUIT heure de Montréal aujourd'hui
-    et les ajoute à closed_trades_today s'ils ne sont pas déjà enregistrés.
-    Évite de polluer la journée en cours avec les trades de la veille.
-    """
     global closed_trades_today
     try:
         resp = retry_api_call(ctx.trade.list, ACCOUNT_ID, state='CLOSED', count=100)
@@ -1482,7 +1516,6 @@ def recover_recent_closed_trades(hours=24):
             pair = t.instrument
             entry = float(t.price)
             units = int(getattr(t, 'initialUnits', getattr(t, 'currentUnits', 0)))
-            # realizedPL est déjà en devise du compte (CAD)
             realized_pl_cad = float(getattr(t, 'realizedPL', 0))
             direction = 'buy' if units > 0 else 'sell'
             units_abs = abs(units)
@@ -1508,7 +1541,6 @@ def recover_recent_closed_trades(hours=24):
                 r_mult = 0
 
             usd_cad = get_usd_cad_rate()
-            # Pas de double conversion : realizedPL est déjà en CAD
             pnl_cad = realized_pl_cad
             pnl_usd = pnl_cad / usd_cad if usd_cad > 0 else pnl_cad
 
@@ -1600,8 +1632,8 @@ def main():
 
     start_msg = (
         f"🟢 Forex Sniper 7-12 Multi-Setup started – max {MAX_TRADES_PER_DAY} trades/day, "
-        f"buffer {MIN_MINUTES_BETWEEN_TRADES}min, 9 setups (incl. Trend Breakout). Quality Score selection. "
-        f"({trades_today} already taken) – Using MARKET orders with dynamic SL/TP and ATR-based slippage filter."
+        f"buffer {MIN_MINUTES_BETWEEN_TRADES}min, 9 setups. Quality Score selection. "
+        f"({trades_today} already taken) – Trailing SL SERVER-SIDE (OANDA) + partial TP1."
     )
 
     if future_events:
@@ -1952,6 +1984,7 @@ def main():
         send_telegram_message("🔴 Bot stopped manually (Ctrl+C)")
 
 
+# ============ PLACE TRADE : trailing SL server-side dès l'ouverture ============
 def place_trade(instrument, entry_price_signal, sl_signal, tp_signal, direction, setup_type, risk_percent, reason, df, balance):
     global active_trade, trades_today, rejected_signals
 
@@ -2015,6 +2048,11 @@ def place_trade(instrument, entry_price_signal, sl_signal, tp_signal, direction,
         print(msg)
         return False
 
+    # Distance du trailing server-side : ATR * TRAILING_ATR_MULT
+    trailing_distance = atr_val * TRAILING_ATR_MULT
+    if trailing_distance < 0.0005:
+        trailing_distance = 0.0005  # plancher de sécurité : 5 pips mini
+
     signed_units = -abs(new_units) if direction == 'sell' else abs(new_units)
     order = {
         "type": "MARKET",
@@ -2022,6 +2060,7 @@ def place_trade(instrument, entry_price_signal, sl_signal, tp_signal, direction,
         "units": str(signed_units),
         "stopLossOnFill": {"price": f"{new_sl:.5f}"},
         "takeProfitOnFill": {"price": f"{new_tp:.5f}"},
+        "trailingStopLossOnFill": {"distance": f"{trailing_distance:.5f}"}
     }
 
     r = retry_api_call(ctx.order.create, ACCOUNT_ID, order=order)
@@ -2062,7 +2101,7 @@ def place_trade(instrument, entry_price_signal, sl_signal, tp_signal, direction,
             'initial_risk': sl_distance,
             'be_triggered': False,
             'tp1_hit': False,
-            'trailing_distance': f"{FIXED_TRAILING_PIPS} pips initial",
+            'trailing_distance': f"{TRAILING_ATR_MULT}x H1 ATR (server-side)",
             'atr': atr_val,
             'opened_at': datetime.now(tz).isoformat(),
             'quality_score': quality_score
@@ -2086,7 +2125,8 @@ def place_trade(instrument, entry_price_signal, sl_signal, tp_signal, direction,
            f"Risk: {risk_percent:.2f}%\n"
            f"Volume: {abs(active_trade['units'])} units\n"
            f"Entry: {current_price:.5f} (market, slippage {slippage_pips:.1f} pips)\n"
-           f"SL: {new_sl:.5f}\n"
+           f"SL initial: {new_sl:.5f}\n"
+           f"Trailing server-side: {trailing_distance/0.0001:.1f} pips\n"
            f"TP1: {active_trade['tp1']:.5f} ({TP1_R_MULT:.1f}R, {TP_PARTIAL_RATIO:.0%})\n"
            f"TP2: {new_tp:.5f} ({rr_ratio:.1f}R)\n"
            f"R/R: 1:{rr_ratio:.1f}\n"
@@ -2109,7 +2149,6 @@ def place_trade(instrument, entry_price_signal, sl_signal, tp_signal, direction,
     return True
 
 
-# ============ FIX P&L : realizedPL est déjà en CAD, pas de double conversion ============
 def check_closed_trade():
     global active_trade, last_close_time
     if active_trade is None:
@@ -2139,7 +2178,6 @@ def check_closed_trade():
             return
 
         latest = our_trade
-        # realizedPL est en devise du compte (CAD), PAS en USD
         total_pnl_cad = float(latest.realizedPL)
         entry = active_trade['entry_price']
         units = active_trade['units']
@@ -2212,7 +2250,6 @@ def check_closed_trade():
         else:
             realized_r = 0.0
 
-        # Conversion inverse pour affichage USD (pas de double comptage)
         usd_cad = get_usd_cad_rate()
         total_pnl_usd = total_pnl_cad / usd_cad if usd_cad > 0 else total_pnl_cad
 
