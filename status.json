@@ -1,13 +1,35 @@
 {
-  "time": "2026-09-16 07:26:19",
+  "time": "2026-09-16 07:31:23",
   "bot_status": "running",
   "session": {
-    "trades_today": 0,
+    "trades_today": 1,
     "max_trades": 3,
     "start": "07:00",
     "end": "11:00"
   },
-  "active_trade": null,
+  "active_trade": {
+    "pair": "EUR_USD",
+    "type": "Sell",
+    "entry": 1.15367,
+    "sl": 1.15566,
+    "tp1": 1.152078,
+    "tp2": 1.14969,
+    "trailing_stop": "20 pips initial",
+    "current_price": 1.15378,
+    "unrealized_pnl_usd": -28.86,
+    "unrealized_pnl_cad": -40.21,
+    "usd_cad_rate": 1.3932,
+    "distance_to_sl_pips": 18.8,
+    "distance_to_tp2_pips": 40.9,
+    "atr": 0.0006521428571428313,
+    "be_triggered": false,
+    "tp1_hit": false,
+    "setup_type": "Pin Bar",
+    "risk_percent": 0.55,
+    "opened_at": "2026-09-16T07:26:50.574965-04:00",
+    "units": -262373,
+    "score": 47.8
+  },
   "next_news_event": {
     "title": "FOMC",
     "time": "14:00",
