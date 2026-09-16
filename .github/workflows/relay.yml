@@ -1,0 +1,77 @@
+name: 🔁 Forex Sniper Relay
+
+on:
+  workflow_run:
+    # Doit correspondre EXACTEMENT au champ 'name:' de bot.yml
+    workflows: ["💹 Forex Sniper 7-12"]
+    types: [completed]
+
+concurrency:
+  group: forex-sniper-relay
+  cancel-in-progress: false
+
+jobs:
+  relay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install deps
+        run: pip install pytz
+
+      - name: Decide whether to relay
+        id: decide
+        shell: python
+        env:
+          CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          EVENT: ${{ github.event.workflow_run.event }}
+        run: |
+          import os
+          from datetime import datetime
+          import pytz
+
+          conclusion = os.environ.get('CONCLUSION', '')
+          event = os.environ.get('EVENT', '')
+
+          tz = pytz.timezone('America/Toronto')
+          now = datetime.now(tz)
+
+          should_relay = False
+          reason = ""
+
+          # Ne pas relayer si le run précédent s'est terminé normalement
+          # (arrêt naturel 12:05 ou 17:05 -> conclusion 'success')
+          if conclusion == 'success':
+              reason = "Previous run completed normally (success) – no relay needed"
+          # Ne relayer que si le run précédent a été déclenché par un événement planifié
+          # (pas un workflow_dispatch manuel ni un relais précédent)
+          elif event not in ('schedule', 'repository_dispatch'):
+              reason = f"Previous event not scheduled (was '{event}')"
+          # Ne relayer que dans la fenêtre temporelle 12:25 → 13:30 ET
+          elif not ((now.hour == 12 and now.minute >= 25) or (now.hour == 13 and now.minute <= 30)):
+              reason = f"Outside relay window (now {now.hour:02d}:{now.minute:02d} ET)"
+          else:
+              should_relay = True
+              reason = f"In relay window ({now.hour:02d}:{now.minute:02d} ET) – relaying"
+
+          print(f"Previous run: conclusion='{conclusion}' event='{event}'")
+          print(f"Decision: {reason}")
+
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+              f.write(f"should_relay={'true' if should_relay else 'false'}\n")
+
+      - name: Trigger new bot run
+        if: steps.decide.outputs.should_relay == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          gh workflow run bot.yml \
+            --repo "${{ github.repository }}" \
+            --ref main
+          echo "✅ Nouveau run déclenché via relay"
