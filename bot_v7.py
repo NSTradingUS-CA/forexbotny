@@ -578,6 +578,7 @@ def load_existing_open_position():
                         'trade_id': trade.id,
                         'pair': instrument,
                         'units': int(trade.currentUnits),
+                        'initial_units': abs(int(trade.currentUnits)), # Fallback pour position récupérée
                         'entry_price': entry_price,
                         'sl': sl_price,
                         'tp1': (entry_price + _tp1_dist) if direction == 'buy' else (entry_price - _tp1_dist),
@@ -2117,6 +2118,7 @@ def place_trade(instrument, entry_price_signal, sl_signal, tp_signal, direction,
             'trade_id': trade.tradeID,
             'pair': instrument,
             'units': int(trade.units),
+            'initial_units': abs(int(trade.units)), # <-- FIX 1: Sauvegarde de la taille initiale
             'entry_price': float(trade.price),
             'sl': new_sl,
             'tp1': (current_price + _tp1_dist) if direction == 'buy' else (current_price - _tp1_dist),
@@ -2206,7 +2208,13 @@ def check_closed_trade():
         latest = our_trade
         total_pnl_cad = float(latest.realizedPL)
         entry = active_trade['entry_price']
-        units = active_trade['units']
+        
+        # <-- FIX 2: Utiliser initialUnits renvoyé par OANDA pour éviter le 0
+        units = int(getattr(latest, 'initialUnits', 0))
+        if units == 0:
+            # Fallback si initialUnits n'est pas disponible
+            units = abs(active_trade.get('initial_units', active_trade.get('units', 0)))
+            
         direction = active_trade.get('direction', 'buy')
         setup = active_trade.get('setup_type', 'unknown')
         init_risk = active_trade.get('initial_risk', 0.0)
