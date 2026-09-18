@@ -1,5 +1,5 @@
 {
-  "time": "2026-09-18 10:42:40",
+  "time": "2026-09-18 10:47:51",
   "bot_status": "running",
   "session": {
     "trades_today": 1,
@@ -7,29 +7,7 @@
     "start": "07:00",
     "end": "11:00"
   },
-  "active_trade": {
-    "pair": "GBP_USD",
-    "type": "Sell",
-    "entry": 1.33467,
-    "sl": 1.33728,
-    "tp1": 1.3325639999999999,
-    "tp2": 1.3294199999999998,
-    "trailing_stop": "server-side (OANDA)",
-    "current_price": 1.3353,
-    "unrealized_pnl_usd": -114.66,
-    "unrealized_pnl_cad": -160.62,
-    "usd_cad_rate": 1.4008,
-    "distance_to_sl_pips": 19.8,
-    "distance_to_tp2_pips": 58.8,
-    "atr": 0.0010521428571428348,
-    "be_triggered": false,
-    "tp1_hit": false,
-    "setup_type": "Resistance",
-    "risk_percent": 0.5,
-    "opened_at": "2026-09-18T09:01:52.319660-04:00",
-    "units": -182007,
-    "score": 57.5
-  },
+  "active_trade": null,
   "next_news_event": null,
   "strategy": "H1 Multi-Setup (9 types) - Quality Score based",
   "max_risk_per_trade_percent": 0.65,
