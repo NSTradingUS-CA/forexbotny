@@ -1,21 +1,6 @@
 {
   "signals": [
     {
-      "time": "07:00:00",
-      "pair": "GBP_USD",
-      "buy_reason": "H1 not up",
-      "sell_reason": "MACD not bearish",
-      "spread": 0.00017000000000000348,
-      "adx": 21.589576755053496,
-      "plus_di": 15.988569431084493,
-      "minus_di": 16.784026543306,
-      "ema50": 1.3390333585181395,
-      "ema200": 1.3459799081362547,
-      "rsi": 49.07783062501711,
-      "atr": 0.0008385714285714028,
-      "diagnostic": "[Best hypothetical: Breakout SELL score=43.8]"
-    },
-    {
       "time": "07:00:02",
       "pair": "EUR_USD",
       "buy_reason": "Slippage 10.7pips > 2.7",
@@ -846,6 +831,216 @@
       "buy_reason": "H1 not up",
       "sell_reason": "MACD not bearish",
       "spread": 0.00018999999999991246,
+      "adx": 21.589576755053496,
+      "plus_di": 15.988569431084493,
+      "minus_di": 16.784026543306,
+      "ema50": 1.3390333585181395,
+      "ema200": 1.3459799081362547,
+      "rsi": 49.07783062501711,
+      "atr": 0.0008385714285714028,
+      "diagnostic": "[Best hypothetical: Breakout SELL score=43.8]"
+    },
+    {
+      "time": "07:20:39",
+      "pair": "EUR_USD",
+      "buy_reason": "Slippage 15.3pips > 2.7",
+      "sell_reason": "Slippage 15.3pips > 2.7"
+    },
+    {
+      "time": "07:21:09",
+      "pair": "GBP_USD",
+      "buy_reason": "H1 not up",
+      "sell_reason": "MACD not bearish",
+      "spread": 0.000180000000000069,
+      "adx": 21.589576755053496,
+      "plus_di": 15.988569431084493,
+      "minus_di": 16.784026543306,
+      "ema50": 1.3390333585181395,
+      "ema200": 1.3459799081362547,
+      "rsi": 49.07783062501711,
+      "atr": 0.0008385714285714028,
+      "diagnostic": "[Best hypothetical: Breakout SELL score=43.8]"
+    },
+    {
+      "time": "07:21:09",
+      "pair": "EUR_USD",
+      "buy_reason": "Slippage 14.7pips > 2.7",
+      "sell_reason": "Slippage 14.7pips > 2.7"
+    },
+    {
+      "time": "07:21:39",
+      "pair": "GBP_USD",
+      "buy_reason": "H1 not up",
+      "sell_reason": "MACD not bearish",
+      "spread": 0.000180000000000069,
+      "adx": 21.589576755053496,
+      "plus_di": 15.988569431084493,
+      "minus_di": 16.784026543306,
+      "ema50": 1.3390333585181395,
+      "ema200": 1.3459799081362547,
+      "rsi": 49.07783062501711,
+      "atr": 0.0008385714285714028,
+      "diagnostic": "[Best hypothetical: Breakout SELL score=43.8]"
+    },
+    {
+      "time": "07:21:40",
+      "pair": "EUR_USD",
+      "buy_reason": "Slippage 15.0pips > 2.7",
+      "sell_reason": "Slippage 15.0pips > 2.7"
+    },
+    {
+      "time": "07:22:11",
+      "pair": "GBP_USD",
+      "buy_reason": "H1 not up",
+      "sell_reason": "MACD not bearish",
+      "spread": 0.0001900000000001345,
+      "adx": 21.589576755053496,
+      "plus_di": 15.988569431084493,
+      "minus_di": 16.784026543306,
+      "ema50": 1.3390333585181395,
+      "ema200": 1.3459799081362547,
+      "rsi": 49.07783062501711,
+      "atr": 0.0008385714285714028,
+      "diagnostic": "[Best hypothetical: Breakout SELL score=43.8]"
+    },
+    {
+      "time": "07:22:11",
+      "pair": "EUR_USD",
+      "buy_reason": "Slippage 15.3pips > 2.7",
+      "sell_reason": "Slippage 15.3pips > 2.7"
+    },
+    {
+      "time": "07:22:41",
+      "pair": "GBP_USD",
+      "buy_reason": "H1 not up",
+      "sell_reason": "MACD not bearish",
+      "spread": 0.000180000000000069,
+      "adx": 21.589576755053496,
+      "plus_di": 15.988569431084493,
+      "minus_di": 16.784026543306,
+      "ema50": 1.3390333585181395,
+      "ema200": 1.3459799081362547,
+      "rsi": 49.07783062501711,
+      "atr": 0.0008385714285714028,
+      "diagnostic": "[Best hypothetical: Breakout SELL score=43.8]"
+    },
+    {
+      "time": "07:22:43",
+      "pair": "EUR_USD",
+      "buy_reason": "Slippage 15.4pips > 2.7",
+      "sell_reason": "Slippage 15.4pips > 2.7"
+    },
+    {
+      "time": "07:23:13",
+      "pair": "GBP_USD",
+      "buy_reason": "H1 not up",
+      "sell_reason": "MACD not bearish",
+      "spread": 0.000180000000000069,
+      "adx": 21.589576755053496,
+      "plus_di": 15.988569431084493,
+      "minus_di": 16.784026543306,
+      "ema50": 1.3390333585181395,
+      "ema200": 1.3459799081362547,
+      "rsi": 49.07783062501711,
+      "atr": 0.0008385714285714028,
+      "diagnostic": "[Best hypothetical: Breakout SELL score=43.8]"
+    },
+    {
+      "time": "07:23:13",
+      "pair": "EUR_USD",
+      "buy_reason": "Slippage 15.2pips > 2.7",
+      "sell_reason": "Slippage 15.2pips > 2.7"
+    },
+    {
+      "time": "07:23:43",
+      "pair": "GBP_USD",
+      "buy_reason": "H1 not up",
+      "sell_reason": "MACD not bearish",
+      "spread": 0.000180000000000069,
+      "adx": 21.589576755053496,
+      "plus_di": 15.988569431084493,
+      "minus_di": 16.784026543306,
+      "ema50": 1.3390333585181395,
+      "ema200": 1.3459799081362547,
+      "rsi": 49.07783062501711,
+      "atr": 0.0008385714285714028,
+      "diagnostic": "[Best hypothetical: Breakout SELL score=43.8]"
+    },
+    {
+      "time": "07:23:44",
+      "pair": "EUR_USD",
+      "buy_reason": "Slippage 16.4pips > 2.7",
+      "sell_reason": "Slippage 16.4pips > 2.7"
+    },
+    {
+      "time": "07:24:14",
+      "pair": "GBP_USD",
+      "buy_reason": "H1 not up",
+      "sell_reason": "MACD not bearish",
+      "spread": 0.000180000000000069,
+      "adx": 21.589576755053496,
+      "plus_di": 15.988569431084493,
+      "minus_di": 16.784026543306,
+      "ema50": 1.3390333585181395,
+      "ema200": 1.3459799081362547,
+      "rsi": 49.07783062501711,
+      "atr": 0.0008385714285714028,
+      "diagnostic": "[Best hypothetical: Breakout SELL score=43.8]"
+    },
+    {
+      "time": "07:24:14",
+      "pair": "EUR_USD",
+      "buy_reason": "Slippage 16.8pips > 2.7",
+      "sell_reason": "Slippage 16.8pips > 2.7"
+    },
+    {
+      "time": "07:24:44",
+      "pair": "GBP_USD",
+      "buy_reason": "H1 not up",
+      "sell_reason": "MACD not bearish",
+      "spread": 0.00019999999999997797,
+      "adx": 21.589576755053496,
+      "plus_di": 15.988569431084493,
+      "minus_di": 16.784026543306,
+      "ema50": 1.3390333585181395,
+      "ema200": 1.3459799081362547,
+      "rsi": 49.07783062501711,
+      "atr": 0.0008385714285714028,
+      "diagnostic": "[Best hypothetical: Breakout SELL score=43.8]"
+    },
+    {
+      "time": "07:24:45",
+      "pair": "EUR_USD",
+      "buy_reason": "Slippage 16.9pips > 2.7",
+      "sell_reason": "Slippage 16.9pips > 2.7"
+    },
+    {
+      "time": "07:25:15",
+      "pair": "GBP_USD",
+      "buy_reason": "H1 not up",
+      "sell_reason": "MACD not bearish",
+      "spread": 0.00018999999999991246,
+      "adx": 21.589576755053496,
+      "plus_di": 15.988569431084493,
+      "minus_di": 16.784026543306,
+      "ema50": 1.3390333585181395,
+      "ema200": 1.3459799081362547,
+      "rsi": 49.07783062501711,
+      "atr": 0.0008385714285714028,
+      "diagnostic": "[Best hypothetical: Breakout SELL score=43.8]"
+    },
+    {
+      "time": "07:25:16",
+      "pair": "EUR_USD",
+      "buy_reason": "Slippage 17.8pips > 2.7",
+      "sell_reason": "Slippage 17.8pips > 2.7"
+    },
+    {
+      "time": "07:25:46",
+      "pair": "GBP_USD",
+      "buy_reason": "H1 not up",
+      "sell_reason": "MACD not bearish",
+      "spread": 0.000180000000000069,
       "adx": 21.589576755053496,
       "plus_di": 15.988569431084493,
       "minus_di": 16.784026543306,
