@@ -1,31 +1,5 @@
 {
-  "trades": [
-    {
-      "pair": "GBP_USD",
-      "type": "Sell",
-      "setup": "Resistance",
-      "pnl": -321.91,
-      "pnl_usd": -229.8,
-      "time": "10:47:19",
-      "r_multiple": -0.48,
-      "units": 0,
-      "entry": 1.33467,
-      "exit": 1.33592,
-      "score": 57.5
-    },
-    {
-      "pair": "GBP_USD",
-      "type": "Sell",
-      "setup": "recovered",
-      "pnl": -321.91,
-      "pnl_usd": -230.1,
-      "time": "10:47:02",
-      "r_multiple": -0.48,
-      "units": 182007,
-      "entry": 1.33467,
-      "exit": 1.33592,
-      "score": null
-    }
-  ],
-  "last_cleanup": "2026-09-18"
+  "trades": [],
+  "signals": [],
+  "last_cleanup": "2026-09-21"
 }
