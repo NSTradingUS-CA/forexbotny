@@ -1087,6 +1087,7 @@ def manage_active_trade():
     Le bot ne fait plus que :
       1. Rafraîchir l'état local depuis OANDA (SL effectif, unités)
       2. Détecter et exécuter le partial close TP1
+      3. Notifier Telegram à la première atteinte du break-even
     """
     global active_trade
     if active_trade is None:
@@ -1120,6 +1121,19 @@ def manage_active_trade():
         direction = active_trade['direction']
         if new_sl is not None:
             if (direction == 'buy' and new_sl >= entry) or (direction == 'sell' and new_sl <= entry):
+                # Notification Telegram UNIQUEMENT à la première transition
+                if not active_trade.get('be_triggered', False):
+                    be_msg = (
+                        f"🛡️ <b>Break-even atteint</b>\n"
+                        f"Pair: {active_trade['pair']}\n"
+                        f"Type: {'Buy' if direction == 'buy' else 'Sell'}\n"
+                        f"Entry: {entry:.5f}\n"
+                        f"Trailing SL: {new_sl:.5f}\n"
+                        f"Risque sur la position restante : ~0\n"
+                        f"Time: {datetime.now(tz).strftime('%H:%M:%S')}"
+                    )
+                    send_telegram_message(be_msg)
+                    print(f"🛡️ BE reached on {active_trade['pair']} – SL {new_sl:.5f} vs entry {entry:.5f}")
                 active_trade['be_triggered'] = True
     except Exception as e:
         print(f"⚠️ refresh state failed: {e}")
@@ -2118,7 +2132,7 @@ def place_trade(instrument, entry_price_signal, sl_signal, tp_signal, direction,
             'trade_id': trade.tradeID,
             'pair': instrument,
             'units': int(trade.units),
-            'initial_units': abs(int(trade.units)), # <-- FIX 1: Sauvegarde de la taille initiale
+            'initial_units': abs(int(trade.units)), # Sauvegarde de la taille initiale
             'entry_price': float(trade.price),
             'sl': new_sl,
             'tp1': (current_price + _tp1_dist) if direction == 'buy' else (current_price - _tp1_dist),
@@ -2209,7 +2223,7 @@ def check_closed_trade():
         total_pnl_cad = float(latest.realizedPL)
         entry = active_trade['entry_price']
         
-        # <-- FIX 2: Utiliser initialUnits renvoyé par OANDA pour éviter le 0
+        # Utiliser initialUnits renvoyé par OANDA pour éviter le 0
         units = int(getattr(latest, 'initialUnits', 0))
         if units == 0:
             # Fallback si initialUnits n'est pas disponible
