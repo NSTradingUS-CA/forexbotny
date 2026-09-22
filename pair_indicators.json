@@ -1,7 +1,7 @@
 {
   "EUR_USD": {
     "price": 1.14622,
-    "spread": 0.00017000000000000348,
+    "spread": 0.0001500000000000945,
     "adx": 27.979209391667535,
     "plus_di": 11.585811121523705,
     "minus_di": 26.601201545014607,
@@ -11,20 +11,6 @@
     "atr": 0.0011014285714285549,
     "ema_orientation": "bearish",
     "macd_signal": "bullish",
-    "last_signal": null
-  },
-  "GBP_USD": {
-    "price": 1.33608,
-    "spread": 0.000180000000000069,
-    "adx": 28.05967817688658,
-    "plus_di": 13.563445433463336,
-    "minus_di": 38.01648245658579,
-    "ema50": 1.3375661298276187,
-    "ema200": 1.342758961686321,
-    "rsi": 43.217513685436124,
-    "atr": 0.001299285714285725,
-    "ema_orientation": "bearish",
-    "macd_signal": "bearish",
     "last_signal": null
   }
 }
