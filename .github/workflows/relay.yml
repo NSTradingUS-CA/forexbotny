@@ -49,9 +49,13 @@ jobs:
           # (arrêt naturel 12:05 ou 17:05 -> conclusion 'success')
           if conclusion == 'success':
               reason = "Previous run completed normally (success) – no relay needed"
-          # Ne relayer que si le run précédent a été déclenché par un événement planifié
-          # (pas un workflow_dispatch manuel ni un relais précédent)
-          elif event not in ('schedule', 'repository_dispatch'):
+          # Ne relayer que si le run précédent a été déclenché par un événement
+          # planifié. Inclut :
+          #   - 'schedule'             : déclenchement natif GitHub Actions
+          #   - 'repository_dispatch'  : déclenchement externe via API /dispatches
+          #   - 'workflow_dispatch'    : déclenchement externe via API /actions/.../dispatches
+          #                              (cas de notre cron externe et du relay lui-même)
+          elif event not in ('schedule', 'repository_dispatch', 'workflow_dispatch'):
               reason = f"Previous event not scheduled (was '{event}')"
           # Ne relayer que dans la fenêtre temporelle 12:25 → 13:30 ET
           elif not ((now.hour == 12 and now.minute >= 25) or (now.hour == 13 and now.minute <= 30)):
