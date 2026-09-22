@@ -1124,12 +1124,12 @@ def manage_active_trade():
                 # Notification Telegram UNIQUEMENT à la première transition
                 if not active_trade.get('be_triggered', False):
                     be_msg = (
-                        f"🛡️ <b>Break-even atteint</b>\n"
+                        f"🛡️ <b>Break-even reached</b>\n"
                         f"Pair: {active_trade['pair']}\n"
                         f"Type: {'Buy' if direction == 'buy' else 'Sell'}\n"
                         f"Entry: {entry:.5f}\n"
                         f"Trailing SL: {new_sl:.5f}\n"
-                        f"Risque sur la position restante : ~0\n"
+                        f"Risk on remaining position: ~0\n"
                         f"Time: {datetime.now(tz).strftime('%H:%M:%S')}"
                     )
                     send_telegram_message(be_msg)
