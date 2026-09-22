@@ -97,6 +97,27 @@ st.markdown("""
         background-color: #6c757d;
         color: white;
     }
+    .badge-be {
+        display: inline-block;
+        background-color: #17a2b8;
+        color: white;
+        font-weight: bold;
+        font-size: 0.85rem;
+        padding: 0.25rem 0.7rem;
+        border-radius: 12px;
+        margin-left: 0.5rem;
+        box-shadow: 0 0 8px rgba(23, 162, 184, 0.6);
+    }
+    .badge-tp1 {
+        display: inline-block;
+        background-color: #ffc107;
+        color: #0D0D0D;
+        font-weight: bold;
+        font-size: 0.85rem;
+        padding: 0.25rem 0.7rem;
+        border-radius: 12px;
+        margin-left: 0.5rem;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -428,6 +449,18 @@ def render_dashboard():
         tp1_hit = active.get('tp1_hit', False)
         be_str = "✅" if be_triggered else "❌"
         tp1_str = "✅" if tp1_hit else "❌"
+
+        # Bandeau visuel BE / TP1 (nouveaux badges)
+        badges_html = ""
+        if be_triggered:
+            badges_html += '<span class="badge-be">🛡️ BE LOCKED</span>'
+        if tp1_hit:
+            badges_html += '<span class="badge-tp1">🎯 TP1 HIT</span>'
+        if badges_html:
+            st.markdown(
+                f"<div style='margin-bottom: 0.5rem;'>{badges_html}</div>",
+                unsafe_allow_html=True
+            )
         
         st.markdown(
             f"<div class='indicators-line'>"
