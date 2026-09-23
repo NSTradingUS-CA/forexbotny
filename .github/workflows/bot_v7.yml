@@ -30,6 +30,7 @@ jobs:
       FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
       GH_PAT: ${{ secrets.GH_PAT }}
       ALPHA_VANTAGE_API_KEY: ${{ secrets.ALPHA_VANTAGE_API_KEY }}
+      PYTHONUNBUFFERED: "1"    # <-- Force stdout/stderr en mode non-bufferisé (logs en temps réel)
 
     steps:
       - name: Checkout repository
