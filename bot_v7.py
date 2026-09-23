@@ -73,6 +73,8 @@ NEWS_CLOSE_BEFORE_MINUTES = 5
 NEWS_WARNING_MINUTES = 15
 NEWS_CHECK_FUTURE_HOURS = 24
 
+BE_TOLERANCE_PIPS = 0.5
+
 PAIR_CONFIG = {
     "EUR_USD": {"MAX_SPREAD_PIPS": 2.5, "ADX_THRESHOLD": 16, "ATR_MULTIPLIER": 2.0},
     "GBP_USD": {"MAX_SPREAD_PIPS": 3.0, "ADX_THRESHOLD": 13, "ATR_MULTIPLIER": 2.0}
@@ -155,6 +157,59 @@ def _oanda_http_retry(method, url, json_body=None, max_attempts=3):
         if i < max_attempts - 1:
             time.sleep(3 * (i + 1))
     return None
+
+
+def fetch_trade_raw(trade_id):
+    """Récupère le trade via HTTP direct (structure JSON brute). Retourne un dict ou None."""
+    url = f"https://{OANDA_URL}/v3/accounts/{ACCOUNT_ID}/trades/{trade_id}"
+    r = _oanda_http_retry("GET", url)
+    if r is None or r.status_code != 200:
+        return None
+    try:
+        data = r.json()
+        return data.get("trade")
+    except Exception as e:
+        print(f"⚠️ Could not parse trade JSON: {e}")
+        return None
+
+
+def extract_sl_from_trade_json(trade_json):
+    """
+    Extrait le SL effectif depuis le JSON brut d'un trade OANDA.
+    Priorité :
+      1. trailingStopLossOrder.trailingStopValue  (niveau COURANT du trailing)
+      2. trailingStopLossOrder.price              (fallback, peut être stale)
+      3. stopLossOrder.price                      (SL fixe)
+    Retourne (sl_price, source) ou (None, None).
+    """
+    if not trade_json:
+        return None, None
+
+    trailing = trade_json.get("trailingStopLossOrder")
+    if trailing:
+        tsv = trailing.get("trailingStopValue")
+        if tsv is not None:
+            try:
+                return float(tsv), "trailing_stop_value"
+            except (ValueError, TypeError):
+                pass
+        p = trailing.get("price")
+        if p is not None:
+            try:
+                return float(p), "trailing_price"
+            except (ValueError, TypeError):
+                pass
+
+    sl = trade_json.get("stopLossOrder")
+    if sl:
+        p = sl.get("price")
+        if p is not None:
+            try:
+                return float(p), "fixed_sl"
+            except (ValueError, TypeError):
+                pass
+
+    return None, None
 
 
 # ---------- Fichiers JSON ----------
@@ -558,27 +613,23 @@ def load_existing_open_position():
                 if open_trades:
                     trade = open_trades[0]
                     entry_price = float(trade.price)
-                    # SL effectif : trailing en priorité, sinon fixe
-                    sl_price = None
-                    if getattr(trade, 'trailingStopLossOrder', None) and trade.trailingStopLossOrder:
-                        try:
-                            sl_price = float(trade.trailingStopLossOrder.price)
-                        except Exception:
-                            sl_price = None
-                    if sl_price is None and getattr(trade, 'stopLossOrder', None) and trade.stopLossOrder:
-                        try:
-                            sl_price = float(trade.stopLossOrder.price)
-                        except Exception:
-                            sl_price = None
+
+                    # Récupération du SL via JSON brut (fiable pour trailing)
+                    trade_id = trade.id
+                    trade_json = fetch_trade_raw(trade_id)
+                    sl_price, sl_source = extract_sl_from_trade_json(trade_json)
+                    if sl_price is not None:
+                        print(f"🔍 SL loaded ({sl_source}): {sl_price:.5f}")
+
                     tp_price = float(trade.takeProfitOrder.price) if trade.takeProfitOrder else None
                     direction = 'buy' if int(trade.currentUnits) > 0 else 'sell'
                     initial_risk = abs(entry_price - sl_price) if sl_price is not None else saved_flags.get("initial_risk", 0.0)
                     _tp1_dist = initial_risk * TP1_R_MULT
                     active_trade = {
-                        'trade_id': trade.id,
+                        'trade_id': trade_id,
                         'pair': instrument,
                         'units': int(trade.currentUnits),
-                        'initial_units': abs(int(trade.currentUnits)), # Fallback pour position récupérée
+                        'initial_units': abs(int(trade.currentUnits)),
                         'entry_price': entry_price,
                         'sl': sl_price,
                         'tp1': (entry_price + _tp1_dist) if direction == 'buy' else (entry_price - _tp1_dist),
@@ -940,20 +991,14 @@ def get_account_balance(response):
 
 # ============ FIX PARTIAL CLOSE : HTTP direct avec fallback ============
 def close_partial_position(units_to_close, expected_remaining=None):
-    """
-    Ferme une partie de la position courante via HTTP direct (bypass v20 Python wrapper bugué).
-    Tente d'abord longUnits/shortUnits, puis fallback units si OANDA refuse.
-    """
     pair = active_trade['pair']
     direction = active_trade['direction']
     url = f"https://{OANDA_URL}/v3/accounts/{ACCOUNT_ID}/positions/{pair}/close"
     units_abs = str(abs(int(units_to_close)))
 
-    # Tentative 1 : longUnits/shortUnits
     field = "longUnits" if direction == 'buy' else "shortUnits"
     r = _oanda_http_retry("PUT", url, json_body={field: units_abs})
 
-    # Fallback : units générique
     if r is None or r.status_code != 200:
         if r is not None:
             print(f"⚠️ {field} refusé (status={r.status_code}): {r.text[:150]}")
@@ -1080,61 +1125,63 @@ def move_sl_to_entry():
         return False
 
 
-# ============ MANAGE ACTIVE TRADE : trailing server-side + TP1 ============
+# ============ MANAGE ACTIVE TRADE : trailing server-side + TP1 + BE ============
 def manage_active_trade():
     """
     Le trailing stop loss est géré nativement par OANDA (server-side).
-    Le bot ne fait plus que :
-      1. Rafraîchir l'état local depuis OANDA (SL effectif, unités)
-      2. Détecter et exécuter le partial close TP1
-      3. Notifier Telegram à la première atteinte du break-even
+    Le bot :
+      1. Rafraîchit l'état local depuis OANDA (SL effectif via JSON brut, unités)
+      2. Notifie Telegram à la première atteinte du break-even
+      3. Détecte et exécute le partial close TP1
     """
     global active_trade
     if active_trade is None:
         return
 
-    # 1. Rafraîchir l'état local depuis OANDA
+    # 1. Rafraîchir l'état local depuis OANDA (via JSON brut, fiable pour trailing)
     try:
-        r = retry_api_call(ctx.trade.get, ACCOUNT_ID, active_trade['trade_id'])
-        trade = r.body['trade']
-        # SL effectif : trailing en priorité, sinon fixe
-        new_sl = None
-        if getattr(trade, 'trailingStopLossOrder', None) and trade.trailingStopLossOrder:
-            try:
-                new_sl = float(trade.trailingStopLossOrder.price)
-            except Exception:
-                new_sl = None
-        if new_sl is None and getattr(trade, 'stopLossOrder', None) and trade.stopLossOrder:
-            try:
-                new_sl = float(trade.stopLossOrder.price)
-            except Exception:
-                new_sl = None
-        if new_sl is not None:
-            active_trade['sl'] = new_sl
-        # Units réelles
-        try:
-            active_trade['units'] = int(trade.currentUnits)
-        except Exception:
-            pass
-        # BE = trailing SL a dépassé l'entrée
-        entry = active_trade['entry_price']
-        direction = active_trade['direction']
-        if new_sl is not None:
-            if (direction == 'buy' and new_sl >= entry) or (direction == 'sell' and new_sl <= entry):
-                # Notification Telegram UNIQUEMENT à la première transition
-                if not active_trade.get('be_triggered', False):
-                    be_msg = (
-                        f"🛡️ <b>Break-even reached</b>\n"
-                        f"Pair: {active_trade['pair']}\n"
-                        f"Type: {'Buy' if direction == 'buy' else 'Sell'}\n"
-                        f"Entry: {entry:.5f}\n"
-                        f"Trailing SL: {new_sl:.5f}\n"
-                        f"Risk on remaining position: ~0\n"
-                        f"Time: {datetime.now(tz).strftime('%H:%M:%S')}"
-                    )
-                    send_telegram_message(be_msg)
-                    print(f"🛡️ BE reached on {active_trade['pair']} – SL {new_sl:.5f} vs entry {entry:.5f}")
-                active_trade['be_triggered'] = True
+        trade_json = fetch_trade_raw(active_trade['trade_id'])
+        if trade_json:
+            new_sl, sl_source = extract_sl_from_trade_json(trade_json)
+            if new_sl is not None:
+                active_trade['sl'] = new_sl
+                print(f"🔍 SL ({sl_source}): {new_sl:.5f}")
+
+            # Units réelles
+            cu = trade_json.get("currentUnits")
+            if cu is not None:
+                try:
+                    active_trade['units'] = int(cu)
+                except (ValueError, TypeError):
+                    pass
+
+            # BE = trailing SL a atteint l'entrée (avec tolérance)
+            entry = active_trade['entry_price']
+            direction = active_trade['direction']
+            tolerance = BE_TOLERANCE_PIPS * 0.0001
+            if new_sl is not None:
+                if direction == 'buy':
+                    be_reached = new_sl >= (entry - tolerance)
+                else:
+                    be_reached = new_sl <= (entry + tolerance)
+
+                if be_reached:
+                    if not active_trade.get('be_triggered', False):
+                        be_msg = (
+                            f"🛡️ <b>Break-even reached</b>\n"
+                            f"Pair: {active_trade['pair']}\n"
+                            f"Type: {'Buy' if direction == 'buy' else 'Sell'}\n"
+                            f"Entry: {entry:.5f}\n"
+                            f"Trailing SL: {new_sl:.5f}\n"
+                            f"Risk on remaining position: ~0\n"
+                            f"Time: {datetime.now(tz).strftime('%H:%M:%S')}"
+                        )
+                        send_telegram_message(be_msg)
+                        print(f"🛡️ BE reached on {active_trade['pair']} – SL {new_sl:.5f} vs entry {entry:.5f}")
+                        active_trade['be_triggered'] = True
+                        save_status_json(force=True)
+        else:
+            print("⚠️ fetch_trade_raw returned None – keeping previous SL value")
     except Exception as e:
         print(f"⚠️ refresh state failed: {e}")
 
@@ -1163,6 +1210,7 @@ def manage_active_trade():
                 active_trade['tp1'] = None
                 print(f"TP1 hit on {pair}, {partial_units} units closed, {remaining} remaining")
                 send_telegram_message(f"🎯 TP1 reached on {pair}: {partial_units} units closed, {remaining} runner kept.")
+                save_status_json(force=True)
 
 
 def compute_quality_score(signal, c, df, instrument, config, atr):
@@ -1827,7 +1875,6 @@ def main():
                                 )
                         if minutes_until <= NEWS_CLOSE_BEFORE_MINUTES:
                             if active_trade['pair'] in blocked_pairs:
-                                # P&L courant
                                 try:
                                     resp = ctx.pricing.get(ACCOUNT_ID, instruments=active_trade['pair'])
                                     pi = resp.body['prices'][0]
@@ -1845,7 +1892,6 @@ def main():
                                 news_time = news_event['time'].strftime('%H:%M')
 
                                 if pnl > 0:
-                                    # === PROFIT : fermer 50 %, garder le runner avec trailing OANDA ===
                                     units_abs = abs(int(active_trade['units']))
                                     partial_units = max(1000, int(units_abs * 0.5))
                                     remaining = units_abs - partial_units
@@ -1866,7 +1912,6 @@ def main():
                                             f"⚠️ 50 % reduction failed before news on {pair}. Please monitor."
                                         )
                                 else:
-                                    # === PERTE ou BE : fermer 100 % ===
                                     if close_full_position_market():
                                         usd_cad = get_usd_cad_rate()
                                         pnl_cad = pnl * usd_cad
@@ -2089,10 +2134,9 @@ def place_trade(instrument, entry_price_signal, sl_signal, tp_signal, direction,
         print(msg)
         return False
 
-    # Distance du trailing server-side : ATR * TRAILING_ATR_MULT
     trailing_distance = atr_val * TRAILING_ATR_MULT
     if trailing_distance < 0.0005:
-        trailing_distance = 0.0005  # plancher de sécurité : 5 pips mini
+        trailing_distance = 0.0005
 
     signed_units = -abs(new_units) if direction == 'sell' else abs(new_units)
     order = {
@@ -2132,7 +2176,7 @@ def place_trade(instrument, entry_price_signal, sl_signal, tp_signal, direction,
             'trade_id': trade.tradeID,
             'pair': instrument,
             'units': int(trade.units),
-            'initial_units': abs(int(trade.units)), # Sauvegarde de la taille initiale
+            'initial_units': abs(int(trade.units)),
             'entry_price': float(trade.price),
             'sl': new_sl,
             'tp1': (current_price + _tp1_dist) if direction == 'buy' else (current_price - _tp1_dist),
@@ -2222,13 +2266,11 @@ def check_closed_trade():
         latest = our_trade
         total_pnl_cad = float(latest.realizedPL)
         entry = active_trade['entry_price']
-        
-        # Utiliser initialUnits renvoyé par OANDA pour éviter le 0
+
         units = int(getattr(latest, 'initialUnits', 0))
         if units == 0:
-            # Fallback si initialUnits n'est pas disponible
             units = abs(active_trade.get('initial_units', active_trade.get('units', 0)))
-            
+
         direction = active_trade.get('direction', 'buy')
         setup = active_trade.get('setup_type', 'unknown')
         init_risk = active_trade.get('initial_risk', 0.0)
