@@ -1,20 +1,5 @@
 {
-  "signals": [
-    {
-      "time": "07:00:19",
-      "pair": "GBP_USD",
-      "buy_reason": "H1 not up, MACD not bullish",
-      "sell_reason": "No SELL setup triggered",
-      "spread": 0.00018999999999991246,
-      "adx": 24.319301710982018,
-      "plus_di": 14.652865930807515,
-      "minus_di": 38.10528205620921,
-      "ema50": 1.3376735951350618,
-      "ema200": 1.3428838857561205,
-      "rsi": 48.65978653648431,
-      "atr": 0.0012314285714285817,
-      "diagnostic": "[Best hypothetical: Pullback SELL score=69.8]"
-    }
-  ],
-  "last_cleanup": "2026-09-22"
+  "trades": [],
+  "signals": [],
+  "last_cleanup": "2026-09-23"
 }
