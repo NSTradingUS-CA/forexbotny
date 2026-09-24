@@ -1,21 +1,6 @@
 {
   "signals": [
     {
-      "time": "07:45:25",
-      "pair": "GBP_USD",
-      "buy_reason": "H1 not up",
-      "sell_reason": "MACD not bearish",
-      "spread": 0.0001900000000001345,
-      "adx": 54.086973465263114,
-      "plus_di": 8.956070482560865,
-      "minus_di": 21.276263043251102,
-      "ema50": 1.3283039936566274,
-      "ema200": 1.337402504704332,
-      "rsi": 35.08846449713678,
-      "atr": 0.0013150000000000345,
-      "diagnostic": "[Best hypothetical: Engulfing SELL score=66.8]"
-    },
-    {
       "time": "07:45:55",
       "pair": "EUR_USD",
       "buy_reason": "H1 not up",
@@ -1094,6 +1079,12 @@
       "pair": "EUR_USD",
       "buy_reason": "Slippage 5.6pips > 4.5",
       "sell_reason": "Slippage 5.6pips > 4.5"
+    },
+    {
+      "time": "08:23:20",
+      "pair": "EUR_USD",
+      "buy_reason": "Slippage 4.9pips > 4.5",
+      "sell_reason": "Slippage 4.9pips > 4.5"
     }
   ],
   "last_cleanup": "2026-09-24"
