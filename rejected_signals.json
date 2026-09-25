@@ -2,21 +2,6 @@
   "signals": [
     {
       "time": "09:35:04",
-      "pair": "EUR_USD",
-      "buy_reason": "H1 not up",
-      "sell_reason": "H1 not down, MACD not bearish",
-      "spread": 0.00015999999999993797,
-      "adx": 29.717928311869557,
-      "plus_di": 37.77051823763584,
-      "minus_di": 10.70177421694437,
-      "ema50": 1.1391082000697992,
-      "ema200": 1.145519260023831,
-      "rsi": 67.29166696605037,
-      "atr": 0.0007771428571428572,
-      "diagnostic": null
-    },
-    {
-      "time": "09:35:04",
       "pair": "GBP_USD",
       "buy_reason": "H1 not up",
       "sell_reason": "H1 not down, MACD not bearish",
@@ -1499,6 +1484,22 @@
       "rsi": 66.16679561684427,
       "atr": 0.00081785714285714,
       "diagnostic": null
+    },
+    {
+      "time": "10:07:12",
+      "pair": "EUR_USD",
+      "buy_reason": "H1 not up",
+      "sell_reason": "H1 not down, MACD not bearish",
+      "spread": 0.00017000000000000348,
+      "adx": 32.330510109961736,
+      "plus_di": 33.74663373136851,
+      "minus_di": 9.561660036085003,
+      "ema50": 1.1391486622805302,
+      "ema200": 1.1454616717226695,
+      "rsi": 66.16679561684427,
+      "atr": 0.00081785714285714,
+      "diagnostic": null,
+      "ct_diagnostic": "No trend to counter"
     }
   ],
   "last_cleanup": "2026-09-25"
