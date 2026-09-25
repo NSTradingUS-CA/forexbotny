@@ -75,6 +75,16 @@ NEWS_CHECK_FUTURE_HOURS = 24
 
 BE_TOLERANCE_PIPS = 0.5
 
+# ========== COUNTER-TREND ==========
+ALLOW_COUNTER_TREND = True
+RISK_COUNTER_TREND = 0.25
+CT_ATR_SL_MULT = 1.2
+CT_RR_TARGET = 1.5
+CT_MIN_ADX = 20
+CT_RSI_OVERSOLD = 32
+CT_RSI_OVERBOUGHT = 68
+CT_MIN_CONFIRMATIONS = 4
+
 PAIR_CONFIG = {
     "EUR_USD": {"MAX_SPREAD_PIPS": 2.5, "ADX_THRESHOLD": 16, "ATR_MULTIPLIER": 2.0},
     "GBP_USD": {"MAX_SPREAD_PIPS": 3.0, "ADX_THRESHOLD": 13, "ATR_MULTIPLIER": 2.0}
@@ -90,6 +100,7 @@ SETUP_RR = {
     "orb":           2.5,
     "breakout":      2.5,
     "trendbreakout": 3.0,
+    "ct reversal":   1.5,
 }
 
 GITHUB_PUSH_MIN_INTERVAL = 300
@@ -931,6 +942,23 @@ def setup_stop_and_target(df, direction, entry, pair_config, setup_type):
 
     rr = SETUP_RR.get(setup_type.lower(), 2.0)
 
+    # Contre-tendance : SL serré, TP court
+    if setup_type.lower() in ('ct reversal', 'ct_reversal'):
+        if direction == 'buy':
+            structure_sl = float(swing['l'].min())
+            raw_sl = min(structure_sl, entry - CT_ATR_SL_MULT * atr)
+            risk = entry - raw_sl
+            tp = entry + rr * risk
+        else:
+            structure_sl = float(swing['h'].max())
+            raw_sl = max(structure_sl, entry + CT_ATR_SL_MULT * atr)
+            risk = raw_sl - entry
+            tp = entry - rr * risk
+        sl_pips = risk / 0.0001
+        if sl_pips < MIN_SL_PIPS or sl_pips > MAX_SL_PIPS:
+            return None
+        return raw_sl, tp, sl_pips, atr
+
     if direction == 'buy':
         structure_sl = float(swing['l'].min())
         raw_sl = min(structure_sl, entry - pair_config['ATR_MULTIPLIER'] * atr)
@@ -1536,6 +1564,108 @@ def check_signal(df, instrument):
         return False, 0, 0, 0, 0, None, None, 0, reason
 
 
+def check_counter_trend_signal(df, instrument):
+    """
+    Cherche un retournement HAUTEMENT confirmé contre la tendance H1.
+    Ne se déclenche que si au moins CT_MIN_CONFIRMATIONS des 5 filtres sont réunis.
+    """
+    if not ALLOW_COUNTER_TREND:
+        return False, 0, 0, 0, 0, None, None, 0, "Counter-trend disabled"
+
+    if len(df) < 220:
+        return False, 0, 0, 0, 0, None, None, 0, "Not enough candles"
+
+    c = df.iloc[-2]
+    prev = df.iloc[-3]
+
+    atr = float(c['atr'])
+    if any(pd.isna(c[x]) for x in ['atr','ema50','ema200','rsi','adx','macd_line','macd_signal','macd_hist']):
+        return False, 0, 0, 0, 0, None, None, 0, "Missing indicators"
+
+    h1_up = c['ema50'] > c['ema200'] and c['c'] > c['ema50']
+    h1_down = c['ema50'] < c['ema200'] and c['c'] < c['ema50']
+
+    if not (h1_up or h1_down):
+        return False, 0, 0, 0, 0, None, None, 0, "No trend to counter"
+
+    if c['adx'] < CT_MIN_ADX:
+        return False, 0, 0, 0, 0, None, None, 0, f"ADX too low ({c['adx']:.1f})"
+
+    adx_vals = df['adx'].iloc[-5:-1].values
+    adx_declining = bool(adx_vals[-1] < adx_vals[-2] or adx_vals[-2] < adx_vals[-3])
+
+    hist_now = c['macd_hist']
+    hist_prev = prev['macd_hist']
+
+    # === COUNTER-TREND BUY (tendance baissière, on cherche le rebond) ===
+    if h1_down:
+        conditions = []
+
+        rsi_extreme = c['rsi'] < CT_RSI_OVERSOLD
+        rsi_recovering = c['rsi'] > prev['rsi'] and prev['rsi'] < 40
+        conditions.append(("RSI", rsi_extreme or rsi_recovering))
+
+        lower_wick = min(c['o'], c['c']) - c['l']
+        body = abs(c['c'] - c['o']) or 1e-9
+        pin = lower_wick > body * 1.8 and c['c'] > c['o']
+        engulf = c['o'] < prev['l'] and c['c'] > prev['h'] and c['c'] > c['o']
+        strong = (not pd.isna(c['body_ratio'])) and c['body_ratio'] >= 0.5 and c['c'] > c['o']
+        conditions.append(("Rejection", pin or engulf or strong))
+
+        conditions.append(("MACD", hist_now > hist_prev))
+        conditions.append(("ADX exh", adx_declining))
+
+        recent_low = float(df['l'].tail(12).min())
+        conditions.append(("Support", c['l'] <= recent_low * 1.002))
+
+        confirmed = sum(1 for _, ok in conditions if ok)
+        if confirmed >= CT_MIN_CONFIRMATIONS:
+            swing_low = min(float(c['l']), float(prev['l']))
+            raw_sl = swing_low - CT_ATR_SL_MULT * atr
+            risk = c['c'] - raw_sl
+            sl_pips = risk / 0.0001
+            if MIN_SL_PIPS <= sl_pips <= MAX_SL_PIPS:
+                tp = c['c'] + CT_RR_TARGET * risk
+                label = ", ".join(n for n, ok in conditions if ok)
+                return (True, c['c'], raw_sl, tp, sl_pips, 'buy', 'CT Reversal',
+                        RISK_COUNTER_TREND, f"CT BUY {confirmed}/5 [{label}]")
+
+    # === COUNTER-TREND SELL (tendance haussière, on cherche la correction) ===
+    if h1_up:
+        conditions = []
+
+        rsi_extreme = c['rsi'] > CT_RSI_OVERBOUGHT
+        rsi_declining = c['rsi'] < prev['rsi'] and prev['rsi'] > 60
+        conditions.append(("RSI", rsi_extreme or rsi_declining))
+
+        upper_wick = c['h'] - max(c['o'], c['c'])
+        body = abs(c['c'] - c['o']) or 1e-9
+        pin = upper_wick > body * 1.8 and c['c'] < c['o']
+        engulf = c['o'] > prev['h'] and c['c'] < prev['l'] and c['c'] < c['o']
+        strong = (not pd.isna(c['body_ratio'])) and c['body_ratio'] >= 0.5 and c['c'] < c['o']
+        conditions.append(("Rejection", pin or engulf or strong))
+
+        conditions.append(("MACD", hist_now < hist_prev))
+        conditions.append(("ADX exh", adx_declining))
+
+        recent_high = float(df['h'].tail(12).max())
+        conditions.append(("Resistance", c['h'] >= recent_high * 0.998))
+
+        confirmed = sum(1 for _, ok in conditions if ok)
+        if confirmed >= CT_MIN_CONFIRMATIONS:
+            swing_high = max(float(c['h']), float(prev['h']))
+            raw_sl = swing_high + CT_ATR_SL_MULT * atr
+            risk = raw_sl - c['c']
+            sl_pips = risk / 0.0001
+            if MIN_SL_PIPS <= sl_pips <= MAX_SL_PIPS:
+                tp = c['c'] - CT_RR_TARGET * risk
+                label = ", ".join(n for n, ok in conditions if ok)
+                return (True, c['c'], raw_sl, tp, sl_pips, 'sell', 'CT Reversal',
+                        RISK_COUNTER_TREND, f"CT SELL {confirmed}/5 [{label}]")
+
+    return False, 0, 0, 0, 0, None, None, 0, "CT: no confirmed setup"
+
+
 def check_future_news_and_alert():
     now = datetime.now(tz)
     events = get_high_impact_news()
@@ -1994,6 +2124,11 @@ def main():
                             print(f"Candles failed {pair}: {e}")
                             continue
                         signal, price, sl, tp, sl_pips, direction, setup_type, risk_pct, reason = check_signal(df, pair)
+                        if not signal:
+                            ct_sig = check_counter_trend_signal(df, pair)
+                            if ct_sig[0]:
+                                signal, price, sl, tp, sl_pips, direction, setup_type, risk_pct, reason = ct_sig
+                                print(f" -> COUNTER-TREND signal on {pair}: {reason}")
                         if signal:
                             candidates.append((pair, price, sl, tp, sl_pips, direction, setup_type, risk_pct, reason, df))
                         else:
