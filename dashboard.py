@@ -97,6 +97,11 @@ st.markdown("""
         background-color: #6c757d;
         color: white;
     }
+    .ct-diagnostic {
+        color: #17a2b8;
+        font-size: 0.9rem;
+        font-style: italic;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -467,10 +472,16 @@ def render_dashboard():
                 time_pair = f"{r.get('time','')} {r.get('pair','')}"
                 buy_reason = r.get('buy_reason', '')
                 sell_reason = r.get('sell_reason', '')
+                ct_diag = r.get('ct_diagnostic', '')
                 st.markdown(
                     f"**{time_pair}** – 🔵 **BUY:** {buy_reason}    |    🔴 **SELL:** {sell_reason}",
                     unsafe_allow_html=True
                 )
+                if ct_diag:
+                    st.markdown(
+                        f"<div class='ct-diagnostic'>🔄 CT scan: {ct_diag}</div>",
+                        unsafe_allow_html=True
+                    )
                 st.markdown("---")
         else:
             st.write("No rejected setups.")
