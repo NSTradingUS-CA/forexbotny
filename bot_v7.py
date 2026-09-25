@@ -1629,6 +1629,9 @@ def check_counter_trend_signal(df, instrument):
                 label = ", ".join(n for n, ok in conditions if ok)
                 return (True, c['c'], raw_sl, tp, sl_pips, 'buy', 'CT Reversal',
                         RISK_COUNTER_TREND, f"CT BUY {confirmed}/5 [{label}]")
+        else:
+            label = ", ".join(n for n, ok in conditions if ok) if confirmed > 0 else "none"
+            return False, 0, 0, 0, 0, None, None, 0, f"CT BUY {confirmed}/5 [{label}]"
 
     # === COUNTER-TREND SELL (tendance haussière, on cherche la correction) ===
     if h1_up:
@@ -1662,6 +1665,9 @@ def check_counter_trend_signal(df, instrument):
                 label = ", ".join(n for n, ok in conditions if ok)
                 return (True, c['c'], raw_sl, tp, sl_pips, 'sell', 'CT Reversal',
                         RISK_COUNTER_TREND, f"CT SELL {confirmed}/5 [{label}]")
+        else:
+            label = ", ".join(n for n, ok in conditions if ok) if confirmed > 0 else "none"
+            return False, 0, 0, 0, 0, None, None, 0, f"CT SELL {confirmed}/5 [{label}]"
 
     return False, 0, 0, 0, 0, None, None, 0, "CT: no confirmed setup"
 
@@ -2124,11 +2130,15 @@ def main():
                             print(f"Candles failed {pair}: {e}")
                             continue
                         signal, price, sl, tp, sl_pips, direction, setup_type, risk_pct, reason = check_signal(df, pair)
+                        ct_reason = ""
                         if not signal:
                             ct_sig = check_counter_trend_signal(df, pair)
                             if ct_sig[0]:
                                 signal, price, sl, tp, sl_pips, direction, setup_type, risk_pct, reason = ct_sig
                                 print(f" -> COUNTER-TREND signal on {pair}: {reason}")
+                            else:
+                                ct_reason = ct_sig[8]
+                                print(f" -> CT scan {pair}: rejected ({ct_reason})")
                         if signal:
                             candidates.append((pair, price, sl, tp, sl_pips, direction, setup_type, risk_pct, reason, df))
                         else:
@@ -2162,7 +2172,8 @@ def main():
                                 "ema200": c['ema200'] if not pd.isna(c['ema200']) else None,
                                 "rsi": c['rsi'] if not pd.isna(c['rsi']) else None,
                                 "atr": c['atr'] if not pd.isna(c['atr']) else None,
-                                "diagnostic": diagnostic if diagnostic else None
+                                "diagnostic": diagnostic if diagnostic else None,
+                                "ct_diagnostic": ct_reason if ct_reason else None
                             })
                             save_rejected_to_file()
                             print(f" -> REJECTED {pair}: {reason[:160]}...")
