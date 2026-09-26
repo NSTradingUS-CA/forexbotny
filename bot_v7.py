@@ -1831,7 +1831,7 @@ def main():
 
     start_msg = (
         f"🟢 Forex Sniper 7-12 Multi-Setup started – max {MAX_TRADES_PER_DAY} trades/day, "
-        f"buffer {MIN_MINUTES_BETWEEN_TRADES}min, 9 setups. Quality Score selection. "
+        f"buffer {MIN_MINUTES_BETWEEN_TRADES}min, 10 setups. Quality Score selection. "
         f"({trades_today} already taken) – Trailing SL SERVER-SIDE (OANDA) + partial TP1."
     )
 
