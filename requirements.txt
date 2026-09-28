@@ -1,5 +1,5 @@
 v20==3.0.25.0
-pandas==2.2.3
+pandas==3.0.6
 numpy==1.26.4
 python-dotenv==1.0.1
 requests==2.32.3
