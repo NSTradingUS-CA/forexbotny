@@ -1,5 +1,20 @@
 {
-  "trades": [],
-  "signals": [],
+  "signals": [
+    {
+      "time": "07:13:35",
+      "pair": "EUR_USD",
+      "buy_reason": "H1 not up, MACD not bullish",
+      "sell_reason": "No SELL setup triggered",
+      "spread": 0.00016000000000016001,
+      "adx": 18.485085446864236,
+      "plus_di": 17.067826424889155,
+      "minus_di": 25.605184205387776,
+      "ema50": 1.138838822421459,
+      "ema200": 1.1441854590598168,
+      "rsi": 40.340266675367644,
+      "atr": 0.0007950000000000536,
+      "diagnostic": "[Best hypothetical: Pullback SELL score=51.2]"
+    }
+  ],
   "last_cleanup": "2026-09-28"
 }
