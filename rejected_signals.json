@@ -1,132 +1,6 @@
 {
   "signals": [
     {
-      "time": "07:31:42",
-      "pair": "GBP_USD",
-      "buy_reason": "Slippage 17.6pips > 3.7",
-      "sell_reason": "Slippage 17.6pips > 3.7"
-    },
-    {
-      "time": "07:32:12",
-      "pair": "EUR_USD",
-      "buy_reason": "H1 not up, RSI 23.8 outside 30-70, MACD not bullish",
-      "sell_reason": "RSI 23.8 outside 30-70",
-      "spread": 0.00015999999999993797,
-      "adx": 23.910541023833176,
-      "plus_di": 11.100202030807651,
-      "minus_di": 37.32271811029799,
-      "ema50": 1.1372412108322392,
-      "ema200": 1.142453402091088,
-      "rsi": 23.765255190129977,
-      "atr": 0.0007892857142857304,
-      "diagnostic": "[Best hypothetical: Engulfing SELL score=64.3]"
-    },
-    {
-      "time": "07:32:12",
-      "pair": "GBP_USD",
-      "buy_reason": "Slippage 18.4pips > 3.7",
-      "sell_reason": "Slippage 18.4pips > 3.7"
-    },
-    {
-      "time": "07:32:42",
-      "pair": "EUR_USD",
-      "buy_reason": "H1 not up, RSI 23.8 outside 30-70, MACD not bullish",
-      "sell_reason": "RSI 23.8 outside 30-70",
-      "spread": 0.0001500000000000945,
-      "adx": 23.910541023833176,
-      "plus_di": 11.100202030807651,
-      "minus_di": 37.32271811029799,
-      "ema50": 1.1372412108322392,
-      "ema200": 1.142453402091088,
-      "rsi": 23.765255190129977,
-      "atr": 0.0007892857142857304,
-      "diagnostic": "[Best hypothetical: Engulfing SELL score=64.3]"
-    },
-    {
-      "time": "07:32:43",
-      "pair": "GBP_USD",
-      "buy_reason": "Slippage 19.1pips > 3.7",
-      "sell_reason": "Slippage 19.1pips > 3.7"
-    },
-    {
-      "time": "07:33:14",
-      "pair": "EUR_USD",
-      "buy_reason": "H1 not up, RSI 23.8 outside 30-70, MACD not bullish",
-      "sell_reason": "RSI 23.8 outside 30-70",
-      "spread": 0.00014999999999987246,
-      "adx": 23.910541023833176,
-      "plus_di": 11.100202030807651,
-      "minus_di": 37.32271811029799,
-      "ema50": 1.1372412108322392,
-      "ema200": 1.142453402091088,
-      "rsi": 23.765255190129977,
-      "atr": 0.0007892857142857304,
-      "diagnostic": "[Best hypothetical: Engulfing SELL score=64.3]"
-    },
-    {
-      "time": "07:33:15",
-      "pair": "GBP_USD",
-      "buy_reason": "Slippage 19.0pips > 3.7",
-      "sell_reason": "Slippage 19.0pips > 3.7"
-    },
-    {
-      "time": "07:33:45",
-      "pair": "EUR_USD",
-      "buy_reason": "H1 not up, RSI 23.8 outside 30-70, MACD not bullish",
-      "sell_reason": "RSI 23.8 outside 30-70",
-      "spread": 0.00017000000000000348,
-      "adx": 23.910541023833176,
-      "plus_di": 11.100202030807651,
-      "minus_di": 37.32271811029799,
-      "ema50": 1.1372412108322392,
-      "ema200": 1.142453402091088,
-      "rsi": 23.765255190129977,
-      "atr": 0.0007892857142857304,
-      "diagnostic": "[Best hypothetical: Engulfing SELL score=64.3]"
-    },
-    {
-      "time": "07:33:47",
-      "pair": "GBP_USD",
-      "buy_reason": "Slippage 18.0pips > 3.7",
-      "sell_reason": "Slippage 18.0pips > 3.7"
-    },
-    {
-      "time": "07:34:17",
-      "pair": "EUR_USD",
-      "buy_reason": "H1 not up, RSI 23.8 outside 30-70, MACD not bullish",
-      "sell_reason": "RSI 23.8 outside 30-70",
-      "spread": 0.00015999999999993797,
-      "adx": 23.910541023833176,
-      "plus_di": 11.100202030807651,
-      "minus_di": 37.32271811029799,
-      "ema50": 1.1372412108322392,
-      "ema200": 1.142453402091088,
-      "rsi": 23.765255190129977,
-      "atr": 0.0007892857142857304,
-      "diagnostic": "[Best hypothetical: Engulfing SELL score=64.3]"
-    },
-    {
-      "time": "07:34:17",
-      "pair": "GBP_USD",
-      "buy_reason": "Slippage 17.0pips > 3.7",
-      "sell_reason": "Slippage 17.0pips > 3.7"
-    },
-    {
-      "time": "07:34:47",
-      "pair": "EUR_USD",
-      "buy_reason": "H1 not up, RSI 23.8 outside 30-70, MACD not bullish",
-      "sell_reason": "RSI 23.8 outside 30-70",
-      "spread": 0.00015999999999993797,
-      "adx": 23.910541023833176,
-      "plus_di": 11.100202030807651,
-      "minus_di": 37.32271811029799,
-      "ema50": 1.1372412108322392,
-      "ema200": 1.142453402091088,
-      "rsi": 23.765255190129977,
-      "atr": 0.0007892857142857304,
-      "diagnostic": "[Best hypothetical: Engulfing SELL score=64.3]"
-    },
-    {
       "time": "07:34:48",
       "pair": "GBP_USD",
       "buy_reason": "Slippage 17.3pips > 3.7",
@@ -1049,6 +923,132 @@
       "rsi": 23.765255190129977,
       "atr": 0.0007892857142857304,
       "diagnostic": "[Best hypothetical: Engulfing SELL score=64.3]"
+    },
+    {
+      "time": "07:57:40",
+      "pair": "GBP_USD",
+      "buy_reason": "Slippage 21.0pips > 3.7",
+      "sell_reason": "Slippage 21.0pips > 3.7"
+    },
+    {
+      "time": "07:58:10",
+      "pair": "EUR_USD",
+      "buy_reason": "H1 not up, RSI 23.8 outside 30-70, MACD not bullish",
+      "sell_reason": "RSI 23.8 outside 30-70",
+      "spread": 0.0001500000000000945,
+      "adx": 23.910541023833176,
+      "plus_di": 11.100202030807651,
+      "minus_di": 37.32271811029799,
+      "ema50": 1.1372412108322392,
+      "ema200": 1.142453402091088,
+      "rsi": 23.765255190129977,
+      "atr": 0.0007892857142857304,
+      "diagnostic": "[Best hypothetical: Engulfing SELL score=64.3]"
+    },
+    {
+      "time": "07:58:11",
+      "pair": "GBP_USD",
+      "buy_reason": "Slippage 21.0pips > 3.7",
+      "sell_reason": "Slippage 21.0pips > 3.7"
+    },
+    {
+      "time": "07:58:41",
+      "pair": "EUR_USD",
+      "buy_reason": "H1 not up, RSI 23.8 outside 30-70, MACD not bullish",
+      "sell_reason": "RSI 23.8 outside 30-70",
+      "spread": 0.00014999999999987246,
+      "adx": 23.910541023833176,
+      "plus_di": 11.100202030807651,
+      "minus_di": 37.32271811029799,
+      "ema50": 1.1372412108322392,
+      "ema200": 1.142453402091088,
+      "rsi": 23.765255190129977,
+      "atr": 0.0007892857142857304,
+      "diagnostic": "[Best hypothetical: Engulfing SELL score=64.3]"
+    },
+    {
+      "time": "07:58:42",
+      "pair": "GBP_USD",
+      "buy_reason": "Slippage 20.6pips > 3.7",
+      "sell_reason": "Slippage 20.6pips > 3.7"
+    },
+    {
+      "time": "07:59:13",
+      "pair": "EUR_USD",
+      "buy_reason": "H1 not up, RSI 23.8 outside 30-70, MACD not bullish",
+      "sell_reason": "RSI 23.8 outside 30-70",
+      "spread": 0.00014999999999987246,
+      "adx": 23.910541023833176,
+      "plus_di": 11.100202030807651,
+      "minus_di": 37.32271811029799,
+      "ema50": 1.1372412108322392,
+      "ema200": 1.142453402091088,
+      "rsi": 23.765255190129977,
+      "atr": 0.0007892857142857304,
+      "diagnostic": "[Best hypothetical: Engulfing SELL score=64.3]"
+    },
+    {
+      "time": "07:59:14",
+      "pair": "GBP_USD",
+      "buy_reason": "Slippage 21.3pips > 3.7",
+      "sell_reason": "Slippage 21.3pips > 3.7"
+    },
+    {
+      "time": "07:59:44",
+      "pair": "EUR_USD",
+      "buy_reason": "H1 not up, RSI 23.8 outside 30-70, MACD not bullish",
+      "sell_reason": "RSI 23.8 outside 30-70",
+      "spread": 0.0001500000000000945,
+      "adx": 23.910541023833176,
+      "plus_di": 11.100202030807651,
+      "minus_di": 37.32271811029799,
+      "ema50": 1.1372412108322392,
+      "ema200": 1.142453402091088,
+      "rsi": 23.765255190129977,
+      "atr": 0.0007892857142857304,
+      "diagnostic": "[Best hypothetical: Engulfing SELL score=64.3]"
+    },
+    {
+      "time": "07:59:45",
+      "pair": "GBP_USD",
+      "buy_reason": "Slippage 21.3pips > 3.7",
+      "sell_reason": "Slippage 21.3pips > 3.7"
+    },
+    {
+      "time": "08:00:15",
+      "pair": "EUR_USD",
+      "buy_reason": "H1 not up, RSI 23.8 outside 30-70, MACD not bullish",
+      "sell_reason": "RSI 23.8 outside 30-70",
+      "spread": 0.0001500000000000945,
+      "adx": 23.910541023833176,
+      "plus_di": 11.100202030807651,
+      "minus_di": 37.32271811029799,
+      "ema50": 1.1372412108322392,
+      "ema200": 1.142453402091088,
+      "rsi": 23.765255190129977,
+      "atr": 0.0007892857142857304,
+      "diagnostic": "[Best hypothetical: Engulfing SELL score=64.3]"
+    },
+    {
+      "time": "08:00:15",
+      "pair": "GBP_USD",
+      "buy_reason": "Slippage 22.4pips > 3.7",
+      "sell_reason": "Slippage 22.4pips > 3.7"
+    },
+    {
+      "time": "08:00:45",
+      "pair": "GBP_USD",
+      "buy_reason": "H1 not up",
+      "sell_reason": "No SELL setup triggered",
+      "spread": 0.00018999999999991246,
+      "adx": 23.72218096935872,
+      "plus_di": 11.427595263751728,
+      "minus_di": 23.10457862749724,
+      "ema50": 1.324640606311224,
+      "ema200": 1.330338829059515,
+      "rsi": 47.085062489481004,
+      "atr": 0.0010271428571428137,
+      "diagnostic": "[Best hypothetical: Pullback SELL score=72.1]"
     }
   ],
   "last_cleanup": "2026-09-29"
