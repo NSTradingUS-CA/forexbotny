@@ -1,4 +1,20 @@
 {
-  "signals": [],
+  "signals": [
+    {
+      "time": "07:00:25",
+      "pair": "EUR_USD",
+      "buy_reason": "H1 not up, RSI 23.8 outside 30-70, MACD not bullish",
+      "sell_reason": "RSI 23.8 outside 30-70",
+      "spread": 0.00015999999999993797,
+      "adx": 23.910541023833176,
+      "plus_di": 11.100202030807651,
+      "minus_di": 37.32271811029799,
+      "ema50": 1.1372412108322392,
+      "ema200": 1.142453402091088,
+      "rsi": 23.765255190129977,
+      "atr": 0.0007892857142857304,
+      "diagnostic": "[Best hypothetical: Engulfing SELL score=64.3]"
+    }
+  ],
   "last_cleanup": "2026-09-29"
 }
