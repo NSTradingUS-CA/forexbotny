@@ -75,7 +75,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GH_PAT }}
         run: |
-          gh workflow run bot.yml \
+          gh workflow run bot_v7.yml \
             --repo "${{ github.repository }}" \
             --ref main
           echo "✅ Nouveau run déclenché via relay"
