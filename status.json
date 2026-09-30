@@ -1,5 +1,5 @@
 {
-  "time": "2026-09-30 08:59:52",
+  "time": "2026-09-30 09:05:02",
   "bot_status": "running",
   "session": {
     "trades_today": 0,
@@ -9,7 +9,7 @@
   },
   "active_trade": null,
   "next_news_event": {
-    "title": "GDP",
+    "title": "Employment",
     "time": "08:30",
     "impact": "High"
   },
