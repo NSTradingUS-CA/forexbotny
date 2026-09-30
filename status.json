@@ -1,5 +1,5 @@
 {
-  "time": "2026-09-30 08:13:48",
+  "time": "2026-09-30 08:18:54",
   "bot_status": "running",
   "session": {
     "trades_today": 0,
@@ -16,6 +16,10 @@
   "strategy": "H1 Multi-Setup (9 types) - Quality Score based",
   "max_risk_per_trade_percent": 0.65,
   "daily_loss_limit_percent": 2.0,
-  "blocked_pairs": [],
-  "active_pairs": []
+  "blocked_pairs": [
+    "GBP_USD"
+  ],
+  "active_pairs": [
+    "EUR_USD"
+  ]
 }
