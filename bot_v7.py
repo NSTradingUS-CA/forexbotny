@@ -284,7 +284,8 @@ def check_and_block_news(now):
         _current_blocked_pairs = []
         _current_active_pairs = PAIRS
         _current_news_event = None
-        send_telegram_message("🟢 News pause lifted – trading resumed")
+        # Notification "News pause lifted" gérée par main() via _last_news_block_message_sent
+        # (suppression de l'envoi ici pour éviter le doublon)
         print("News pause lifted.")
     return False, None, None, []
 
@@ -1803,8 +1804,9 @@ def main():
 
             blocked, news_event, time_until, blocked_pairs = check_and_block_news(now)
 
-            if blocked and active_trade is None:
-                if not _last_news_block_message_sent:
+            # === FIX bug annexe : le "else" ne se déclenche plus si blocked=True avec trade actif ===
+            if blocked:
+                if active_trade is None and not _last_news_block_message_sent:
                     if set(blocked_pairs) == set(PAIRS):
                         msg = (f"📅 High-impact news in progress: {news_event['title']} at {news_event['time'].strftime('%H:%M')} – "
                                f"Trading paused on ALL pairs until {datetime.fromtimestamp(get_pause_until(), tz).strftime('%H:%M')}.")
@@ -1939,7 +1941,9 @@ def main():
                             news_sentiment_filter[pair] = s
                     main.next_news_check = now + timedelta(seconds=60)
 
-                if blocked:
+                # === FIX : ne bloquer le scan QUE si TOUTES les paires sont bloquées ===
+                all_pairs_blocked = (set(blocked_pairs) == set(PAIRS))
+                if blocked and all_pairs_blocked:
                     can_trade = False
                 else:
                     in_trading_hours = TRADING_HOURS_START <= now.hour < TRADING_HOURS_END
