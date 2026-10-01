@@ -1,4 +1,20 @@
 {
-  "signals": [],
+  "signals": [
+    {
+      "time": "07:00:24",
+      "pair": "EUR_USD",
+      "buy_reason": "H1 not up, RSI 19.5 outside 30-70, MACD not bullish",
+      "sell_reason": "RSI 19.5 outside 30-70",
+      "spread": 0.00014999999999987246,
+      "adx": 37.833061452233125,
+      "plus_di": 5.392315001692914,
+      "minus_di": 40.44036005264059,
+      "ema50": 1.1335686613178948,
+      "ema200": 1.1387156741979634,
+      "rsi": 19.537198715219475,
+      "atr": 0.0011642857142856971,
+      "diagnostic": null
+    }
+  ],
   "last_cleanup": "2026-10-01"
 }
