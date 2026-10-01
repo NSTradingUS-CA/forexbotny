@@ -212,6 +212,52 @@ def extract_sl_from_trade_json(trade_json):
     return None, None
 
 
+def fetch_closing_fills(trade_id):
+    """
+    Récupère toutes les transactions de clôture (ORDER_FILL avec tradesClosed)
+    associées à ce trade. Retourne une liste de dicts triés chronologiquement :
+        [{'units': int, 'price': float, 'time': str}, ...]
+    """
+    fills = []
+    try:
+        tr_resp = retry_api_call(ctx.transaction.list, ACCOUNT_ID, count=500)
+    except Exception as e:
+        print(f"⚠️ fetch_closing_fills: transaction.list failed: {e}")
+        return fills
+
+    for tx in tr_resp.body.get('transactions', []):
+        tx_type = getattr(tx, 'type', None)
+        if tx_type != 'ORDER_FILL':
+            continue
+
+        trades_closed = getattr(tx, 'tradesClosed', None)
+        if not trades_closed:
+            continue
+        # Le SDK peut renvoyer un objet unique au lieu d'une liste
+        if not isinstance(trades_closed, (list, tuple)):
+            trades_closed = [trades_closed]
+
+        for tc in trades_closed:
+            tc_id = str(getattr(tc, 'tradeID', ''))
+            if tc_id != str(trade_id):
+                continue
+            try:
+                closed_units = abs(int(getattr(tc, 'units', 0)))
+                fill_price = float(getattr(tx, 'price', 0))
+                fill_time = str(getattr(tx, 'time', ''))
+                if closed_units > 0 and fill_price > 0:
+                    fills.append({
+                        'units': closed_units,
+                        'price': fill_price,
+                        'time': fill_time,
+                    })
+            except (ValueError, TypeError):
+                continue
+
+    fills.sort(key=lambda x: x.get('time', ''))
+    return fills
+
+
 # ---------- Fichiers JSON ----------
 def get_pause_until():
     if os.path.exists(PAUSE_FILE):
@@ -285,7 +331,6 @@ def check_and_block_news(now):
         _current_active_pairs = PAIRS
         _current_news_event = None
         # Notification "News pause lifted" gérée par main() via _last_news_block_message_sent
-        # (suppression de l'envoi ici pour éviter le doublon)
         print("News pause lifted.")
     return False, None, None, []
 
@@ -2347,12 +2392,22 @@ def check_closed_trade():
         usd_cad = get_usd_cad_rate()
         total_pnl_usd = total_pnl_cad / usd_cad if usd_cad > 0 else total_pnl_cad
 
+        # === OPTION B : récupération des fills de clôture pour les sous-lignes ===
+        closing_fills = fetch_closing_fills(our_trade_id)
+
+        if len(closing_fills) > 1:
+            exit_lines = f"Exit: {close_price:.5f} (avg of {len(closing_fills)} fills)"
+            for i, cf in enumerate(closing_fills, start=1):
+                exit_lines += f"\n  • Fill {i}: {cf['units']} units @ {cf['price']:.5f}"
+        else:
+            exit_lines = f"Exit: {close_price:.5f}"
+
         msg = (f"<b>🔴 Trade closed ({trades_today}/{MAX_TRADES_PER_DAY})</b>\n"
                f"Pair: {pair}\n"
                f"Setup: {setup.upper()}\n"
                f"Type: {'Buy' if direction == 'buy' else 'Sell'}\n"
                f"Entry: {entry:.5f}\n"
-               f"Exit: {close_price:.5f}\n"
+               f"{exit_lines}\n"
                f"Volume: {abs(units)}\n"
                f"P&L: {total_pnl_cad:.2f} CAD\n"
                f"R: {realized_r:+.2f}R\n"
