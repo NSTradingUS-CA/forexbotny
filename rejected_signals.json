@@ -1,12 +1,6 @@
 {
   "signals": [
     {
-      "time": "08:17:22",
-      "pair": "EUR_USD",
-      "buy_reason": "Slippage 14.6pips > 4.4",
-      "sell_reason": "Slippage 14.6pips > 4.4"
-    },
-    {
       "time": "08:17:53",
       "pair": "GBP_USD",
       "buy_reason": "H1 not up",
@@ -1049,6 +1043,21 @@
       "rsi": 47.08695594327289,
       "atr": 0.001048571428571494,
       "diagnostic": "[Best hypothetical: Breakout SELL score=46.7]"
+    },
+    {
+      "time": "09:10:17",
+      "pair": "GBP_USD",
+      "buy_reason": "H1 not up",
+      "sell_reason": "No SELL setup triggered",
+      "spread": 0.00019999999999997797,
+      "adx": 14.867071681111534,
+      "plus_di": 14.321690495161585,
+      "minus_di": 15.653461053533047,
+      "ema50": 1.3220763491362826,
+      "ema200": 1.3263966490085137,
+      "rsi": 46.74666218198362,
+      "atr": 0.0010614285714286259,
+      "diagnostic": "[Best hypothetical: Pullback SELL score=45.1]"
     }
   ],
   "last_cleanup": "2026-10-02"
