@@ -295,36 +295,50 @@ def get_affected_pairs(event_title):
 
 
 def check_and_block_news(now):
+    """
+    Détecte les news à fort impact actives et retourne les paires bloquées.
+
+    IMPORTANT : la liste des paires bloquées est recalculée à CHAQUE cycle
+    tant que l'événement est actif, et non seulement lors de la première
+    détection. Sinon, les cycles suivants retournent une liste vide et le
+    bot ouvre un trade pendant la pause (bug observé le 02/10/2026).
+    """
     global _current_blocked_pairs, _current_active_pairs, _current_news_event
     events = get_high_impact_news()
-    blocked_pairs = []
-    affected_pairs = []
     for event in events:
         block_start = event["time"] - timedelta(minutes=NEWS_BLOCK_MINUTES)
         block_end = event["time"] + timedelta(minutes=NEWS_BLOCK_MINUTES)
         if block_start <= now <= block_end:
             pause_until = block_end.timestamp()
-            if get_pause_until() < pause_until:
+            first_detection = (get_pause_until() < pause_until)
+            if first_detection:
                 set_pause_until(pause_until)
-                affected_pairs = get_affected_pairs(event['title'])
-                blocked_pairs = affected_pairs
-                _current_blocked_pairs = blocked_pairs
-                _current_active_pairs = [p for p in PAIRS if p not in blocked_pairs]
-                _current_news_event = event
-                if active_trade is not None:
-                    if set(affected_pairs) == set(PAIRS):
-                        msg = (f"📅 High-impact news detected: {event['title']} at "
-                               f"{event['time'].strftime('%H:%M')} – Trading paused on ALL pairs from "
-                               f"{block_start.strftime('%H:%M')} to {block_end.strftime('%H:%M')}")
-                    else:
-                        active_pairs = [p for p in PAIRS if p not in affected_pairs]
-                        msg = (f"📅 High-impact news detected: {event['title']} at "
-                               f"{event['time'].strftime('%H:%M')} – Trading paused on {', '.join(affected_pairs)} from "
-                               f"{block_start.strftime('%H:%M')} to {block_end.strftime('%H:%M')}\n"
-                               f"(Active pairs: {', '.join(active_pairs)})")
-                    send_telegram_message(msg)
-                    print(msg)
+
+            # TOUJOURS recalculer blocked_pairs tant que l'événement est actif
+            affected_pairs = get_affected_pairs(event['title'])
+            blocked_pairs = affected_pairs
+            _current_blocked_pairs = blocked_pairs
+            _current_active_pairs = [p for p in PAIRS if p not in blocked_pairs]
+            _current_news_event = event
+
+            # Notification Telegram UNE SEULE FOIS (à la 1re détection),
+            # et uniquement si un trade est déjà actif au moment où la news démarre
+            if first_detection and active_trade is not None:
+                if set(affected_pairs) == set(PAIRS):
+                    msg = (f"📅 High-impact news detected: {event['title']} at "
+                           f"{event['time'].strftime('%H:%M')} – Trading paused on ALL pairs from "
+                           f"{block_start.strftime('%H:%M')} to {block_end.strftime('%H:%M')}")
+                else:
+                    active_pairs = [p for p in PAIRS if p not in affected_pairs]
+                    msg = (f"📅 High-impact news detected: {event['title']} at "
+                           f"{event['time'].strftime('%H:%M')} – Trading paused on {', '.join(affected_pairs)} from "
+                           f"{block_start.strftime('%H:%M')} to {block_end.strftime('%H:%M')}\n"
+                           f"(Active pairs: {', '.join(active_pairs)})")
+                send_telegram_message(msg)
+                print(msg)
+
             return True, event, event["time"] - now, blocked_pairs
+
     if get_pause_until() > 0 and now.timestamp() >= get_pause_until():
         set_pause_until(0)
         _current_blocked_pairs = []
@@ -332,6 +346,7 @@ def check_and_block_news(now):
         _current_news_event = None
         # Notification "News pause lifted" gérée par main() via _last_news_block_message_sent
         print("News pause lifted.")
+
     return False, None, None, []
 
 
