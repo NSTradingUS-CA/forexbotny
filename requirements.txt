@@ -2,7 +2,7 @@ v20==3.0.25.0
 pandas==2.2.3
 numpy==1.26.4
 python-dotenv==1.0.1
-requests==2.32.3
+requests==2.33.0
 pytz==2024.2
 pyyaml==6.0.2
 tzdata==2024.1
