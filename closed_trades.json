@@ -1,31 +1,5 @@
 {
-  "trades": [
-    {
-      "pair": "EUR_USD",
-      "type": "Sell",
-      "setup": "Momentum",
-      "pnl": -351.2,
-      "pnl_usd": -246.92,
-      "time": "08:55:09",
-      "r_multiple": -0.63,
-      "units": 121610,
-      "entry": 1.12374,
-      "exit": 1.12575,
-      "score": 60.6
-    },
-    {
-      "pair": "EUR_USD",
-      "type": "Sell",
-      "setup": "recovered",
-      "pnl": -351.2,
-      "pnl_usd": -246.38,
-      "time": "08:54:41",
-      "r_multiple": -0.62,
-      "units": 121610,
-      "entry": 1.12374,
-      "exit": 1.12575,
-      "score": null
-    }
-  ],
-  "last_cleanup": "2026-10-02"
+  "trades": [],
+  "signals": [],
+  "last_cleanup": "2026-10-05"
 }
