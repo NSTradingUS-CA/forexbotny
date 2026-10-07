@@ -1,12 +1,6 @@
 {
   "signals": [
     {
-      "time": "07:00:16",
-      "pair": "EUR_USD",
-      "buy_reason": "Slippage 7.9pips > 4.7",
-      "sell_reason": "Slippage 7.9pips > 4.7"
-    },
-    {
       "time": "07:00:48",
       "pair": "EUR_USD",
       "buy_reason": "Slippage 7.6pips > 4.7",
@@ -545,6 +539,66 @@
       "pair": "EUR_USD",
       "buy_reason": "Slippage 20.0pips > 4.7",
       "sell_reason": "Slippage 20.0pips > 4.7"
+    },
+    {
+      "time": "07:47:17",
+      "pair": "EUR_USD",
+      "buy_reason": "Slippage 18.3pips > 4.7",
+      "sell_reason": "Slippage 18.3pips > 4.7"
+    },
+    {
+      "time": "07:47:48",
+      "pair": "EUR_USD",
+      "buy_reason": "Slippage 18.0pips > 4.7",
+      "sell_reason": "Slippage 18.0pips > 4.7"
+    },
+    {
+      "time": "07:48:20",
+      "pair": "EUR_USD",
+      "buy_reason": "Slippage 15.3pips > 4.7",
+      "sell_reason": "Slippage 15.3pips > 4.7"
+    },
+    {
+      "time": "07:48:50",
+      "pair": "EUR_USD",
+      "buy_reason": "Slippage 16.5pips > 4.7",
+      "sell_reason": "Slippage 16.5pips > 4.7"
+    },
+    {
+      "time": "07:49:22",
+      "pair": "EUR_USD",
+      "buy_reason": "Slippage 17.8pips > 4.7",
+      "sell_reason": "Slippage 17.8pips > 4.7"
+    },
+    {
+      "time": "07:49:53",
+      "pair": "EUR_USD",
+      "buy_reason": "Slippage 16.5pips > 4.7",
+      "sell_reason": "Slippage 16.5pips > 4.7"
+    },
+    {
+      "time": "07:50:23",
+      "pair": "EUR_USD",
+      "buy_reason": "Slippage 17.7pips > 4.7",
+      "sell_reason": "Slippage 17.7pips > 4.7"
+    },
+    {
+      "time": "07:50:54",
+      "pair": "EUR_USD",
+      "buy_reason": "Slippage 16.6pips > 4.7",
+      "sell_reason": "Slippage 16.6pips > 4.7"
+    },
+    {
+      "time": "07:51:24",
+      "pair": "EUR_USD",
+      "buy_reason": "Slippage 15.9pips > 4.7",
+      "sell_reason": "Slippage 15.9pips > 4.7"
+    },
+    {
+      "time": "07:51:55",
+      "pair": "EUR_USD",
+      "buy_reason": "Slippage 15.6pips > 4.7",
+      "sell_reason": "Slippage 15.6pips > 4.7"
     }
   ],
   "last_cleanup": "2026-10-07"
