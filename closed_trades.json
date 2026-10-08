@@ -1,4 +1,18 @@
 {
-  "trades": [],
+  "trades": [
+    {
+      "pair": "EUR_USD",
+      "type": "Sell",
+      "setup": "Pin Bar",
+      "pnl": -301.31,
+      "pnl_usd": -211.34,
+      "time": "08:17:50",
+      "r_multiple": -0.39,
+      "units": 275297,
+      "entry": 1.11827,
+      "exit": 1.11903,
+      "score": 62.5
+    }
+  ],
   "last_cleanup": "2026-10-08"
 }
