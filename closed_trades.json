@@ -12,6 +12,19 @@
       "entry": 1.11827,
       "exit": 1.11903,
       "score": 62.5
+    },
+    {
+      "pair": "EUR_USD",
+      "type": "Sell",
+      "setup": "Momentum",
+      "pnl": -325.49,
+      "pnl_usd": -228.49,
+      "time": "09:48:46",
+      "r_multiple": -0.58,
+      "units": 190103,
+      "entry": 1.11872,
+      "exit": 1.11991,
+      "score": 55.8
     }
   ],
   "last_cleanup": "2026-10-08"
