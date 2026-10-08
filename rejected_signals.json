@@ -1,4 +1,11 @@
 {
-  "signals": [],
+  "signals": [
+    {
+      "time": "08:33:03",
+      "pair": "EUR_USD",
+      "buy_reason": "Slippage 10.8pips > 4.1",
+      "sell_reason": "Slippage 10.8pips > 4.1"
+    }
+  ],
   "last_cleanup": "2026-10-08"
 }
