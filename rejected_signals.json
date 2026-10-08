@@ -95,6 +95,21 @@
       "pair": "EUR_USD",
       "buy_reason": "Slippage 4.1pips > 4.1",
       "sell_reason": "Slippage 4.1pips > 4.1"
+    },
+    {
+      "time": "10:03:59",
+      "pair": "GBP_USD",
+      "buy_reason": "H1 not up",
+      "sell_reason": "MACD not bearish",
+      "spread": 0.00019999999999997797,
+      "adx": 28.53799358600596,
+      "plus_di": 16.65039702949971,
+      "minus_di": 16.95776507789048,
+      "ema50": 1.3219857618087691,
+      "ema200": 1.323983616551314,
+      "rsi": 43.79216414125771,
+      "atr": 0.001315714285714309,
+      "diagnostic": "[Best hypothetical: Pullback SELL score=54.4]"
     }
   ],
   "last_cleanup": "2026-10-08"
