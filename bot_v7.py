@@ -233,7 +233,6 @@ def fetch_closing_fills(trade_id):
         trades_closed = getattr(tx, 'tradesClosed', None)
         if not trades_closed:
             continue
-        # Le SDK peut renvoyer un objet unique au lieu d'une liste
         if not isinstance(trades_closed, (list, tuple)):
             trades_closed = [trades_closed]
 
@@ -297,11 +296,7 @@ def get_affected_pairs(event_title):
 def check_and_block_news(now):
     """
     Détecte les news à fort impact actives et retourne les paires bloquées.
-
-    IMPORTANT : la liste des paires bloquées est recalculée à CHAQUE cycle
-    tant que l'événement est actif, et non seulement lors de la première
-    détection. Sinon, les cycles suivants retournent une liste vide et le
-    bot ouvre un trade pendant la pause (bug observé le 02/10/2026).
+    La liste est recalculée à CHAQUE cycle tant que l'événement est actif.
     """
     global _current_blocked_pairs, _current_active_pairs, _current_news_event
     events = get_high_impact_news()
@@ -314,15 +309,12 @@ def check_and_block_news(now):
             if first_detection:
                 set_pause_until(pause_until)
 
-            # TOUJOURS recalculer blocked_pairs tant que l'événement est actif
             affected_pairs = get_affected_pairs(event['title'])
             blocked_pairs = affected_pairs
             _current_blocked_pairs = blocked_pairs
             _current_active_pairs = [p for p in PAIRS if p not in blocked_pairs]
             _current_news_event = event
 
-            # Notification Telegram UNE SEULE FOIS (à la 1re détection),
-            # et uniquement si un trade est déjà actif au moment où la news démarre
             if first_detection and active_trade is not None:
                 if set(affected_pairs) == set(PAIRS):
                     msg = (f"📅 High-impact news detected: {event['title']} at "
@@ -344,7 +336,6 @@ def check_and_block_news(now):
         _current_blocked_pairs = []
         _current_active_pairs = PAIRS
         _current_news_event = None
-        # Notification "News pause lifted" gérée par main() via _last_news_block_message_sent
         print("News pause lifted.")
 
     return False, None, None, []
@@ -675,7 +666,6 @@ def load_existing_open_position():
                     trade = open_trades[0]
                     entry_price = float(trade.price)
 
-                    # Récupération du SL via JSON brut (fiable pour trailing)
                     trade_id = trade.id
                     trade_json = fetch_trade_raw(trade_id)
                     sl_price, sl_source = extract_sl_from_trade_json(trade_json)
@@ -987,7 +977,8 @@ def get_daily_loss_status(balance):
 
 
 def setup_stop_and_target(df, direction, entry, pair_config, setup_type):
-    atr = float(df['atr'].iloc[-2])
+    # === CHANGEMENT : utiliser l'ATR de la bougie source (-1 au lieu de -2) ===
+    atr = float(df['atr'].iloc[-1])
     swing = df.iloc[-4:-1]
 
     rr = SETUP_RR.get(setup_type.lower(), 2.0)
@@ -1188,18 +1179,10 @@ def move_sl_to_entry():
 
 # ============ MANAGE ACTIVE TRADE : trailing server-side + TP1 + BE ============
 def manage_active_trade():
-    """
-    Le trailing stop loss est géré nativement par OANDA (server-side).
-    Le bot :
-      1. Rafraîchit l'état local depuis OANDA (SL effectif via JSON brut, unités)
-      2. Notifie Telegram à la première atteinte du break-even
-      3. Détecte et exécute le partial close TP1
-    """
     global active_trade
     if active_trade is None:
         return
 
-    # 1. Rafraîchir l'état local depuis OANDA (via JSON brut, fiable pour trailing)
     try:
         trade_json = fetch_trade_raw(active_trade['trade_id'])
         if trade_json:
@@ -1208,7 +1191,6 @@ def manage_active_trade():
                 active_trade['sl'] = new_sl
                 print(f"🔍 SL ({sl_source}): {new_sl:.5f}")
 
-            # Units réelles
             cu = trade_json.get("currentUnits")
             if cu is not None:
                 try:
@@ -1216,7 +1198,6 @@ def manage_active_trade():
                 except (ValueError, TypeError):
                     pass
 
-            # BE = trailing SL a atteint l'entrée (avec tolérance)
             entry = active_trade['entry_price']
             direction = active_trade['direction']
             tolerance = BE_TOLERANCE_PIPS * 0.0001
@@ -1246,7 +1227,6 @@ def manage_active_trade():
     except Exception as e:
         print(f"⚠️ refresh state failed: {e}")
 
-    # 2. Prix actuel
     pair = active_trade['pair']
     direction = active_trade['direction']
     try:
@@ -1258,7 +1238,6 @@ def manage_active_trade():
     except Exception:
         return
 
-    # 3. Partial close TP1
     tp1 = active_trade.get('tp1')
     units = abs(int(active_trade['units']))
     if tp1 is not None and not active_trade.get('tp1_hit'):
@@ -1368,8 +1347,9 @@ def check_signal(df, instrument):
     if len(df) < 220:
         return False, 0, 0, 0, 0, None, None, 0, "Not enough candles"
 
-    c = df.iloc[-2]
-    prev = df.iloc[-3]
+    # === CHANGEMENT : bougie source = dernière bougie CLÔTURÉE (iloc[-1]) ===
+    c = df.iloc[-1]
+    prev = df.iloc[-2]
 
     config = PAIR_CONFIG[instrument]
     atr = float(c['atr'])
@@ -1864,7 +1844,6 @@ def main():
 
             blocked, news_event, time_until, blocked_pairs = check_and_block_news(now)
 
-            # === FIX bug annexe : le "else" ne se déclenche plus si blocked=True avec trade actif ===
             if blocked:
                 if active_trade is None and not _last_news_block_message_sent:
                     if set(blocked_pairs) == set(PAIRS):
@@ -2001,7 +1980,6 @@ def main():
                             news_sentiment_filter[pair] = s
                     main.next_news_check = now + timedelta(seconds=60)
 
-                # === FIX : ne bloquer le scan QUE si TOUTES les paires sont bloquées ===
                 all_pairs_blocked = (set(blocked_pairs) == set(PAIRS))
                 if blocked and all_pairs_blocked:
                     can_trade = False
@@ -2061,7 +2039,8 @@ def main():
                         if signal:
                             candidates.append((pair, price, sl, tp, sl_pips, direction, setup_type, risk_pct, reason, df))
                         else:
-                            c = df.iloc[-2]
+                            # === CHANGEMENT : bougie source pour le diagnostic = iloc[-1] ===
+                            c = df.iloc[-1]
                             parts = reason.split("|")
                             buy_reason = parts[0].strip() if len(parts) > 0 else reason
                             if len(parts) > 1:
@@ -2154,7 +2133,8 @@ def place_trade(instrument, entry_price_signal, sl_signal, tp_signal, direction,
     slippage_pips = abs(current_price - entry_price_signal) / 0.0001
 
     try:
-        atr = float(df['atr'].iloc[-2])
+        # === CHANGEMENT : ATR de la bougie source = iloc[-1] ===
+        atr = float(df['atr'].iloc[-1])
         atr_pips = atr / 0.0001
         max_slippage_pips = max(SLIPPAGE_MIN_PIPS, SLIPPAGE_ATR_FACTOR * atr_pips)
         max_slippage_pips = min(max_slippage_pips, 8.0)
@@ -2407,7 +2387,6 @@ def check_closed_trade():
         usd_cad = get_usd_cad_rate()
         total_pnl_usd = total_pnl_cad / usd_cad if usd_cad > 0 else total_pnl_cad
 
-        # === OPTION B : récupération des fills de clôture pour les sous-lignes ===
         closing_fills = fetch_closing_fills(our_trade_id)
 
         if len(closing_fills) > 1:
