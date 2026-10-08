@@ -1,13 +1,35 @@
 {
-  "time": "2026-10-08 08:38:14",
+  "time": "2026-10-08 08:43:22",
   "bot_status": "running",
   "session": {
-    "trades_today": 1,
+    "trades_today": 2,
     "max_trades": 3,
     "start": "07:00",
     "end": "11:00"
   },
-  "active_trade": null,
+  "active_trade": {
+    "pair": "EUR_USD",
+    "type": "Sell",
+    "entry": 1.11872,
+    "sl": 1.1207,
+    "tp1": 1.1170879999999999,
+    "tp2": 1.114232,
+    "trailing_stop": "server-side (OANDA)",
+    "current_price": 1.11875,
+    "unrealized_pnl_usd": -5.7,
+    "unrealized_pnl_cad": -8.13,
+    "usd_cad_rate": 1.4261,
+    "distance_to_sl_pips": 19.5,
+    "distance_to_tp2_pips": 45.2,
+    "atr": 0.0010199999999999734,
+    "be_triggered": false,
+    "tp1_hit": false,
+    "setup_type": "Momentum",
+    "risk_percent": 0.4,
+    "opened_at": "2026-10-08T08:41:19.396882-04:00",
+    "units": -190103,
+    "score": 55.8
+  },
   "next_news_event": {
     "title": "Employment",
     "time": "08:30",
