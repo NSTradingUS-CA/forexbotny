@@ -174,14 +174,6 @@ def fetch_trade_raw(trade_id):
 
 
 def extract_sl_from_trade_json(trade_json):
-    """
-    Extrait le SL effectif depuis le JSON brut d'un trade OANDA.
-    Priorité :
-      1. trailingStopLossOrder.trailingStopValue  (niveau COURANT du trailing)
-      2. trailingStopLossOrder.price              (fallback, peut être stale)
-      3. stopLossOrder.price                      (SL fixe)
-    Retourne (sl_price, source) ou (None, None).
-    """
     if not trade_json:
         return None, None
 
@@ -213,11 +205,6 @@ def extract_sl_from_trade_json(trade_json):
 
 
 def fetch_closing_fills(trade_id):
-    """
-    Récupère toutes les transactions de clôture (ORDER_FILL avec tradesClosed)
-    associées à ce trade. Retourne une liste de dicts triés chronologiquement :
-        [{'units': int, 'price': float, 'time': str}, ...]
-    """
     fills = []
     try:
         tr_resp = retry_api_call(ctx.transaction.list, ACCOUNT_ID, count=500)
@@ -294,10 +281,6 @@ def get_affected_pairs(event_title):
 
 
 def check_and_block_news(now):
-    """
-    Détecte les news à fort impact actives et retourne les paires bloquées.
-    La liste est recalculée à CHAQUE cycle tant que l'événement est actif.
-    """
     global _current_blocked_pairs, _current_active_pairs, _current_news_event
     events = get_high_impact_news()
     for event in events:
@@ -575,9 +558,11 @@ def save_status_json(force=False):
         sl_distance = abs(current_price - active_trade['sl'])
         tp_distance = abs(active_trade['tp2'] - current_price) if active_trade.get('tp2') else 0
 
-        unrealized_pnl_usd = (current_price - active_trade['entry_price']) * abs(active_trade['units'])
+        units_abs = abs(int(active_trade['units']))
         if active_trade['direction'] == 'sell':
-            unrealized_pnl_usd = -unrealized_pnl_usd
+            unrealized_pnl_usd = (active_trade['entry_price'] - current_price) * units_abs
+        else:
+            unrealized_pnl_usd = (current_price - active_trade['entry_price']) * units_abs
 
         usd_cad = get_usd_cad_rate()
         unrealized_pnl_cad = unrealized_pnl_usd * usd_cad
@@ -977,7 +962,6 @@ def get_daily_loss_status(balance):
 
 
 def setup_stop_and_target(df, direction, entry, pair_config, setup_type):
-    # === CHANGEMENT : utiliser l'ATR de la bougie source (-1 au lieu de -2) ===
     atr = float(df['atr'].iloc[-1])
     swing = df.iloc[-4:-1]
 
@@ -1347,7 +1331,6 @@ def check_signal(df, instrument):
     if len(df) < 220:
         return False, 0, 0, 0, 0, None, None, 0, "Not enough candles"
 
-    # === CHANGEMENT : bougie source = dernière bougie CLÔTURÉE (iloc[-1]) ===
     c = df.iloc[-1]
     prev = df.iloc[-2]
 
@@ -1775,9 +1758,11 @@ def main():
                         bid = float(pi.bids[0].price)
                         ask = float(pi.asks[0].price)
                         current_price = bid if active_trade['direction'] == 'sell' else ask
-                        pnl = (current_price - active_trade['entry_price']) * active_trade['units']
+                        units_abs = abs(int(active_trade['units']))
                         if active_trade['direction'] == 'sell':
-                            pnl = -pnl
+                            pnl = (active_trade['entry_price'] - current_price) * units_abs
+                        else:
+                            pnl = (current_price - active_trade['entry_price']) * units_abs
                     except:
                         pnl = 0
 
@@ -1791,8 +1776,8 @@ def main():
                                 f"P&L: {pnl_cad:.2f} CAD\n"
                                 f"Reason: End of session (16:50)"
                             )
-                            active_trade = None
-                            save_closed_trades_to_file()
+                            time.sleep(2)
+                            check_closed_trade()
                         else:
                             send_telegram_message(f"⚠️ Could not close trade on {active_trade['pair']}.")
                     else:
@@ -1810,9 +1795,11 @@ def main():
                         bid = float(pi.bids[0].price)
                         ask = float(pi.asks[0].price)
                         current_price = bid if active_trade['direction'] == 'sell' else ask
-                        pnl = (current_price - active_trade['entry_price']) * active_trade['units']
+                        units_abs = abs(int(active_trade['units']))
                         if active_trade['direction'] == 'sell':
-                            pnl = -pnl
+                            pnl = (active_trade['entry_price'] - current_price) * units_abs
+                        else:
+                            pnl = (current_price - active_trade['entry_price']) * units_abs
                     except:
                         pnl = 0
                     if pnl > 0:
@@ -1825,8 +1812,8 @@ def main():
                                 f"P&L: {pnl_cad:.2f} CAD\n"
                                 f"Reason: End of session (17:05)"
                             )
-                            active_trade = None
-                            save_closed_trades_to_file()
+                            time.sleep(2)
+                            check_closed_trade()
                         else:
                             send_telegram_message(
                                 f"⚠️ **Could not close trade on {active_trade['pair']}.** Please close manually."
@@ -1908,12 +1895,6 @@ def main():
                 if active_trade is not None:
                     if blocked and news_event is not None and time_until is not None:
                         minutes_until = time_until.total_seconds() / 60.0
-                        if minutes_until <= NEWS_WARNING_MINUTES and minutes_until > NEWS_CLOSE_BEFORE_MINUTES:
-                            if active_trade['pair'] in blocked_pairs:
-                                send_telegram_message(
-                                    f"📰 <b>High-impact news in {int(minutes_until)} min:</b> {news_event['title']} at {news_event['time'].strftime('%H:%M')}\n"
-                                    f"Trade {active_trade['pair']} will be paused. Action in {NEWS_CLOSE_BEFORE_MINUTES} min."
-                                )
                         if minutes_until <= NEWS_CLOSE_BEFORE_MINUTES:
                             if active_trade['pair'] in blocked_pairs:
                                 try:
@@ -1922,9 +1903,11 @@ def main():
                                     bid = float(pi.bids[0].price)
                                     ask = float(pi.asks[0].price)
                                     current = bid if active_trade['direction'] == 'sell' else ask
-                                    pnl = (current - active_trade['entry_price']) * active_trade['units']
+                                    units_abs = abs(int(active_trade['units']))
                                     if active_trade['direction'] == 'sell':
-                                        pnl = -pnl
+                                        pnl = (active_trade['entry_price'] - current) * units_abs
+                                    else:
+                                        pnl = (current - active_trade['entry_price']) * units_abs
                                 except:
                                     pnl = 0
 
@@ -1963,9 +1946,8 @@ def main():
                                             f"P&L: {pnl_cad:.2f} CAD"
                                         )
                                         print(f"News imminent – {pair} en perte : clôture complète.")
-                                        active_trade = None
-                                        save_closed_trades_to_file()
                                         time.sleep(2)
+                                        check_closed_trade()
                                     else:
                                         send_telegram_message(
                                             f"Closing failed {pair} before news. Please monitor."
@@ -2039,7 +2021,6 @@ def main():
                         if signal:
                             candidates.append((pair, price, sl, tp, sl_pips, direction, setup_type, risk_pct, reason, df))
                         else:
-                            # === CHANGEMENT : bougie source pour le diagnostic = iloc[-1] ===
                             c = df.iloc[-1]
                             parts = reason.split("|")
                             buy_reason = parts[0].strip() if len(parts) > 0 else reason
@@ -2133,7 +2114,6 @@ def place_trade(instrument, entry_price_signal, sl_signal, tp_signal, direction,
     slippage_pips = abs(current_price - entry_price_signal) / 0.0001
 
     try:
-        # === CHANGEMENT : ATR de la bougie source = iloc[-1] ===
         atr = float(df['atr'].iloc[-1])
         atr_pips = atr / 0.0001
         max_slippage_pips = max(SLIPPAGE_MIN_PIPS, SLIPPAGE_ATR_FACTOR * atr_pips)
