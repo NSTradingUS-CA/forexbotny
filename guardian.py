@@ -1,14 +1,19 @@
 """
 Guardian : lit status.json distant et envoie les rappels Telegram critiques
-avant la fin de session NY, même si le workflow principal a été tué.
+avant/après la fin de session NY, même si le workflow principal a été tué.
 
-Fenêtre utile réelle : 16:40 → 17:15 ET (après mort du bot principal à 13:00,
-avant/après la clôture OANDA à 16:59 ET).
+Fenêtre utile réelle : 16:44 → 17:14 ET
+  → complète les reminders du bot principal (16:50-16:54, 16:55-16:57, 16:58)
+  → couvre la clôture OANDA à 16:59 ET et l'arrêt bot à 17:05 ET
 
 CORRECTIONS 2026-10-09 :
-- Fenêtres élargies à ±7 min pour tolérer les retards GitHub cron
+- Alignement sur les reminders du bot principal :
+    * Cron 1 = 16:50 ET → fenêtre pré-clôture 16:44-16:53
+    * Cron 2 = 16:56 ET → fenêtre dernier appel 16:53-17:03
+    * Cron 3 = 17:06 ET → fenêtre post-mortem 17:03-17:14
+- Fenêtres élargies à ±6-7 min pour tolérer les retards GitHub cron
 - Une seule alerte par fenêtre (3 alertes max par jour)
-- Le YAML ne doit contenir que 3 crons (16:45, 16:55, 17:10 ET)
+- Le YAML ne doit contenir que 3 crons (20:50, 20:56, 21:06 UTC en EDT)
   pour éviter les doublons d'alerte
 """
 import os
@@ -62,14 +67,17 @@ def main():
     minutes_now = now.hour * 60 + now.minute
 
     # Fenêtres en minutes depuis minuit (heure ET).
-    # Chaque fenêtre tolère un retard GitHub cron d'environ ±7 min.
+    # Alignées sur les reminders du bot principal :
+    #   bot : 16:50-16:54 (reminders) / 16:55-16:57 (close) / 16:58 (critique) / 17:05 (stop)
+    #
+    # Chaque fenêtre tolère un retard GitHub cron de ±6-7 min.
     # Bornes supérieures exclusives pour éviter les chevauchements.
-    WIN_PRE_CLOSE_START   = 16 * 60 + 40    # 16:40
-    WIN_PRE_CLOSE_END     = 16 * 60 + 52    # 16:52 (exclu)
+    WIN_PRE_CLOSE_START   = 16 * 60 + 44    # 16:44
+    WIN_PRE_CLOSE_END     = 16 * 60 + 53    # 16:53 (exclu)
     WIN_LAST_CALL_START   = 16 * 60 + 53    # 16:53
-    WIN_LAST_CALL_END     = 17 * 60 + 4     # 17:04 (exclu)
-    WIN_POST_MORTEM_START = 17 * 60 + 5     # 17:05
-    WIN_POST_MORTEM_END   = 17 * 60 + 16    # 17:16 (exclu)
+    WIN_LAST_CALL_END     = 17 * 60 + 3     # 17:03 (exclu)
+    WIN_POST_MORTEM_START = 17 * 60 + 3     # 17:03
+    WIN_POST_MORTEM_END   = 17 * 60 + 14    # 17:14 (exclu)
 
     in_any_window = (
         (WIN_PRE_CLOSE_START <= minutes_now < WIN_PRE_CLOSE_END) or
@@ -77,7 +85,7 @@ def main():
         (WIN_POST_MORTEM_START <= minutes_now < WIN_POST_MORTEM_END)
     )
     if not in_any_window:
-        print(f"{now.strftime('%H:%M')} – Hors fenêtre utile (16:40–17:15 ET), sortie sans action.")
+        print(f"{now.strftime('%H:%M')} – Hors fenêtre utile (16:44–17:14 ET), sortie sans action.")
         return
 
     status = fetch_status()
@@ -96,7 +104,8 @@ def main():
     sl = active.get("sl", 0)
     tp2 = active.get("tp2", 0)
 
-    # === Fenêtre 1 : pré-clôture (16:40 → 16:52) ===
+    # === Fenêtre 1 : pré-clôture (16:44 → 16:53) ===
+    # Alignée sur les reminders bot de 16:50-16:54.
     if WIN_PRE_CLOSE_START <= minutes_now < WIN_PRE_CLOSE_END:
         send_telegram(
             f"⏰ <b>Guardian – fermeture imminente</b>\n"
@@ -108,7 +117,8 @@ def main():
         )
         print(f"{now.strftime('%H:%M')} – Rappel pré-clôture envoyé.")
 
-    # === Fenêtre 2 : dernier appel (16:53 → 17:04) ===
+    # === Fenêtre 2 : dernier appel (16:53 → 17:03) ===
+    # Alignée sur la clôture forcée bot (16:55-16:57) et l'alerte critique (16:58).
     elif WIN_LAST_CALL_START <= minutes_now < WIN_LAST_CALL_END:
         send_telegram(
             f"🚨 <b>Guardian – DERNIER APPEL</b>\n"
@@ -118,7 +128,8 @@ def main():
         )
         print(f"{now.strftime('%H:%M')} – Dernier appel envoyé.")
 
-    # === Fenêtre 3 : post-mortem (17:05 → 17:15) ===
+    # === Fenêtre 3 : post-mortem (17:03 → 17:14) ===
+    # Alignée sur l'arrêt bot à 17:05.
     elif WIN_POST_MORTEM_START <= minutes_now < WIN_POST_MORTEM_END:
         send_telegram(
             f"🕒 <b>Guardian – post-mortem</b>\n"
