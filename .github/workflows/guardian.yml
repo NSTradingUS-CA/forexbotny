@@ -2,32 +2,21 @@ name: 🛡️ Trade Guardian
 
 on:
   schedule:
-    # ⚠️ GitHub cron est TOUJOURS interprété en UTC. Il n'accepte PAS de
-    # spécifier un fuseau horaire. On calcule donc l'UTC équivalent à la
-    # fenêtre locale voulue, et on l'ajuste 2x/an pour l'heure d'été/hiver.
+    # ⚠️ GitHub cron est en UTC. On déclare 6 crons :
+    #   3 pour l'heure d'été (EDT, UTC-4) + 3 pour l'heure d'hiver (EST, UTC-5).
+    #   Python filtre selon l'heure locale 'America/Toronto'.
+    #   Aucun ajustement manuel 2×/an.
     #
-    # Alignement sur les reminders du bot principal :
-    #   bot : 16:50-16:54 (reminders) / 16:55-16:57 (close) / 16:58 (critique) / 17:05 (stop)
+    # Fenêtre ET utile : 16:44 → 17:14 (alignée sur les reminders du bot)
     #
-    # Fenêtre utile Guardian : 16:44 → 17:14 ET
-    #   → complète le bot même s'il est tué par GitHub avant 17:05 ET
-    #   → couvre la clôture OANDA à 16:59 ET
-    #
-    # 3 crons uniquement (un par alerte Guardian) pour éviter les doublons.
-    # Les fenêtres Python tolèrent un retard GitHub cron d'environ ±6-7 min.
-    #
-    # Été (EDT, UTC-4) :
-    #   20:50 UTC = 16:50 ET → rappel pré-clôture
-    #   20:56 UTC = 16:56 ET → dernier appel
-    #   21:06 UTC = 17:06 ET → post-mortem
-    #
-    # Hiver (EST, UTC-5) : à ajuster en novembre :
-    #   21:50 UTC = 16:50 ET → rappel pré-clôture
-    #   21:56 UTC = 16:56 ET → dernier appel
-    #   22:06 UTC = 17:06 ET → post-mortem
-    - cron: '50 20 * * 1-5'    # 16:50 EDT (été) → pré-clôture
-    - cron: '56 20 * * 1-5'    # 16:56 EDT (été) → dernier appel
-    - cron: '06 21 * * 1-5'    # 17:06 EDT (été) → post-mortem
+    # Été (EDT) :
+    - cron: '50 20 * * 1-5'   # 16:50 EDT → pré-clôture
+    - cron: '56 20 * * 1-5'   # 16:56 EDT → dernier appel
+    - cron: '06 21 * * 1-5'   # 17:06 EDT → post-mortem
+    # Hiver (EST) :
+    - cron: '50 21 * * 1-5'   # 16:50 EST → pré-clôture
+    - cron: '56 21 * * 1-5'   # 16:56 EST → dernier appel
+    - cron: '06 22 * * 1-5'   # 17:06 EST → post-mortem
   workflow_dispatch:
 
 concurrency:
