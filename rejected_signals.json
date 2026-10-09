@@ -65,6 +65,66 @@
       "pair": "EUR_USD",
       "buy_reason": "Slippage 13.1pips > 3.5",
       "sell_reason": "Slippage 13.1pips > 3.5"
+    },
+    {
+      "time": "08:50:51",
+      "pair": "EUR_USD",
+      "buy_reason": "Slippage 14.7pips > 3.5",
+      "sell_reason": "Slippage 14.7pips > 3.5"
+    },
+    {
+      "time": "08:51:22",
+      "pair": "EUR_USD",
+      "buy_reason": "Slippage 16.1pips > 3.5",
+      "sell_reason": "Slippage 16.1pips > 3.5"
+    },
+    {
+      "time": "08:51:52",
+      "pair": "EUR_USD",
+      "buy_reason": "Slippage 16.4pips > 3.5",
+      "sell_reason": "Slippage 16.4pips > 3.5"
+    },
+    {
+      "time": "08:52:22",
+      "pair": "EUR_USD",
+      "buy_reason": "Slippage 16.9pips > 3.5",
+      "sell_reason": "Slippage 16.9pips > 3.5"
+    },
+    {
+      "time": "08:52:53",
+      "pair": "EUR_USD",
+      "buy_reason": "Slippage 14.9pips > 3.5",
+      "sell_reason": "Slippage 14.9pips > 3.5"
+    },
+    {
+      "time": "08:53:24",
+      "pair": "EUR_USD",
+      "buy_reason": "Slippage 16.1pips > 3.5",
+      "sell_reason": "Slippage 16.1pips > 3.5"
+    },
+    {
+      "time": "08:53:55",
+      "pair": "EUR_USD",
+      "buy_reason": "Slippage 16.1pips > 3.5",
+      "sell_reason": "Slippage 16.1pips > 3.5"
+    },
+    {
+      "time": "08:54:25",
+      "pair": "EUR_USD",
+      "buy_reason": "Slippage 16.6pips > 3.5",
+      "sell_reason": "Slippage 16.6pips > 3.5"
+    },
+    {
+      "time": "08:54:55",
+      "pair": "EUR_USD",
+      "buy_reason": "Slippage 16.3pips > 3.5",
+      "sell_reason": "Slippage 16.3pips > 3.5"
+    },
+    {
+      "time": "08:55:26",
+      "pair": "EUR_USD",
+      "buy_reason": "Slippage 16.7pips > 3.5",
+      "sell_reason": "Slippage 16.7pips > 3.5"
     }
   ],
   "last_cleanup": "2026-10-09"
