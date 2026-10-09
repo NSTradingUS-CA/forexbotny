@@ -6,15 +6,23 @@ Fenêtre utile réelle : 16:44 → 17:14 ET
   → complète les reminders du bot principal (16:50-16:54, 16:55-16:57, 16:58)
   → couvre la clôture OANDA à 16:59 ET et l'arrêt bot à 17:05 ET
 
-CORRECTIONS 2026-10-09 :
-- Alignement sur les reminders du bot principal :
-    * Cron 1 = 16:50 ET → fenêtre pré-clôture 16:44-16:53
-    * Cron 2 = 16:56 ET → fenêtre dernier appel 16:53-17:03
-    * Cron 3 = 17:06 ET → fenêtre post-mortem 17:03-17:14
-- Fenêtres élargies à ±6-7 min pour tolérer les retards GitHub cron
-- Une seule alerte par fenêtre (3 alertes max par jour)
-- Le YAML ne doit contenir que 3 crons (20:50, 20:56, 21:06 UTC en EDT)
-  pour éviter les doublons d'alerte
+STRATÉGIE DST-AUTO (aucun ajustement manuel 2×/an) :
+  - Le YAML déclare 6 crons UTC :
+        3 pour l'heure d'été (EDT, UTC-4) : 20:50 / 20:56 / 21:06
+        3 pour l'heure d'hiver (EST, UTC-5) : 21:50 / 21:56 / 22:06
+  - En été, les 3 crons EST tombent à 15:50 / 15:56 / 16:06 ET → hors fenêtre
+    utile, Python les ignore silencieusement.
+  - En hiver, les 3 crons EDT tombent à 17:50 / 17:56 / 18:06 ET → hors
+    fenêtre utile, Python les ignore silencieusement.
+  - Résultat : chaque alerte part exactement une fois par jour, par le cron
+    qui tombe dans la bonne plage locale. Aucun doublon possible.
+
+ALIGNEMENT sur les reminders du bot principal :
+  - bot : 16:50-16:54 (reminders) / 16:55-16:57 (clôture forcée)
+          / 16:58 (critique) / 17:05 (arrêt)
+  - guardian : fenêtre pré-clôture 16:44-16:53
+               fenêtre dernier appel 16:53-17:03
+               fenêtre post-mortem   17:03-17:14
 """
 import os
 import json
