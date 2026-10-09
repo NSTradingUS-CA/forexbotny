@@ -2,18 +2,18 @@ name: 🛡️ Trade Guardian
 
 on:
   schedule:
-    # ⚠️ GitHub cron est en UTC. On déclare 6 crons :
+    # ⚠️ GitHub cron est TOUJOURS interprété en UTC. On déclare 6 crons :
     #   3 pour l'heure d'été (EDT, UTC-4) + 3 pour l'heure d'hiver (EST, UTC-5).
     #   Python filtre selon l'heure locale 'America/Toronto'.
-    #   Aucun ajustement manuel 2×/an.
+    #   → Aucun ajustement manuel 2×/an.
     #
     # Fenêtre ET utile : 16:44 → 17:14 (alignée sur les reminders du bot)
     #
-    # Été (EDT) :
+    # Été (EDT, UTC-4) :
     - cron: '50 20 * * 1-5'   # 16:50 EDT → pré-clôture
     - cron: '56 20 * * 1-5'   # 16:56 EDT → dernier appel
     - cron: '06 21 * * 1-5'   # 17:06 EDT → post-mortem
-    # Hiver (EST) :
+    # Hiver (EST, UTC-5) :
     - cron: '50 21 * * 1-5'   # 16:50 EST → pré-clôture
     - cron: '56 21 * * 1-5'   # 16:56 EST → dernier appel
     - cron: '06 22 * * 1-5'   # 17:06 EST → post-mortem
