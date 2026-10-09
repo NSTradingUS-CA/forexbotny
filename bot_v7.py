@@ -135,6 +135,7 @@ _last_closed_trades_data = None
 _candle_cache = {}
 
 _last_news_block_message_sent = False
+_last_reminder_minute = None
 
 
 # ============ HTTP HELPERS (bypass v20 pour position.close) ============
@@ -157,6 +158,56 @@ def _oanda_http_retry(method, url, json_body=None, max_attempts=3):
         if i < max_attempts - 1:
             time.sleep(3 * (i + 1))
     return None
+
+
+def _extract_attr(obj, key, default=None):
+    """Extrait un attribut depuis un dict OU un objet (SDK v20)."""
+    if obj is None:
+        return default
+    if isinstance(obj, dict):
+        return obj.get(key, default)
+    return getattr(obj, key, default)
+
+
+def fetch_position_pnl_from_oanda(instrument):
+    """
+    Récupère le P&L non réalisé directement depuis l'API OANDA.
+    Retourne le P&L en devise du compte (ex: CAD) ou None si indisponible.
+    """
+    try:
+        resp = retry_api_call(ctx.position.get, ACCOUNT_ID, instrument)
+        body = getattr(resp, 'body', None)
+        if body is None:
+            return None
+
+        pos = _extract_attr(body, 'position', None)
+        if pos is None:
+            return None
+
+        # Priorité : unrealizedPL au niveau de la position
+        pl_raw = _extract_attr(pos, 'unrealizedPL', None)
+        if pl_raw is not None:
+            try:
+                return float(pl_raw)
+            except (ValueError, TypeError):
+                pass
+
+        # Fallback : somme des P&L long + short
+        total_pl = 0.0
+        for side_name in ('long', 'short'):
+            side = _extract_attr(pos, side_name, None)
+            if side is None:
+                continue
+            side_pl = _extract_attr(side, 'unrealizedPL', None)
+            if side_pl is not None:
+                try:
+                    total_pl += float(side_pl)
+                except (ValueError, TypeError):
+                    pass
+        return total_pl if total_pl != 0.0 else None
+    except Exception as e:
+        print(f"⚠️ fetch_position_pnl_from_oanda failed: {e}")
+        return None
 
 
 def fetch_trade_raw(trade_id):
@@ -1666,7 +1717,7 @@ def main():
     global trades_today, last_trade_date, last_close_time, active_trade
     global closed_trades_today, rejected_signals
     global late_shutdown_required, trade_opened_during_window_today, daily_start_balance
-    global BOT_STATUS, orb_range, _last_news_block_message_sent
+    global BOT_STATUS, orb_range, _last_news_block_message_sent, _last_reminder_minute
 
     load_closed_trades_from_file()
     load_rejected_from_file()
@@ -1741,88 +1792,53 @@ def main():
                 send_telegram_message("🔴 Bot stopped – End of session (past 12:05), no active trade.")
                 break
 
-            if now.hour == 16 and now.minute >= 45 and now.minute < 47:
-                if active_trade is not None:
+            # === Reminders pré-clôture : 16:51 → 16:55, un par minute, P&L depuis OANDA ===
+            if now.hour == 16 and 51 <= now.minute <= 55:
+                if active_trade is not None and _last_reminder_minute != now.minute:
+                    pnl_oanda = fetch_position_pnl_from_oanda(active_trade['pair'])
+                    if pnl_oanda is not None:
+                        pnl_str = f"{pnl_oanda:.2f} CAD"
+                    else:
+                        pnl_str = "indisponible (API OANDA)"
                     send_telegram_message(
-                        f"⏰ **Reminder:** Trade still open on {active_trade['pair']}.\n"
-                        f"Market closes at 16:59 (NY time). Please monitor or close manually."
+                        f"⏰ <b>Reminder {now.strftime('%H:%M')}</b>\n"
+                        f"Pair: {active_trade['pair']}\n"
+                        f"P&L (OANDA): {pnl_str}\n"
+                        f"Marché ferme à 16:59 NY.\n"
+                        f"Clôture forcée automatique à 16:56-16:58."
                     )
-                    print("Rappel envoyé à 16:45.")
+                    print(f"Reminder {now.strftime('%H:%M')} envoyé. P&L OANDA: {pnl_str}")
+                    _last_reminder_minute = now.minute
 
-            if now.hour == 16 and now.minute >= 50 and now.minute < 52:
+            # === 16:56-16:58 : clôture forcée, peu importe le P&L ===
+            if now.hour == 16 and 56 <= now.minute < 59:
                 if active_trade is not None:
-                    try:
-                        pair = active_trade['pair']
-                        resp = ctx.pricing.get(ACCOUNT_ID, instruments=pair)
-                        pi = resp.body['prices'][0]
-                        bid = float(pi.bids[0].price)
-                        ask = float(pi.asks[0].price)
-                        current_price = bid if active_trade['direction'] == 'sell' else ask
-                        units_abs = abs(int(active_trade['units']))
-                        if active_trade['direction'] == 'sell':
-                            pnl = (active_trade['entry_price'] - current_price) * units_abs
-                        else:
-                            pnl = (current_price - active_trade['entry_price']) * units_abs
-                    except:
-                        pnl = 0
-
-                    if pnl > 0:
-                        if close_full_position_market():
-                            usd_cad = get_usd_cad_rate()
-                            pnl_cad = pnl * usd_cad
-                            send_telegram_message(
-                                f"🔒 **Trade closed before market close**\n"
-                                f"Pair: {active_trade['pair']}\n"
-                                f"P&L: {pnl_cad:.2f} CAD\n"
-                                f"Reason: End of session (16:50)"
-                            )
-                            time.sleep(2)
-                            check_closed_trade()
-                        else:
-                            send_telegram_message(f"⚠️ Could not close trade on {active_trade['pair']}.")
+                    pnl_oanda = fetch_position_pnl_from_oanda(active_trade['pair'])
+                    pnl_str = f"{pnl_oanda:.2f} CAD" if pnl_oanda is not None else "indisponible"
+                    print(f"16:{now.minute:02d} – Clôture forcée en cours. P&L OANDA: {pnl_str}")
+                    if close_full_position_market():
+                        send_telegram_message(
+                            f"🔒 <b>Trade closed (forced, end of session)</b>\n"
+                            f"Pair: {active_trade['pair']}\n"
+                            f"P&L: {pnl_str}\n"
+                            f"Reason: End of session (forced closure)"
+                        )
+                        time.sleep(2)
+                        check_closed_trade()
                     else:
                         send_telegram_message(
-                            f"⏳ **Trade on {active_trade['pair']} is in loss ({pnl:.2f} USD).**\n"
-                            f"Market closes at 16:59. Please manage manually."
+                            f"⚠️ <b>Forced closure failed on {active_trade['pair']}.</b>\n"
+                            f"Please close manually before 16:59 NY."
                         )
 
             if now.hour > BOT_SHUTDOWN_HOUR or (now.hour == BOT_SHUTDOWN_HOUR and now.minute >= 5):
                 if active_trade is not None:
-                    try:
-                        pair = active_trade['pair']
-                        resp = ctx.pricing.get(ACCOUNT_ID, instruments=pair)
-                        pi = resp.body['prices'][0]
-                        bid = float(pi.bids[0].price)
-                        ask = float(pi.asks[0].price)
-                        current_price = bid if active_trade['direction'] == 'sell' else ask
-                        units_abs = abs(int(active_trade['units']))
-                        if active_trade['direction'] == 'sell':
-                            pnl = (active_trade['entry_price'] - current_price) * units_abs
-                        else:
-                            pnl = (current_price - active_trade['entry_price']) * units_abs
-                    except:
-                        pnl = 0
-                    if pnl > 0:
-                        if close_full_position_market():
-                            usd_cad = get_usd_cad_rate()
-                            pnl_cad = pnl * usd_cad
-                            send_telegram_message(
-                                f"🔒 **Trade closed at market close**\n"
-                                f"Pair: {active_trade['pair']}\n"
-                                f"P&L: {pnl_cad:.2f} CAD\n"
-                                f"Reason: End of session (17:05)"
-                            )
-                            time.sleep(2)
-                            check_closed_trade()
-                        else:
-                            send_telegram_message(
-                                f"⚠️ **Could not close trade on {active_trade['pair']}.** Please close manually."
-                            )
-                    else:
-                        send_telegram_message(
-                            f"⏳ **Trade on {active_trade['pair']} is in loss ({pnl:.2f} USD).**\n"
-                            f"Market is now closed. Please manage manually."
-                        )
+                    send_telegram_message(
+                        f"🚨 <b>Critical: trade still open after market close</b>\n"
+                        f"Pair: {active_trade['pair']}\n"
+                        f"The forced closure at 16:56-16:58 failed. Position carries over the weekend.\n"
+                        f"Please verify OANDA immediately."
+                    )
                 print("🕒 17:05 reached – stopping bot.")
                 BOT_STATUS = "stopped"
                 save_status_json()
@@ -1861,6 +1877,7 @@ def main():
                     trade_opened_during_window_today = False
                     orb_range = {"high": None, "low": None, "recorded": False}
                     _candle_cache.clear()
+                    _last_reminder_minute = None
                     load_closed_trades_from_file()
                     load_rejected_from_file()
                     recover_recent_closed_trades(hours=24)
