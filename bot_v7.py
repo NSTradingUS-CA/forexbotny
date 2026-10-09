@@ -1812,25 +1812,33 @@ def main():
                     _last_reminder_minute = now.minute
 
             # === 16:55-16:57 : clôture forcée, peu importe le P&L ===
+            # Patch : vérifie d'abord si la position est déjà fermée pour éviter
+            # un faux positif "Forced closure failed" quand OANDA a traité la
+            # clôture mais ne l'a pas encore publiée dans la liste CLOSED.
             if now.hour == 16 and 55 <= now.minute <= 57:
                 if active_trade is not None:
-                    pnl_oanda = fetch_position_pnl_from_oanda(active_trade['pair'])
-                    pnl_str = f"{pnl_oanda:.2f} CAD" if pnl_oanda is not None else "indisponible"
-                    print(f"16:{now.minute:02d} – Clôture forcée en cours. P&L OANDA: {pnl_str}")
-                    if close_full_position_market():
-                        send_telegram_message(
-                            f"🔒 <b>Trade closed (forced, end of session)</b>\n"
-                            f"Pair: {active_trade['pair']}\n"
-                            f"P&L: {pnl_str}\n"
-                            f"Reason: End of session (forced closure)"
-                        )
-                        time.sleep(2)
+                    pair = active_trade['pair']
+                    if not has_open_position(pair):
+                        print(f"Position {pair} déjà fermée côté OANDA. Finalisation de l'enregistrement.")
                         check_closed_trade()
                     else:
-                        send_telegram_message(
-                            f"⚠️ <b>Forced closure failed on {active_trade['pair']}.</b>\n"
-                            f"Please close manually before 16:59 NY."
-                        )
+                        pnl_oanda = fetch_position_pnl_from_oanda(pair)
+                        pnl_str = f"{pnl_oanda:.2f} CAD" if pnl_oanda is not None else "indisponible"
+                        print(f"16:{now.minute:02d} – Clôture forcée en cours. P&L OANDA: {pnl_str}")
+                        if close_full_position_market():
+                            send_telegram_message(
+                                f"🔒 <b>Trade closed (forced, end of session)</b>\n"
+                                f"Pair: {pair}\n"
+                                f"P&L: {pnl_str}\n"
+                                f"Reason: End of session (forced closure)"
+                            )
+                            time.sleep(2)
+                            check_closed_trade()
+                        else:
+                            send_telegram_message(
+                                f"⚠️ <b>Forced closure failed on {pair}.</b>\n"
+                                f"Please close manually before 16:59 NY."
+                            )
 
             # === 16:58 : alerte critique (une seule fois) si la position est encore ouverte ===
             if now.hour == 16 and now.minute == 58:
