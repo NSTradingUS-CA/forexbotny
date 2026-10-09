@@ -1,5 +1,5 @@
 {
-  "time": "2026-10-09 08:11:56",
+  "time": "2026-10-09 08:17:03",
   "bot_status": "running",
   "session": {
     "trades_today": 1,
@@ -11,16 +11,16 @@
     "pair": "EUR_USD",
     "type": "Sell",
     "entry": 1.1207,
-    "sl": 1.12189,
+    "sl": 1.12184,
     "tp1": 1.1185880000000001,
     "tp2": 1.11674,
     "trailing_stop": "server-side (OANDA)",
-    "current_price": 1.12022,
-    "unrealized_pnl_usd": 114.2,
-    "unrealized_pnl_cad": 162.5,
-    "usd_cad_rate": 1.4229,
-    "distance_to_sl_pips": 16.7,
-    "distance_to_tp2_pips": 34.8,
+    "current_price": 1.12035,
+    "unrealized_pnl_usd": 83.27,
+    "unrealized_pnl_cad": 118.47,
+    "usd_cad_rate": 1.4227,
+    "distance_to_sl_pips": 14.9,
+    "distance_to_tp2_pips": 36.1,
     "atr": 0.0008428571428571134,
     "be_triggered": false,
     "tp1_hit": false,
@@ -38,6 +38,9 @@
   "strategy": "H1 Multi-Setup (9 types) - Quality Score based",
   "max_risk_per_trade_percent": 0.65,
   "daily_loss_limit_percent": 2.0,
-  "blocked_pairs": [],
+  "blocked_pairs": [
+    "EUR_USD",
+    "GBP_USD"
+  ],
   "active_pairs": []
 }
