@@ -1,5 +1,5 @@
 {
-  "time": "2026-10-09 12:26:54",
+  "time": "2026-10-09 12:31:21",
   "bot_status": "running",
   "session": {
     "trades_today": 2,
@@ -12,22 +12,22 @@
     "type": "Sell",
     "entry": 1.11991,
     "sl": 1.12073,
-    "tp1": 1.117934,
-    "tp2": 1.114476,
+    "tp1": null,
+    "tp2": 1.11448,
     "trailing_stop": "server-side (OANDA)",
-    "current_price": 1.11892,
-    "unrealized_pnl_usd": 155.12,
-    "unrealized_pnl_cad": 221.42,
-    "usd_cad_rate": 1.4275,
-    "distance_to_sl_pips": 18.1,
-    "distance_to_tp2_pips": 44.4,
+    "current_price": 1.11893,
+    "unrealized_pnl_usd": 102.88,
+    "unrealized_pnl_cad": 146.84,
+    "usd_cad_rate": 1.4273,
+    "distance_to_sl_pips": 18.0,
+    "distance_to_tp2_pips": 44.5,
     "atr": 0.00097214285714285,
     "be_triggered": false,
-    "tp1_hit": false,
+    "tp1_hit": true,
     "setup_type": "Momentum",
     "risk_percent": 0.4,
     "opened_at": "2026-10-09T09:01:35.035607-04:00",
-    "units": -156683,
+    "units": -104978,
     "score": 58.9
   },
   "next_news_event": null,
@@ -35,8 +35,5 @@
   "max_risk_per_trade_percent": 0.65,
   "daily_loss_limit_percent": 2.0,
   "blocked_pairs": [],
-  "active_pairs": [
-    "EUR_USD",
-    "GBP_USD"
-  ]
+  "active_pairs": []
 }
