@@ -4,6 +4,12 @@ avant la fin de session NY, même si le workflow principal a été tué.
 
 Fenêtre utile réelle : 16:40 → 17:15 ET (après mort du bot principal à 13:00,
 avant/après la clôture OANDA à 16:59 ET).
+
+CORRECTIONS 2026-10-09 :
+- Fenêtres élargies à ±7 min pour tolérer les retards GitHub cron
+- Une seule alerte par fenêtre (3 alertes max par jour)
+- Le YAML ne doit contenir que 3 crons (16:45, 16:55, 17:10 ET)
+  pour éviter les doublons d'alerte
 """
 import os
 import json
@@ -53,15 +59,24 @@ def fetch_status():
 
 def main():
     now = datetime.now(tz)
+    minutes_now = now.hour * 60 + now.minute
 
-    # === FILTRE DE FENÊTRE : on sort immédiatement si on n'est pas dans
-    # 16:40 → 17:15 ET. Ça évite tout appel API inutile si GitHub déclenche
-    # le workflow hors créneau (retard, fuseau, ajustement YAML manqué).
-    in_window = (
-        (now.hour == 16 and now.minute >= 40) or
-        (now.hour == 17 and now.minute <= 15)
+    # Fenêtres en minutes depuis minuit (heure ET).
+    # Chaque fenêtre tolère un retard GitHub cron d'environ ±7 min.
+    # Bornes supérieures exclusives pour éviter les chevauchements.
+    WIN_PRE_CLOSE_START   = 16 * 60 + 40    # 16:40
+    WIN_PRE_CLOSE_END     = 16 * 60 + 52    # 16:52 (exclu)
+    WIN_LAST_CALL_START   = 16 * 60 + 53    # 16:53
+    WIN_LAST_CALL_END     = 17 * 60 + 4     # 17:04 (exclu)
+    WIN_POST_MORTEM_START = 17 * 60 + 5     # 17:05
+    WIN_POST_MORTEM_END   = 17 * 60 + 16    # 17:16 (exclu)
+
+    in_any_window = (
+        (WIN_PRE_CLOSE_START <= minutes_now < WIN_PRE_CLOSE_END) or
+        (WIN_LAST_CALL_START <= minutes_now < WIN_LAST_CALL_END) or
+        (WIN_POST_MORTEM_START <= minutes_now < WIN_POST_MORTEM_END)
     )
-    if not in_window:
+    if not in_any_window:
         print(f"{now.strftime('%H:%M')} – Hors fenêtre utile (16:40–17:15 ET), sortie sans action.")
         return
 
@@ -81,38 +96,36 @@ def main():
     sl = active.get("sl", 0)
     tp2 = active.get("tp2", 0)
 
-    # 16:45 → rappel de fermeture imminente
-    if now.hour == 16 and 45 <= now.minute < 50:
+    # === Fenêtre 1 : pré-clôture (16:40 → 16:52) ===
+    if WIN_PRE_CLOSE_START <= minutes_now < WIN_PRE_CLOSE_END:
         send_telegram(
-            f"⏰ <b>Guardian 16:45</b> – Trade encore ouvert :\n"
+            f"⏰ <b>Guardian – fermeture imminente</b>\n"
             f"Pair : {pair}\n"
             f"Prix actuel : {current}\n"
             f"SL : {sl} | TP2 : {tp2}\n"
             f"P&L latent : {pnl_cad:.2f} CAD\n"
             f"Marché ferme à 16:59 NY. Fermez manuellement si nécessaire."
         )
-        print("Rappel 16:45 envoyé.")
+        print(f"{now.strftime('%H:%M')} – Rappel pré-clôture envoyé.")
 
-    # 16:55 → dernier appel
-    elif now.hour == 16 and 55 <= now.minute < 60:
+    # === Fenêtre 2 : dernier appel (16:53 → 17:04) ===
+    elif WIN_LAST_CALL_START <= minutes_now < WIN_LAST_CALL_END:
         send_telegram(
-            f"🚨 <b>Guardian 16:55</b> – DERNIER APPEL :\n"
+            f"🚨 <b>Guardian – DERNIER APPEL</b>\n"
             f"Trade {pair} toujours ouvert.\n"
             f"P&L latent : {pnl_cad:.2f} CAD\n"
             f"Fermez MAINTENANT ou laissez le broker clôturer."
         )
-        print("Rappel 16:55 envoyé.")
+        print(f"{now.strftime('%H:%M')} – Dernier appel envoyé.")
 
-    # 17:10 → post-mortem
-    elif now.hour == 17 and 10 <= now.minute <= 15:
+    # === Fenêtre 3 : post-mortem (17:05 → 17:15) ===
+    elif WIN_POST_MORTEM_START <= minutes_now < WIN_POST_MORTEM_END:
         send_telegram(
-            f"🕒 <b>Guardian 17:10</b> – Session NY fermée.\n"
+            f"🕒 <b>Guardian – post-mortem</b>\n"
+            f"Session NY fermée.\n"
             f"Trade {pair} : P&L final inconnu. Vérifiez OANDA."
         )
-        print("Post-mortem 17:10 envoyé.")
-
-    else:
-        print(f"{now.strftime('%H:%M')} – Trade actif mais hors fenêtre d'alerte.")
+        print(f"{now.strftime('%H:%M')} – Post-mortem envoyé.")
 
 
 if __name__ == "__main__":
