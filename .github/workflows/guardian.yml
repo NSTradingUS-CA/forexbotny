@@ -10,15 +10,21 @@ on:
     #   → après la mort du bot principal (kill GitHub à 13:00 ET)
     #   → avant/après la clôture OANDA à 16:59 ET
     #
-    # Été (EDT, UTC-4) : 20:40 → 21:15 UTC
-    #   '40,45,50,55 20 * * 1-5'  →  16:40, 16:45, 16:50, 16:55 EDT
-    #   '0,5,10,15 21 * * 1-5'    →  17:00, 17:05, 17:10, 17:15 EDT
+    # 3 crons uniquement (un par alerte Guardian) pour éviter les doublons.
+    # Les fenêtres Python tolèrent un retard GitHub cron d'environ ±7 min.
+    #
+    # Été (EDT, UTC-4) :
+    #   20:45 UTC = 16:45 ET → rappel pré-clôture
+    #   20:55 UTC = 16:55 ET → dernier appel
+    #   21:10 UTC = 17:10 ET → post-mortem
     #
     # Hiver (EST, UTC-5) : à ajuster en novembre :
-    #   '40,45,50,55 21 * * 1-5'  →  16:40, 16:45, 16:50, 16:55 EST
-    #   '0,5,10,15 22 * * 1-5'    →  17:00, 17:05, 17:10, 17:15 EST
-    - cron: '40,45,50,55 20 * * 1-5'
-    - cron: '0,5,10,15 21 * * 1-5'
+    #   21:45 UTC = 16:45 ET → rappel pré-clôture
+    #   21:55 UTC = 16:55 ET → dernier appel
+    #   22:10 UTC = 17:10 ET → post-mortem
+    - cron: '45 20 * * 1-5'    # 16:45 EDT (été)
+    - cron: '55 20 * * 1-5'    # 16:55 EDT (été)
+    - cron: '10 21 * * 1-5'    # 17:10 EDT (été)
   workflow_dispatch:
 
 concurrency:
