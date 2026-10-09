@@ -136,6 +136,7 @@ _candle_cache = {}
 
 _last_news_block_message_sent = False
 _last_reminder_minute = None
+_critical_alert_sent = False
 
 
 # ============ HTTP HELPERS (bypass v20 pour position.close) ============
@@ -1717,7 +1718,7 @@ def main():
     global trades_today, last_trade_date, last_close_time, active_trade
     global closed_trades_today, rejected_signals
     global late_shutdown_required, trade_opened_during_window_today, daily_start_balance
-    global BOT_STATUS, orb_range, _last_news_block_message_sent, _last_reminder_minute
+    global BOT_STATUS, orb_range, _last_news_block_message_sent, _last_reminder_minute, _critical_alert_sent
 
     load_closed_trades_from_file()
     load_rejected_from_file()
@@ -1792,8 +1793,8 @@ def main():
                 send_telegram_message("🔴 Bot stopped – End of session (past 12:05), no active trade.")
                 break
 
-            # === Reminders pré-clôture : 16:51 → 16:55, un par minute, P&L depuis OANDA ===
-            if now.hour == 16 and 51 <= now.minute <= 55:
+            # === Reminders pré-clôture : 16:50 → 16:54, un par minute, P&L depuis OANDA ===
+            if now.hour == 16 and 50 <= now.minute <= 54:
                 if active_trade is not None and _last_reminder_minute != now.minute:
                     pnl_oanda = fetch_position_pnl_from_oanda(active_trade['pair'])
                     if pnl_oanda is not None:
@@ -1805,13 +1806,13 @@ def main():
                         f"Pair: {active_trade['pair']}\n"
                         f"P&L (OANDA): {pnl_str}\n"
                         f"Marché ferme à 16:59 NY.\n"
-                        f"Clôture forcée automatique à 16:56-16:58."
+                        f"Clôture forcée automatique à 16:55-16:57."
                     )
                     print(f"Reminder {now.strftime('%H:%M')} envoyé. P&L OANDA: {pnl_str}")
                     _last_reminder_minute = now.minute
 
-            # === 16:56-16:58 : clôture forcée, peu importe le P&L ===
-            if now.hour == 16 and 56 <= now.minute < 59:
+            # === 16:55-16:57 : clôture forcée, peu importe le P&L ===
+            if now.hour == 16 and 55 <= now.minute <= 57:
                 if active_trade is not None:
                     pnl_oanda = fetch_position_pnl_from_oanda(active_trade['pair'])
                     pnl_str = f"{pnl_oanda:.2f} CAD" if pnl_oanda is not None else "indisponible"
@@ -1831,13 +1832,24 @@ def main():
                             f"Please close manually before 16:59 NY."
                         )
 
+            # === 16:58 : alerte critique (une seule fois) si la position est encore ouverte ===
+            if now.hour == 16 and now.minute == 58:
+                if active_trade is not None and not _critical_alert_sent:
+                    send_telegram_message(
+                        f"🚨 <b>CRITICAL: trade still open at 16:58</b>\n"
+                        f"Pair: {active_trade['pair']}\n"
+                        f"Forced closure failed. You have ~60 seconds to close manually before market close (16:59 NY).\n"
+                        f"Otherwise position carries over the weekend."
+                    )
+                    print("🚨 Alerte critique 16:58 envoyée.")
+                    _critical_alert_sent = True
+
             if now.hour > BOT_SHUTDOWN_HOUR or (now.hour == BOT_SHUTDOWN_HOUR and now.minute >= 5):
                 if active_trade is not None:
                     send_telegram_message(
-                        f"🚨 <b>Critical: trade still open after market close</b>\n"
+                        f"🚨 <b>Trade still open after market close</b>\n"
                         f"Pair: {active_trade['pair']}\n"
-                        f"The forced closure at 16:56-16:58 failed. Position carries over the weekend.\n"
-                        f"Please verify OANDA immediately."
+                        f"Position carries over the weekend. Verify on OANDA."
                     )
                 print("🕒 17:05 reached – stopping bot.")
                 BOT_STATUS = "stopped"
@@ -1878,6 +1890,7 @@ def main():
                     orb_range = {"high": None, "low": None, "recorded": False}
                     _candle_cache.clear()
                     _last_reminder_minute = None
+                    _critical_alert_sent = False
                     load_closed_trades_from_file()
                     load_rejected_from_file()
                     recover_recent_closed_trades(hours=24)
