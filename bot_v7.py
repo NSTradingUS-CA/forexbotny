@@ -185,7 +185,6 @@ def fetch_position_pnl_from_oanda(instrument):
         if pos is None:
             return None
 
-        # Priorité : unrealizedPL au niveau de la position
         pl_raw = _extract_attr(pos, 'unrealizedPL', None)
         if pl_raw is not None:
             try:
@@ -193,7 +192,6 @@ def fetch_position_pnl_from_oanda(instrument):
             except (ValueError, TypeError):
                 pass
 
-        # Fallback : somme des P&L long + short
         total_pl = 0.0
         for side_name in ('long', 'short'):
             side = _extract_attr(pos, side_name, None)
@@ -1381,7 +1379,7 @@ def _best_hypothetical_setup(c, df, instrument, config, atr, h1_up, h1_down, sen
 
 def check_signal(df, instrument):
     if len(df) < 220:
-        return False, 0, 0, 0, 0, None, None, 0, "Not enough candles"
+        return False, 0, 0, 0, 0, None, None, 0, 0.0, "Not enough candles"
 
     c = df.iloc[-1]
     prev = df.iloc[-2]
@@ -1389,7 +1387,7 @@ def check_signal(df, instrument):
     config = PAIR_CONFIG[instrument]
     atr = float(c['atr'])
     if any(pd.isna(c[x]) for x in ['atr','ema50','ema200','rsi','adx','plus_di','minus_di','macd_line','macd_signal']):
-        return False, 0, 0, 0, 0, None, None, 0, "Missing indicators"
+        return False, 0, 0, 0, 0, None, None, 0, 0.0, "Missing indicators"
 
     h1_up = c['ema50'] > c['ema200'] and c['c'] > c['ema50']
     h1_down = c['ema50'] < c['ema200'] and c['c'] < c['ema50']
@@ -1569,7 +1567,7 @@ def check_signal(df, instrument):
         scored_signals.sort(key=lambda x: x[0], reverse=True)
         best_score, best_signal = scored_signals[0]
         price, sl, tp, sl_pips, direction, setup_type, risk_pct = best_signal
-        return True, price, sl, tp, sl_pips, direction, setup_type, risk_pct, f"{setup_type} selected (score {best_score:.1f})"
+        return True, price, sl, tp, sl_pips, direction, setup_type, risk_pct, best_score, f"{setup_type} selected (score {best_score:.1f})"
     else:
         buy_reasons = []
         sell_reasons = []
@@ -1609,7 +1607,7 @@ def check_signal(df, instrument):
             diag_str = f" [Diagnostic error: {e}]"
 
         reason = f"{', '.join(buy_reasons)} | {', '.join(sell_reasons)}{diag_str}"
-        return False, 0, 0, 0, 0, None, None, 0, reason
+        return False, 0, 0, 0, 0, None, None, 0, 0.0, reason
 
 
 def check_future_news_and_alert():
@@ -1812,14 +1810,11 @@ def main():
                     _last_reminder_minute = now.minute
 
             # === 16:55-16:57 : clôture forcée, peu importe le P&L ===
-            # Patch : vérifie d'abord si la position est déjà fermée pour éviter
-            # un faux positif "Forced closure failed" quand OANDA a traité la
-            # clôture mais ne l'a pas encore publiée dans la liste CLOSED.
             if now.hour == 16 and 55 <= now.minute <= 57:
                 if active_trade is not None:
                     pair = active_trade['pair']
                     if not has_open_position(pair):
-                        print(f"Position {pair} déjà fermée côté OANDA. Finalisation de l'enregistrement.")
+                        print(f"Position {pair} déjà fermée. Finalisation de l'enregistrement.")
                         check_closed_trade()
                     else:
                         pnl_oanda = fetch_position_pnl_from_oanda(pair)
@@ -2055,9 +2050,9 @@ def main():
                         except Exception as e:
                             print(f"Candles failed {pair}: {e}")
                             continue
-                        signal, price, sl, tp, sl_pips, direction, setup_type, risk_pct, reason = check_signal(df, pair)
+                        signal, price, sl, tp, sl_pips, direction, setup_type, risk_pct, score, reason = check_signal(df, pair)
                         if signal:
-                            candidates.append((pair, price, sl, tp, sl_pips, direction, setup_type, risk_pct, reason, df))
+                            candidates.append((score, pair, price, sl, tp, sl_pips, direction, setup_type, risk_pct, reason, df))
                         else:
                             c = df.iloc[-1]
                             parts = reason.split("|")
@@ -2095,8 +2090,8 @@ def main():
                             print(f" -> REJECTED {pair}: {reason[:160]}...")
 
                     if candidates:
-                        best = candidates[0]
-                        pair, price, sl, tp, sl_pips, direction, setup_type, risk_pct, reason, df = best
+                        best = max(candidates, key=lambda c: c[0])
+                        score, pair, price, sl, tp, sl_pips, direction, setup_type, risk_pct, reason, df = best
                         print(f" -> SIGNAL {direction} {pair} [{setup_type}] {reason}")
 
                         success = place_trade(pair, price, sl, tp, direction, setup_type, risk_pct, reason, df, balance)
