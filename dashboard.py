@@ -102,6 +102,14 @@ st.markdown("""
         font-size: 0.9rem;
         font-style: italic;
     }
+    .stale-banner {
+        color: #AAAAAA;
+        font-size: 0.85rem;
+        font-style: italic;
+        text-align: center;
+        margin-top: -0.5rem;
+        margin-bottom: 0.5rem;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -138,7 +146,39 @@ def fetch_json(filename):
     return None
 
 def fetch_status():
-    return fetch_json("status.json")
+    """
+    Récupère status.json et neutralise les données périmées.
+
+    Si le fichier a été écrit un autre jour que celui d'aujourd'hui, le bot
+    n'a pas tourné aujourd'hui → on remet à zéro tous les compteurs du jour
+    et on marque le statut comme 'stopped' pour éviter d'afficher des valeurs
+    figées (ex. trades_today=2/3 un samedi alors que le bot est mort vendredi
+    à 17:05).
+    """
+    data = fetch_json("status.json")
+    if not data:
+        return None
+
+    time_str = data.get("time", "")
+    try:
+        status_date = datetime.strptime(time_str, "%Y-%m-%d %H:%M:%S").date()
+        today = datetime.now(MONTREAL_TZ).date()
+        if status_date != today:
+            # status.json périmé → jour sans session
+            data["_stale"] = True
+            data["_stale_date"] = status_date.strftime("%a %d %b")
+            if "session" in data:
+                data["session"]["trades_today"] = 0
+            data["active_trade"] = None
+            data["blocked_pairs"] = []
+            data["active_pairs"] = ["EUR_USD", "GBP_USD"]
+            data["next_news_event"] = None
+            data["bot_status"] = "stopped"
+    except (ValueError, TypeError):
+        # Format de date inattendu → on laisse passer tel quel
+        pass
+
+    return data
 
 def fetch_pair_indicators():
     data = fetch_json("pair_indicators.json")
@@ -276,6 +316,14 @@ def render_dashboard():
         st.error("Status unavailable – retrying in 10s")
         return
 
+    # ---------- Bannière de données périmées ----------
+    if data.get("_stale"):
+        st.markdown(
+            f'<div class="stale-banner">⚠️ Last bot activity: {data.get("_stale_date", "?")} '
+            f'– no session today, counters reset to zero.</div>',
+            unsafe_allow_html=True
+        )
+
     # ---------- Déterminer si le bot est en cours d'exécution ----------
     bot_status = data.get("bot_status")
     if bot_status == "stopped":
@@ -291,7 +339,7 @@ def render_dashboard():
         event_time = news_event.get("time", "")
         blocked_pairs = data.get("blocked_pairs", [])
         active_pairs = data.get("active_pairs", [])
-        
+
         if blocked_pairs and active_pairs:
             blocked_str = ", ".join(blocked_pairs)
             active_str = ", ".join(active_pairs)
@@ -308,7 +356,7 @@ def render_dashboard():
             )
         else:
             banner_text = f"📅 High-impact news detected – Trading paused until {resume_time}"
-        
+
         st.markdown(
             f'<div class="news-pause-banner">{banner_text}</div>',
             unsafe_allow_html=True
@@ -386,14 +434,14 @@ def render_dashboard():
         st.markdown("---")
         st.markdown("#### 🔥 Active Trade")
         st.markdown('<div class="active-trade-metrics">', unsafe_allow_html=True)
-        
+
         # Métriques principales
         c1, c2, c3, c4 = st.columns(4)
         c1.metric("Pair", active.get("pair", ""))
         c2.metric("Type", active.get("type", ""))
         c3.metric("Entry", f"{active.get('entry',0):.5f}")
         c4.metric("Current", f"{active.get('current_price',0):.5f}")
-        
+
         # P&L : on utilise CAD si disponible, sinon USD
         pnl_cad = active.get('unrealized_pnl_cad')
         if pnl_cad is not None:
@@ -402,9 +450,9 @@ def render_dashboard():
         else:
             pnl = active.get('unrealized_pnl', 0)
             currency = "USD"
-        
+
         c1.metric("P&L", f"{pnl:.2f} {currency}", delta_color="normal" if pnl>=0 else "inverse")
-        
+
         tp1_val = active.get('tp1')
         tp2_val = active.get('tp2')
         if tp1_val is not None:
@@ -412,7 +460,7 @@ def render_dashboard():
         if tp2_val is not None:
             c3.metric("TP2 (final)", f"{tp2_val:.5f}")
         c4.metric("SL", f"{active.get('sl',0):.5f} ({active.get('distance_to_sl_pips',0)} pips)")
-        
+
         # Informations de trailing
         trail_info = active.get('trailing_stop', '')
         atr_active = active.get('atr', None)
@@ -428,12 +476,12 @@ def render_dashboard():
         risk = display_risk(active)
         current_r = display_r(active)
         management = display_trade_status(active)
-        
+
         be_triggered = active.get('be_triggered', False)
         tp1_hit = active.get('tp1_hit', False)
         be_str = "✅" if be_triggered else "❌"
         tp1_str = "✅" if tp1_hit else "❌"
-        
+
         st.markdown(
             f"<div class='indicators-line'>"
             f"<span class='orange-label'>Setup:</span> {setup} | "
@@ -494,12 +542,12 @@ def render_dashboard():
             df_trades = pd.DataFrame(closed_trades)
             df_trades['setup'] = df_trades['setup'].str.upper()
             df_trades['r_multiple'] = pd.to_numeric(df_trades['r_multiple'], errors='coerce')
-            
+
             if 'score' in df_trades.columns:
                 df_trades['score'] = pd.to_numeric(df_trades['score'], errors='coerce')
             else:
                 df_trades['score'] = pd.NA
-            
+
             df_trades['pnl'] = pd.to_numeric(df_trades['pnl'], errors='coerce')
 
             all_setups = df_trades['setup'].unique()
