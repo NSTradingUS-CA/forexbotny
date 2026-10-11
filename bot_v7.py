@@ -53,7 +53,10 @@ BREAKOUT_LOOKBACK = 12
 BREAKOUT_BUFFER_ATR = 0.10
 MIN_SL_PIPS = 8
 MAX_SL_PIPS = 35
-NEWS_BLOCK_MINUTES = 15
+# === Fenêtre news asymétrique : 7 min pré + 10 min post (cohérent avec
+# NEWS_CLOSE_BEFORE_MINUTES = 5 → 2 min de buffer fermeture avant la news) ===
+NEWS_BLOCK_PRE_MINUTES = 7
+NEWS_BLOCK_POST_MINUTES = 10
 HIGH_IMPACT_EVENTS = ["NFP", "CPI", "FOMC", "Interest Rate", "GDP", "Retail Sales", "Nonfarm Payrolls", "Employment", "Rate Decision"]
 USE_MACD_FILTER = True
 MACD_FAST = 5
@@ -70,7 +73,6 @@ SLIPPAGE_ATR_FACTOR = 0.40
 SLIPPAGE_MIN_PIPS = 2.0
 
 NEWS_CLOSE_BEFORE_MINUTES = 5
-NEWS_WARNING_MINUTES = 15
 NEWS_CHECK_FUTURE_HOURS = 24
 
 BE_TOLERANCE_PIPS = 0.5
@@ -334,8 +336,9 @@ def check_and_block_news(now):
     global _current_blocked_pairs, _current_active_pairs, _current_news_event
     events = get_high_impact_news()
     for event in events:
-        block_start = event["time"] - timedelta(minutes=NEWS_BLOCK_MINUTES)
-        block_end = event["time"] + timedelta(minutes=NEWS_BLOCK_MINUTES)
+        # Fenêtre asymétrique : 7 min pré-news + 10 min post-news
+        block_start = event["time"] - timedelta(minutes=NEWS_BLOCK_PRE_MINUTES)
+        block_end = event["time"] + timedelta(minutes=NEWS_BLOCK_POST_MINUTES)
         if block_start <= now <= block_end:
             pause_until = block_end.timestamp()
             first_detection = (get_pause_until() < pause_until)
@@ -350,14 +353,18 @@ def check_and_block_news(now):
 
             if first_detection and active_trade is not None:
                 if set(affected_pairs) == set(PAIRS):
-                    msg = (f"📅 High-impact news detected: {event['title']} at "
-                           f"{event['time'].strftime('%H:%M')} – Trading paused on ALL pairs from "
-                           f"{block_start.strftime('%H:%M')} to {block_end.strftime('%H:%M')}")
+                    msg = (f"📅 <b>High-impact news detected:</b> {event['title']} at "
+                           f"{event['time'].strftime('%H:%M')}\n"
+                           f"Trading paused on <b>ALL pairs</b> from "
+                           f"{block_start.strftime('%H:%M')} to {block_end.strftime('%H:%M')} "
+                           f"({NEWS_BLOCK_PRE_MINUTES} min pre + {NEWS_BLOCK_POST_MINUTES} min post)")
                 else:
                     active_pairs = [p for p in PAIRS if p not in affected_pairs]
-                    msg = (f"📅 High-impact news detected: {event['title']} at "
-                           f"{event['time'].strftime('%H:%M')} – Trading paused on {', '.join(affected_pairs)} from "
-                           f"{block_start.strftime('%H:%M')} to {block_end.strftime('%H:%M')}\n"
+                    msg = (f"📅 <b>High-impact news detected:</b> {event['title']} at "
+                           f"{event['time'].strftime('%H:%M')}\n"
+                           f"Trading paused on {', '.join(affected_pairs)} from "
+                           f"{block_start.strftime('%H:%M')} to {block_end.strftime('%H:%M')} "
+                           f"({NEWS_BLOCK_PRE_MINUTES} min pre + {NEWS_BLOCK_POST_MINUTES} min post)\n"
                            f"(Active pairs: {', '.join(active_pairs)})")
                 send_telegram_message(msg)
                 print(msg)
@@ -1770,7 +1777,9 @@ def main():
     start_msg = (
         f"🟢 Forex Sniper 7-12 Multi-Setup started – max {MAX_TRADES_PER_DAY} trades/day, "
         f"buffer {MIN_MINUTES_BETWEEN_TRADES}min, 10 setups. Quality Score selection. "
-        f"({trades_today} already taken) – Trailing SL SERVER-SIDE (OANDA) + partial TP1."
+        f"({trades_today} already taken) – Trailing SL SERVER-SIDE (OANDA) + partial TP1.\n"
+        f"📅 News pause: {NEWS_BLOCK_PRE_MINUTES} min pre + {NEWS_BLOCK_POST_MINUTES} min post "
+        f"(close attempt at T-{NEWS_CLOSE_BEFORE_MINUTES})."
     )
 
     if future_events:
@@ -1865,12 +1874,16 @@ def main():
             if blocked:
                 if active_trade is None and not _last_news_block_message_sent:
                     if set(blocked_pairs) == set(PAIRS):
-                        msg = (f"📅 High-impact news in progress: {news_event['title']} at {news_event['time'].strftime('%H:%M')} – "
-                               f"Trading paused on ALL pairs until {datetime.fromtimestamp(get_pause_until(), tz).strftime('%H:%M')}.")
+                        msg = (f"📅 <b>High-impact news in progress:</b> {news_event['title']} at "
+                               f"{news_event['time'].strftime('%H:%M')} – "
+                               f"Trading paused on <b>ALL pairs</b> until "
+                               f"{datetime.fromtimestamp(get_pause_until(), tz).strftime('%H:%M')}.")
                     else:
                         active = [p for p in PAIRS if p not in blocked_pairs]
-                        msg = (f"📅 High-impact news in progress: {news_event['title']} at {news_event['time'].strftime('%H:%M')} – "
-                               f"Trading paused on {', '.join(blocked_pairs)} until {datetime.fromtimestamp(get_pause_until(), tz).strftime('%H:%M')}.\n"
+                        msg = (f"📅 <b>High-impact news in progress:</b> {news_event['title']} at "
+                               f"{news_event['time'].strftime('%H:%M')} – "
+                               f"Trading paused on {', '.join(blocked_pairs)} until "
+                               f"{datetime.fromtimestamp(get_pause_until(), tz).strftime('%H:%M')}.\n"
                                f"(Active pairs: {', '.join(active)})")
                     send_telegram_message(msg)
                     _last_news_block_message_sent = True
