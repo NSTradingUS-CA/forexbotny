@@ -1744,6 +1744,21 @@ def main():
             check_closed_trade()
 
     _now_check = datetime.now(tz)
+
+    # === Filtre DST pour le cron saisonnier ===
+    # Le YAML déclare deux crons ('30 16' été / '30 17' hiver). En saison, l'un
+    # tombe à 12:30 ET (fenêtre relay) et l'autre à 11:30 ET (hiver avec cron
+    # été) ou 13:30 ET (été avec cron hiver). On rejette le cron hors saison
+    # silencieusement (sans notification), pour ne laisser que celui qui tombe
+    # dans la bonne fenêtre locale. Ne s'applique qu'aux déclenchements cron
+    # (variable GITHUB_EVENT_SCHEDULE non vide) — pas aux dispatch.
+    _event_schedule = os.environ.get('GITHUB_EVENT_SCHEDULE', '')
+    if _event_schedule and _now_check.hour in (11, 13):
+        print(f"⏭️ Cron hors fenêtre saisonnière ({_now_check.strftime('%H:%M')} ET) – sortie silencieuse.")
+        BOT_STATUS = "stopped"
+        save_status_json()
+        return
+
     _after_1205 = _now_check.hour > 12 or (_now_check.hour == 12 and _now_check.minute >= 5)
     if _after_1205 and active_trade is None:
         print(f"🕒 Bot démarré à {_now_check.strftime('%H:%M')} sans trade actif – sortie immédiate (aucune notification).")
