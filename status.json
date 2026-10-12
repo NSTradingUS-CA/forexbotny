@@ -1,13 +1,35 @@
 {
-  "time": "2026-10-12 06:56:33",
+  "time": "2026-10-12 07:01:39",
   "bot_status": "running",
   "session": {
-    "trades_today": 0,
+    "trades_today": 1,
     "max_trades": 3,
     "start": "07:00",
     "end": "11:00"
   },
-  "active_trade": null,
+  "active_trade": {
+    "pair": "EUR_USD",
+    "type": "Sell",
+    "entry": 1.11797,
+    "sl": 1.1194,
+    "tp1": 1.1156899999999998,
+    "tp2": 1.1122699999999999,
+    "trailing_stop": "server-side (OANDA)",
+    "current_price": 1.11768,
+    "unrealized_pnl_usd": 54.15,
+    "unrealized_pnl_cad": 77.25,
+    "usd_cad_rate": 1.4264,
+    "distance_to_sl_pips": 17.2,
+    "distance_to_tp2_pips": 54.1,
+    "atr": 0.0008721428571428451,
+    "be_triggered": false,
+    "tp1_hit": false,
+    "setup_type": "Pin Bar",
+    "risk_percent": 0.55,
+    "opened_at": "2026-10-12T07:00:07.391189-04:00",
+    "units": -186738,
+    "score": 52.2
+  },
   "next_news_event": {
     "title": "CPI",
     "time": "08:30",
