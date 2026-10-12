@@ -1,5 +1,5 @@
 {
-  "time": "2026-10-12 15:22:24",
+  "time": "2026-10-12 15:27:31",
   "bot_status": "running",
   "session": {
     "trades_today": 1,
@@ -17,8 +17,8 @@
     "trailing_stop": "server-side (OANDA)",
     "current_price": 1.11562,
     "unrealized_pnl_usd": 294.02,
-    "unrealized_pnl_cad": 419.97,
-    "usd_cad_rate": 1.4284,
+    "unrealized_pnl_cad": 419.94,
+    "usd_cad_rate": 1.4283,
     "distance_to_sl_pips": 14.7,
     "distance_to_tp2_pips": 33.5,
     "atr": 0.0008721428571428451,
