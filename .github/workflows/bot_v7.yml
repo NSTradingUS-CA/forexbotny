@@ -4,12 +4,14 @@ on:
   workflow_dispatch:
   repository_dispatch:        # déclenché par Cron-job.org à 06:30 ET
   schedule:
-    # ⚠️ GitHub cron est TOUJOURS en UTC et ne connaît PAS l'heure d'été/hiver.
-    # Un seul cron est actif, à ajuster manuellement 2x/an :
-    #   - Été (mars → novembre) : '30 16 * * 1-5' = 12:30 EDT
-    #   - Hiver (novembre → mars) : '30 17 * * 1-5' = 12:30 EST
-    # Le 2e déclenchement inutile (13:30 EDT en été, 11:30 EST en hiver) est éliminé.
+    # ⚠️ GitHub cron est TOUJOURS en UTC. On déclare 2 crons pour couvrir
+    # les 2 saisons et on laisse le filtre Python dans bot_v7.py rejeter
+    # celui qui ne tombe pas dans la fenêtre 12:25-13:30 ET.
+    #   - Été (EDT, UTC-4) : '30 16' = 12:30 ET ✅
+    #   - Hiver (EST, UTC-5) : '30 17' = 12:30 ET ✅
+    # → Aucun ajustement manuel 2x/an.
     - cron: '30 16 * * 1-5'
+    - cron: '30 17 * * 1-5'
 
 concurrency:
   group: forex-sniper
@@ -31,6 +33,10 @@ jobs:
       GH_PAT: ${{ secrets.GH_PAT }}
       ALPHA_VANTAGE_API_KEY: ${{ secrets.ALPHA_VANTAGE_API_KEY }}
       PYTHONUNBUFFERED: "1"
+      # Permet au script de distinguer un déclenchement cron d'un dispatch.
+      # Vide pour repository_dispatch / workflow_dispatch, contient l'expression
+      # cron (ex. '30 16 * * 1-5') pour les déclenchements schedule.
+      GITHUB_EVENT_SCHEDULE: ${{ github.event.schedule }}
 
     steps:
       - name: Checkout repository
