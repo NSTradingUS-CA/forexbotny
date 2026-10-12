@@ -1774,18 +1774,49 @@ def main():
     now = datetime.now(tz)
     future_events = [e for e in events if e["time"] > now and e["time"] - now < timedelta(hours=NEWS_CHECK_FUTURE_HOURS)]
 
-    start_msg = (
-        f"🟢 Forex Sniper 7-12 Multi-Setup started – max {MAX_TRADES_PER_DAY} trades/day, "
-        f"buffer {MIN_MINUTES_BETWEEN_TRADES}min, 10 setups. Quality Score selection. "
-        f"({trades_today} already taken) – Trailing SL SERVER-SIDE (OANDA) + partial TP1.\n"
-        f"📅 News pause: {NEWS_BLOCK_PRE_MINUTES} min pre + {NEWS_BLOCK_POST_MINUTES} min post "
-        f"(close attempt at T-{NEWS_CLOSE_BEFORE_MINUTES})."
-    )
+    # Le Relay ne démarre que si un trade est actif (l'early-return ci-dessus
+    # garantit déjà qu'on n'arrive ici avec active_trade=None après 12:05).
+    if _after_1205 and active_trade is not None:
+        # === RELAY TAKEOVER ===
+        at = active_trade
+        direction_label = "BUY" if at['direction'] == 'buy' else "SELL"
+        lines = [
+            f"🔄 <b>Relay takeover</b> • {_now_check.strftime('%H:%M')} ET",
+            f"Session: {trades_today}/{MAX_TRADES_PER_DAY} trades",
+            "",
+            f"🔥 <b>Active Trade on {at['pair']} ({direction_label})</b>",
+            f"Entry: {at['entry_price']:.5f} • SL: {at['sl']:.5f}",
+        ]
+        tp2_val = at.get('tp2')
+        if tp2_val is not None:
+            lines.append(f"TP2 {tp2_val:.5f} • Runner {abs(int(at['units']))} units")
+        if at.get('be_triggered'):
+            lines.append("🛡️ BE secured ✅")
+        if at.get('tp1_hit'):
+            lines.append("🎯 TP1 hit ✅")
+        try:
+            pnl_oanda = fetch_position_pnl_from_oanda(at['pair'])
+            if pnl_oanda is not None:
+                lines.append(f"P&L: {pnl_oanda:+.2f} CAD")
+        except Exception:
+            pass
+        lines.append("")
+        lines.append("Relay runs until 17:05 ET (forced close at 16:55).")
+        start_msg = "\n".join(lines)
+    else:
+        # === NORMAL STARTUP ===
+        start_msg = (
+            f"🟢 Forex Sniper 7-12 Multi-Setup started – max {MAX_TRADES_PER_DAY} trades/day, "
+            f"buffer {MIN_MINUTES_BETWEEN_TRADES}min, 10 setups. Quality Score selection. "
+            f"({trades_today} already taken) – Trailing SL SERVER-SIDE (OANDA) + partial TP1.\n"
+            f"📅 News pause: {NEWS_BLOCK_PRE_MINUTES} min pre + {NEWS_BLOCK_POST_MINUTES} min post "
+            f"(close attempt at T-{NEWS_CLOSE_BEFORE_MINUTES})."
+        )
+        if future_events:
+            start_msg += "\n\n📰 <b>Upcoming high-impact news:</b>\n"
+            for e in future_events:
+                start_msg += f"• {e['title']} at {e['time'].strftime('%H:%M')} ({e['time'].strftime('%a %d %b')})\n"
 
-    if future_events:
-        start_msg += "\n\n📰 <b>Upcoming high-impact news:</b>\n"
-        for e in future_events:
-            start_msg += f"• {e['title']} at {e['time'].strftime('%H:%M')} ({e['time'].strftime('%a %d %b')})\n"
     print(start_msg)
     send_telegram_message(start_msg)
 
@@ -1807,13 +1838,13 @@ def main():
                     if pnl_oanda is not None:
                         pnl_str = f"{pnl_oanda:.2f} CAD"
                     else:
-                        pnl_str = "indisponible (API OANDA)"
+                        pnl_str = "unavailable (OANDA API)"
                     send_telegram_message(
                         f"⏰ <b>Reminder {now.strftime('%H:%M')}</b>\n"
                         f"Pair: {active_trade['pair']}\n"
                         f"P&L (OANDA): {pnl_str}\n"
-                        f"Marché ferme à 16:59 NY.\n"
-                        f"Clôture forcée automatique à 16:55-16:57."
+                        f"Market closes at 16:59 NY.\n"
+                        f"Automatic forced closure at 16:55-16:57."
                     )
                     print(f"Reminder {now.strftime('%H:%M')} envoyé. P&L OANDA: {pnl_str}")
                     _last_reminder_minute = now.minute
