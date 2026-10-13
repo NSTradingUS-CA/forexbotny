@@ -1,20 +1,5 @@
 {
-  "signals": [
-    {
-      "time": "07:00:05",
-      "pair": "GBP_USD",
-      "buy_reason": "H1 not up, MACD not bullish",
-      "sell_reason": "H1 not down",
-      "spread": 0.00017000000000000348,
-      "adx": 15.782127122411152,
-      "plus_di": 22.95075529732398,
-      "minus_di": 23.60316061275936,
-      "ema50": 1.323388772791901,
-      "ema200": 1.3231579079035038,
-      "rsi": 46.78215292758521,
-      "atr": 0.000989999999999999,
-      "diagnostic": null
-    }
-  ],
-  "last_cleanup": "2026-10-12"
+  "trades": [],
+  "signals": [],
+  "last_cleanup": "2026-10-13"
 }
