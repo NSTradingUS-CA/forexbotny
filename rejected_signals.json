@@ -1,4 +1,20 @@
 {
-  "signals": [],
+  "signals": [
+    {
+      "time": "07:00:12",
+      "pair": "GBP_USD",
+      "buy_reason": "MACD not bullish",
+      "sell_reason": "H1 not down",
+      "spread": 0.00017999999999984695,
+      "adx": 38.40198215416606,
+      "plus_di": 19.342064229468043,
+      "minus_di": 14.320785733903252,
+      "ema50": 1.3247051851955,
+      "ema200": 1.323571515577275,
+      "rsi": 57.04116531557914,
+      "atr": 0.0007757142857142764,
+      "diagnostic": "[Best hypothetical: Pullback BUY score=66.9]"
+    }
+  ],
   "last_cleanup": "2026-10-14"
 }
