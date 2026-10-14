@@ -449,6 +449,216 @@
       "rsi": 58.70275277480057,
       "atr": 0.000758571428571418,
       "diagnostic": "[Best hypothetical: Pullback BUY score=57.3]"
+    },
+    {
+      "time": "08:50:51",
+      "pair": "EUR_USD",
+      "buy_reason": "Slippage 51.4pips > 2.6",
+      "sell_reason": "Slippage 51.4pips > 2.6"
+    },
+    {
+      "time": "08:51:21",
+      "pair": "GBP_USD",
+      "buy_reason": "MACD not bullish",
+      "sell_reason": "H1 not down",
+      "spread": 0.00019999999999997797,
+      "adx": 34.878002187743725,
+      "plus_di": 17.350874690084943,
+      "minus_di": 18.484040090527387,
+      "ema50": 1.324778711494797,
+      "ema200": 1.3236341367650817,
+      "rsi": 58.70275277480057,
+      "atr": 0.000758571428571418,
+      "diagnostic": "[Best hypothetical: Pullback BUY score=57.3]"
+    },
+    {
+      "time": "08:51:21",
+      "pair": "EUR_USD",
+      "buy_reason": "Slippage 49.1pips > 2.6",
+      "sell_reason": "Slippage 49.1pips > 2.6"
+    },
+    {
+      "time": "08:51:51",
+      "pair": "GBP_USD",
+      "buy_reason": "MACD not bullish",
+      "sell_reason": "H1 not down",
+      "spread": 0.00015999999999993797,
+      "adx": 34.878002187743725,
+      "plus_di": 17.350874690084943,
+      "minus_di": 18.484040090527387,
+      "ema50": 1.324778711494797,
+      "ema200": 1.3236341367650817,
+      "rsi": 58.70275277480057,
+      "atr": 0.000758571428571418,
+      "diagnostic": "[Best hypothetical: Pullback BUY score=57.3]"
+    },
+    {
+      "time": "08:51:51",
+      "pair": "EUR_USD",
+      "buy_reason": "Slippage 48.6pips > 2.6",
+      "sell_reason": "Slippage 48.6pips > 2.6"
+    },
+    {
+      "time": "08:52:21",
+      "pair": "GBP_USD",
+      "buy_reason": "MACD not bullish",
+      "sell_reason": "H1 not down",
+      "spread": 0.00017000000000000348,
+      "adx": 34.878002187743725,
+      "plus_di": 17.350874690084943,
+      "minus_di": 18.484040090527387,
+      "ema50": 1.324778711494797,
+      "ema200": 1.3236341367650817,
+      "rsi": 58.70275277480057,
+      "atr": 0.000758571428571418,
+      "diagnostic": "[Best hypothetical: Pullback BUY score=57.3]"
+    },
+    {
+      "time": "08:52:22",
+      "pair": "EUR_USD",
+      "buy_reason": "Slippage 51.8pips > 2.6",
+      "sell_reason": "Slippage 51.8pips > 2.6"
+    },
+    {
+      "time": "08:52:52",
+      "pair": "GBP_USD",
+      "buy_reason": "MACD not bullish",
+      "sell_reason": "H1 not down",
+      "spread": 0.00017000000000000348,
+      "adx": 34.878002187743725,
+      "plus_di": 17.350874690084943,
+      "minus_di": 18.484040090527387,
+      "ema50": 1.324778711494797,
+      "ema200": 1.3236341367650817,
+      "rsi": 58.70275277480057,
+      "atr": 0.000758571428571418,
+      "diagnostic": "[Best hypothetical: Pullback BUY score=57.3]"
+    },
+    {
+      "time": "08:52:53",
+      "pair": "EUR_USD",
+      "buy_reason": "Slippage 56.5pips > 2.6",
+      "sell_reason": "Slippage 56.5pips > 2.6"
+    },
+    {
+      "time": "08:53:23",
+      "pair": "GBP_USD",
+      "buy_reason": "MACD not bullish",
+      "sell_reason": "H1 not down",
+      "spread": 0.00018999999999991246,
+      "adx": 34.878002187743725,
+      "plus_di": 17.350874690084943,
+      "minus_di": 18.484040090527387,
+      "ema50": 1.324778711494797,
+      "ema200": 1.3236341367650817,
+      "rsi": 58.70275277480057,
+      "atr": 0.000758571428571418,
+      "diagnostic": "[Best hypothetical: Pullback BUY score=57.3]"
+    },
+    {
+      "time": "08:53:23",
+      "pair": "EUR_USD",
+      "buy_reason": "Slippage 54.5pips > 2.6",
+      "sell_reason": "Slippage 54.5pips > 2.6"
+    },
+    {
+      "time": "08:53:53",
+      "pair": "GBP_USD",
+      "buy_reason": "MACD not bullish",
+      "sell_reason": "H1 not down",
+      "spread": 0.00018999999999991246,
+      "adx": 34.878002187743725,
+      "plus_di": 17.350874690084943,
+      "minus_di": 18.484040090527387,
+      "ema50": 1.324778711494797,
+      "ema200": 1.3236341367650817,
+      "rsi": 58.70275277480057,
+      "atr": 0.000758571428571418,
+      "diagnostic": "[Best hypothetical: Pullback BUY score=57.3]"
+    },
+    {
+      "time": "08:53:53",
+      "pair": "EUR_USD",
+      "buy_reason": "Slippage 56.2pips > 2.6",
+      "sell_reason": "Slippage 56.2pips > 2.6"
+    },
+    {
+      "time": "08:54:24",
+      "pair": "GBP_USD",
+      "buy_reason": "MACD not bullish",
+      "sell_reason": "H1 not down",
+      "spread": 0.00018999999999991246,
+      "adx": 34.878002187743725,
+      "plus_di": 17.350874690084943,
+      "minus_di": 18.484040090527387,
+      "ema50": 1.324778711494797,
+      "ema200": 1.3236341367650817,
+      "rsi": 58.70275277480057,
+      "atr": 0.000758571428571418,
+      "diagnostic": "[Best hypothetical: Pullback BUY score=57.3]"
+    },
+    {
+      "time": "08:54:25",
+      "pair": "EUR_USD",
+      "buy_reason": "Slippage 54.5pips > 2.6",
+      "sell_reason": "Slippage 54.5pips > 2.6"
+    },
+    {
+      "time": "08:54:55",
+      "pair": "GBP_USD",
+      "buy_reason": "MACD not bullish",
+      "sell_reason": "H1 not down",
+      "spread": 0.00017000000000000348,
+      "adx": 34.878002187743725,
+      "plus_di": 17.350874690084943,
+      "minus_di": 18.484040090527387,
+      "ema50": 1.324778711494797,
+      "ema200": 1.3236341367650817,
+      "rsi": 58.70275277480057,
+      "atr": 0.000758571428571418,
+      "diagnostic": "[Best hypothetical: Pullback BUY score=57.3]"
+    },
+    {
+      "time": "08:54:55",
+      "pair": "EUR_USD",
+      "buy_reason": "Slippage 52.0pips > 2.6",
+      "sell_reason": "Slippage 52.0pips > 2.6"
+    },
+    {
+      "time": "08:55:25",
+      "pair": "GBP_USD",
+      "buy_reason": "MACD not bullish",
+      "sell_reason": "H1 not down",
+      "spread": 0.00015999999999993797,
+      "adx": 34.878002187743725,
+      "plus_di": 17.350874690084943,
+      "minus_di": 18.484040090527387,
+      "ema50": 1.324778711494797,
+      "ema200": 1.3236341367650817,
+      "rsi": 58.70275277480057,
+      "atr": 0.000758571428571418,
+      "diagnostic": "[Best hypothetical: Pullback BUY score=57.3]"
+    },
+    {
+      "time": "08:55:26",
+      "pair": "EUR_USD",
+      "buy_reason": "Slippage 54.3pips > 2.6",
+      "sell_reason": "Slippage 54.3pips > 2.6"
+    },
+    {
+      "time": "08:55:56",
+      "pair": "GBP_USD",
+      "buy_reason": "MACD not bullish",
+      "sell_reason": "H1 not down",
+      "spread": 0.00017000000000000348,
+      "adx": 34.878002187743725,
+      "plus_di": 17.350874690084943,
+      "minus_di": 18.484040090527387,
+      "ema50": 1.324778711494797,
+      "ema200": 1.3236341367650817,
+      "rsi": 58.70275277480057,
+      "atr": 0.000758571428571418,
+      "diagnostic": "[Best hypothetical: Pullback BUY score=57.3]"
     }
   ],
   "last_cleanup": "2026-10-14"
