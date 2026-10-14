@@ -1,5 +1,5 @@
 {
-  "time": "2026-10-14 08:59:02",
+  "time": "2026-10-14 09:04:12",
   "bot_status": "running",
   "session": {
     "trades_today": 1,
@@ -9,8 +9,8 @@
   },
   "active_trade": null,
   "next_news_event": {
-    "title": "CPI",
-    "time": "08:30",
+    "title": "Employment",
+    "time": "20:30",
     "impact": "High"
   },
   "strategy": "H1 Multi-Setup (9 types) - Quality Score based",
