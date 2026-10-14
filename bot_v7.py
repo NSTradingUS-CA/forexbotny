@@ -69,6 +69,23 @@ TP1_R_MULT = 0.8
 TP_PARTIAL_RATIO = 0.33
 TRAILING_ATR_MULT = 1.8
 
+# === Widening TP2 conditionnel : uniquement sur setups d'extension,
+# et seulement après BE + TP1 validés et prix ayant atteint 90 % de TP2.
+# Le trailing SL server-side reste le plancher de protection. ===
+TP2_WIDEN_TRIGGER = 0.90
+TP2_WIDEN_FACTOR = 1.50
+TP2_WIDEN_SETUPS = {"Momentum", "Breakout", "ORB", "Trend Breakout"}
+
+# === Option A : fermeture partielle avant news, setup-aware ===
+# Les setups d'extension (Momentum, Breakout, ORB, Trend Breakout) gardent
+# une part plus importante du runner car la news a statistiquement plus de
+# chances de s'ajouter à la tendance détectée. Les autres setups (Pullback,
+# Pin Bar, Engulfing, SR, Inside Bar) ferment plus pour se protéger d'un
+# retournement sur zone identifiée.
+# Plus de fermeture 100 % — le runner conserve au minimum 50 % de la position.
+NEWS_CLOSE_PCT_EXTENSION = 0.33   # fermer 33 % (garder 67 %) sur setups d'extension
+NEWS_CLOSE_PCT_OTHER = 0.50       # fermer 50 % (garder 50 %) sur les autres setups
+
 SLIPPAGE_ATR_FACTOR = 0.40
 SLIPPAGE_MIN_PIPS = 2.0
 
@@ -641,6 +658,7 @@ def save_status_json(force=False):
             "atr": active_trade.get('atr'),
             "be_triggered": active_trade.get('be_triggered', False),
             "tp1_hit": active_trade.get('tp1_hit', False),
+            "tp2_widened": active_trade.get('tp2_widened', False),
             "setup_type": active_trade.get('setup_type'),
             "risk_percent": active_trade.get('risk_percent'),
             "opened_at": active_trade.get('opened_at'),
@@ -682,6 +700,7 @@ def load_existing_open_position():
                     saved_flags = {
                         "be_triggered": saved_trade.get("be_triggered", False),
                         "tp1_hit": saved_trade.get("tp1_hit", False),
+                        "tp2_widened": saved_trade.get("tp2_widened", False),
                         "setup_type": saved_trade.get("setup_type"),
                         "risk_percent": saved_trade.get("risk_percent"),
                         "initial_risk": saved_trade.get("initial_risk"),
@@ -734,6 +753,7 @@ def load_existing_open_position():
                         'initial_risk': initial_risk,
                         'be_triggered': saved_flags.get("be_triggered", False),
                         'tp1_hit': saved_flags.get("tp1_hit", False),
+                        'tp2_widened': saved_flags.get("tp2_widened", False),
                         'opened_at': saved_flags.get("opened_at", str(trade.openTime) if getattr(trade, 'openTime', None) else None),
                         'trailing_distance': saved_flags.get("trailing_distance", "server-side"),
                         'atr': saved_flags.get("atr"),
@@ -1218,7 +1238,7 @@ def move_sl_to_entry():
         return False
 
 
-# ============ MANAGE ACTIVE TRADE : trailing server-side + TP1 + BE ============
+# ============ MANAGE ACTIVE TRADE : trailing server-side + TP1 + BE + TP2 widening ============
 def manage_active_trade():
     global active_trade
     if active_trade is None:
@@ -1279,6 +1299,7 @@ def manage_active_trade():
     except Exception:
         return
 
+    # === TP1 : fermeture partielle 33 % à 0.8R ===
     tp1 = active_trade.get('tp1')
     units = abs(int(active_trade['units']))
     if tp1 is not None and not active_trade.get('tp1_hit'):
@@ -1292,6 +1313,63 @@ def manage_active_trade():
                 print(f"TP1 hit on {pair}, {partial_units} units closed, {remaining} remaining")
                 send_telegram_message(f"🎯 TP1 reached on {pair}: {partial_units} units closed, {remaining} runner kept.")
                 save_status_json(force=True)
+
+    # === TP2 widening conditionnel ===
+    # Conditions cumulatives :
+    #   1) setup dans la whitelist des setups d'extension
+    #   2) TP1 déjà atteint (33 % sécurisés)
+    #   3) BE déjà atteint (SL au point d'entrée, position risk-free)
+    #   4) prix >= 90 % de la distance vers TP2
+    #   5) pas déjà widened
+    # Action : recule TP2 de +50 % de sa distance initiale (server-side).
+    # Le trailing SL reste inchangé et continue de protéger le runner.
+    tp2 = active_trade.get('tp2')
+    setup_type = active_trade.get('setup_type', '')
+    if (tp2 is not None
+            and setup_type in TP2_WIDEN_SETUPS
+            and active_trade.get('tp1_hit', False)
+            and active_trade.get('be_triggered', False)
+            and not active_trade.get('tp2_widened', False)):
+        entry = active_trade['entry_price']
+        tp2_distance = abs(tp2 - entry)
+        trigger_distance = TP2_WIDEN_TRIGGER * tp2_distance
+
+        if direction == 'buy':
+            trigger_price = entry + trigger_distance
+            reached = current_price >= trigger_price
+        else:
+            trigger_price = entry - trigger_distance
+            reached = current_price <= trigger_price
+
+        if reached:
+            widen_amount = (TP2_WIDEN_FACTOR - 1.0) * tp2_distance
+            new_tp2 = (tp2 + widen_amount) if direction == 'buy' else (tp2 - widen_amount)
+
+            if update_trade_sl_tp(active_trade['trade_id'], tp_price=new_tp2):
+                old_tp2 = tp2
+                active_trade['tp2'] = new_tp2
+                active_trade['tp2_widened'] = True
+
+                init_risk = active_trade.get('initial_risk', 0)
+                new_rr = abs(new_tp2 - entry) / init_risk if init_risk > 0 else 0
+                old_rr = abs(old_tp2 - entry) / init_risk if init_risk > 0 else 0
+
+                msg = (
+                    f"🎯 <b>TP2 widened</b>\n"
+                    f"Pair: {pair}\n"
+                    f"Setup: {setup_type.upper()}\n"
+                    f"Type: {'Buy' if direction == 'buy' else 'Sell'}\n"
+                    f"Conditions: BE ✅ • TP1 ✅ • {TP2_WIDEN_TRIGGER:.0%} of TP2 ✅\n"
+                    f"Old TP2: {old_tp2:.5f} ({old_rr:.1f}R)\n"
+                    f"New TP2: {new_tp2:.5f} ({new_rr:.1f}R)\n"
+                    f"Trailing SL remains active as floor.\n"
+                    f"Time: {datetime.now(tz).strftime('%H:%M:%S')}"
+                )
+                send_telegram_message(msg)
+                print(msg)
+                save_status_json(force=True)
+            else:
+                print(f"⚠️ TP2 widening FAILED on {pair} – OANDA still at {tp2:.5f}")
 
 
 def compute_quality_score(signal, c, df, instrument, config, atr):
@@ -1809,6 +1887,8 @@ def main():
             lines.append("🛡️ BE secured ✅")
         if at.get('tp1_hit'):
             lines.append("🎯 TP1 hit ✅")
+        if at.get('tp2_widened'):
+            lines.append("🎯 TP2 widened ✅")
         try:
             pnl_oanda = fetch_position_pnl_from_oanda(at['pair'])
             if pnl_oanda is not None:
@@ -1989,60 +2069,83 @@ def main():
                         minutes_until = time_until.total_seconds() / 60.0
                         if minutes_until <= NEWS_CLOSE_BEFORE_MINUTES:
                             if active_trade['pair'] in blocked_pairs:
+                                pair = active_trade['pair']
+                                setup_type = active_trade.get('setup_type', '')
+                                news_title = news_event['title']
+                                news_time = news_event['time'].strftime('%H:%M')
+
+                                # Calcul du P&L actuel (en CAD via USD/CAD)
                                 try:
-                                    resp = ctx.pricing.get(ACCOUNT_ID, instruments=active_trade['pair'])
+                                    resp = ctx.pricing.get(ACCOUNT_ID, instruments=pair)
                                     pi = resp.body['prices'][0]
                                     bid = float(pi.bids[0].price)
                                     ask = float(pi.asks[0].price)
                                     current = bid if active_trade['direction'] == 'sell' else ask
                                     units_abs = abs(int(active_trade['units']))
                                     if active_trade['direction'] == 'sell':
-                                        pnl = (active_trade['entry_price'] - current) * units_abs
+                                        pnl_usd = (active_trade['entry_price'] - current) * units_abs
                                     else:
-                                        pnl = (current - active_trade['entry_price']) * units_abs
-                                except:
-                                    pnl = 0
+                                        pnl_usd = (current - active_trade['entry_price']) * units_abs
+                                except Exception:
+                                    pnl_usd = 0
 
-                                pair = active_trade['pair']
-                                news_title = news_event['title']
-                                news_time = news_event['time'].strftime('%H:%M')
+                                usd_cad = get_usd_cad_rate()
+                                pnl_cad = pnl_usd * usd_cad
 
-                                if pnl > 0:
-                                    units_abs = abs(int(active_trade['units']))
-                                    partial_units = max(1000, int(units_abs * 0.5))
-                                    remaining = units_abs - partial_units
-
-                                    if partial_units < units_abs and close_partial_position(partial_units, expected_remaining=remaining):
-                                        active_trade['units'] = remaining if active_trade['direction'] == 'buy' else -remaining
-                                        send_telegram_message(
-                                            f"📰 <b>Imminent News – 50 % secured</b>\n"
-                                            f"Pair: {pair}\n"
-                                            f"News: {news_title} à {news_time}\n"
-                                            f"Units fermées: {partial_units}\n"
-                                            f"Runner gardé: {remaining} (Trailing OANDA)\n"
-                                            f"P&L sécurisé: {pnl * (partial_units / units_abs):.2f} USD"
-                                        )
-                                        print(f"News imminent – {pair} en profit : 50 % fermé ({partial_units} units), trailing conserve {remaining}.")
-                                    else:
-                                        send_telegram_message(
-                                            f"⚠️ 50 % reduction failed before news on {pair}. Please monitor."
-                                        )
+                                # === Option A : fermeture partielle setup-aware ===
+                                # Setups d'extension (Momentum/Breakout/ORB/Trend Breakout) :
+                                #   fermer 33 %, garder 67 % comme runner.
+                                # Autres setups (Pullback/Pin Bar/Engulfing/SR/Inside Bar) :
+                                #   fermer 50 %, garder 50 %.
+                                # Dans tous les cas, le SL (initial ou trailing si BE atteint)
+                                # reste en place sur le runner.
+                                if setup_type in TP2_WIDEN_SETUPS:
+                                    close_pct = NEWS_CLOSE_PCT_EXTENSION
+                                    setup_label = "extension"
                                 else:
+                                    close_pct = NEWS_CLOSE_PCT_OTHER
+                                    setup_label = "standard"
+
+                                units_abs = abs(int(active_trade['units']))
+                                partial_units = max(1000, int(units_abs * close_pct))
+                                remaining = units_abs - partial_units
+
+                                if partial_units >= units_abs or remaining < 1000:
+                                    # Position trop petite pour splitter → fermeture complète
                                     if close_full_position_market():
-                                        usd_cad = get_usd_cad_rate()
-                                        pnl_cad = pnl * usd_cad
                                         send_telegram_message(
-                                            f"📰 <b>Imminent News – Complete closure (trade in loss)</b>\n"
+                                            f"📰 <b>Imminent News – Full closure (too small to split)</b>\n"
                                             f"Pair: {pair}\n"
-                                            f"News: {news_title} à {news_time}\n"
-                                            f"P&L: {pnl_cad:.2f} CAD"
+                                            f"Setup: {setup_type.upper()}\n"
+                                            f"News: {news_title} at {news_time}\n"
+                                            f"P&L: {pnl_cad:+.2f} CAD"
                                         )
-                                        print(f"News imminent – {pair} en perte : clôture complète.")
+                                        print(f"News imminent – {pair} : position trop petite pour split, clôture complète.")
                                         time.sleep(2)
                                         check_closed_trade()
                                     else:
                                         send_telegram_message(
-                                            f"Closing failed {pair} before news. Please monitor."
+                                            f"⚠️ Closing failed {pair} before news. Please monitor."
+                                        )
+                                else:
+                                    if close_partial_position(partial_units, expected_remaining=remaining):
+                                        active_trade['units'] = remaining if active_trade['direction'] == 'buy' else -remaining
+                                        sl_state = "trailing (BE)" if active_trade.get('be_triggered') else "initial SL"
+                                        send_telegram_message(
+                                            f"📰 <b>Imminent News – Partial close</b>\n"
+                                            f"Pair: {pair}\n"
+                                            f"Setup: {setup_type.upper()} ({setup_label})\n"
+                                            f"News: {news_title} at {news_time}\n"
+                                            f"Closed: {int(close_pct*100)}% ({partial_units} units)\n"
+                                            f"Runner: {remaining} units ({sl_state} intact)\n"
+                                            f"P&L at trigger: {pnl_cad:+.2f} CAD"
+                                        )
+                                        print(f"News imminent – {pair} [{setup_type}/{setup_label}] : "
+                                              f"{int(close_pct*100)}% fermé ({partial_units} units), "
+                                              f"{remaining} runner conservé.")
+                                    else:
+                                        send_telegram_message(
+                                            f"⚠️ Partial close failed before news on {pair}. Please monitor."
                                         )
 
                 if not hasattr(main, "next_news_check"):
@@ -2303,6 +2406,7 @@ def place_trade(instrument, entry_price_signal, sl_signal, tp_signal, direction,
             'initial_risk': sl_distance,
             'be_triggered': False,
             'tp1_hit': False,
+            'tp2_widened': False,
             'trailing_distance': f"{TRAILING_ATR_MULT}x H1 ATR (server-side)",
             'atr': atr_val,
             'opened_at': datetime.now(tz).isoformat(),
