@@ -12,6 +12,19 @@
       "entry": 1.1189,
       "exit": 1.1194,
       "score": 66.4
+    },
+    {
+      "pair": "EUR_USD",
+      "type": "Sell",
+      "setup": "recovered",
+      "pnl": -142.64,
+      "pnl_usd": -100.17,
+      "time": "08:25:20",
+      "r_multiple": -0.26,
+      "units": 198709,
+      "entry": 1.1189,
+      "exit": 1.1194,
+      "score": null
     }
   ],
   "last_cleanup": "2026-10-14"
