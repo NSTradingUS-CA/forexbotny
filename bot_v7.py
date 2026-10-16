@@ -67,21 +67,14 @@ TP1_R_MULT = 0.8
 TP_PARTIAL_RATIO = 0.33
 TRAILING_ATR_MULT = 1.8
 
-# Widening TP2 conditionnel
 TP2_WIDEN_TRIGGER = 0.90
 TP2_WIDEN_FACTOR = 1.50
 TP2_WIDEN_SETUPS = {"Momentum", "Breakout", "ORB", "Trend Breakout"}
 
-# Option A : fermeture partielle avant news
 NEWS_CLOSE_PCT_EXTENSION = 0.33
 NEWS_CLOSE_PCT_OTHER = 0.50
 
-# === Time-lock partiel conditionnel (nouveau) ===
-# Fenêtre 11:05 → 12:30 ET. Déclenché uniquement pour un trade ouvert depuis
-# >= 75 min à 11:00 (donc ouvert avant 09:45), ayant atteint un peak de profit
-# entre 60% et 85% de TP1, avec un retracement >= 30% depuis ce peak, et sans
-# TP1 ni BE encore atteints. Action : fermer 67% au marché + SL runner fixé à
-# entrée+2 pips (le trailing SL est remplacé).
+# === Time-lock partiel conditionnel ===
 TIME_LOCK_WINDOW_START_H = 11
 TIME_LOCK_WINDOW_START_M = 5
 TIME_LOCK_WINDOW_END_H = 12
@@ -92,6 +85,19 @@ TIME_LOCK_PEAK_MAX_FRACTION = 0.85
 TIME_LOCK_RETRACE_MIN = 0.30
 TIME_LOCK_CLOSE_PCT = 0.67
 TIME_LOCK_SL_OFFSET_PIPS = 2.0
+
+# === Adverse regime detection ===
+# 3 signaux évalués à chaque cycle (30 s) sur les bougies H1 clôturées :
+#   1. Prix courant vs EMA50 (H1)
+#   2. +DI vs -DI (H1)
+#   3. MACD line vs signal (H1)
+# Régime déclaré adverse si >= 2 signaux basculent contre la position.
+# Action (garde-fou : peak >= 40 % de TP1) : partial close 67 % + SL runner
+# fixé à entrée + 2 pips. Une seule fois par trade.
+REGIME_ADVERSE_MIN_SIGNALS = 2
+REGIME_ADVERSE_MIN_PEAK_FRACTION = 0.40
+REGIME_ADVERSE_CLOSE_PCT = 0.67
+REGIME_ADVERSE_SL_OFFSET_PIPS = 2.0
 
 # === Session checkpoint 11:00 (informatif uniquement) ===
 CHECKPOINT_HOUR = 11
@@ -671,6 +677,7 @@ def save_status_json(force=False):
             "tp2_widened": active_trade.get('tp2_widened', False),
             "peak_profit_pips": active_trade.get('peak_profit_pips', 0.0),
             "time_lock_done": active_trade.get('time_lock_done', False),
+            "regime_adverse_handled": active_trade.get('regime_adverse_handled', False),
             "setup_type": active_trade.get('setup_type'),
             "risk_percent": active_trade.get('risk_percent'),
             "opened_at": active_trade.get('opened_at'),
@@ -715,6 +722,7 @@ def load_existing_open_position():
                         "tp2_widened": saved_trade.get("tp2_widened", False),
                         "peak_profit_pips": saved_trade.get("peak_profit_pips", 0.0),
                         "time_lock_done": saved_trade.get("time_lock_done", False),
+                        "regime_adverse_handled": saved_trade.get("regime_adverse_handled", False),
                         "setup_type": saved_trade.get("setup_type"),
                         "risk_percent": saved_trade.get("risk_percent"),
                         "initial_risk": saved_trade.get("initial_risk"),
@@ -770,6 +778,7 @@ def load_existing_open_position():
                         'tp2_widened': saved_flags.get("tp2_widened", False),
                         'peak_profit_pips': saved_flags.get("peak_profit_pips", 0.0),
                         'time_lock_done': saved_flags.get("time_lock_done", False),
+                        'regime_adverse_handled': saved_flags.get("regime_adverse_handled", False),
                         'checkpoint_sent': False,
                         'opened_at': saved_flags.get("opened_at", str(trade.openTime) if getattr(trade, 'openTime', None) else None),
                         'trailing_distance': saved_flags.get("trailing_distance", "server-side"),
@@ -1255,7 +1264,57 @@ def move_sl_to_entry():
         return False
 
 
-# ============ MANAGE ACTIVE TRADE : trailing + TP1 + BE + TP2 widening + time-lock ============
+# ============ ADVERSE REGIME DETECTION ============
+def check_adverse_regime(direction, current_price, df):
+    """
+    Évalue 3 signaux d'adversité pour la direction en cours :
+      1. Prix courant vs EMA50 (H1)
+      2. +DI vs -DI (H1)
+      3. MACD line vs signal (H1)
+    Retourne (is_adverse, signals_list, count).
+    Régime adverse si count >= REGIME_ADVERSE_MIN_SIGNALS.
+    """
+    if df is None or df.empty:
+        return False, [], 0
+
+    try:
+        c = df.iloc[-1]
+    except Exception:
+        return False, [], 0
+
+    required = ['ema50', 'plus_di', 'minus_di', 'macd_line', 'macd_signal']
+    for k in required:
+        if k not in c or pd.isna(c[k]):
+            return False, [], 0
+
+    ema50 = float(c['ema50'])
+    plus_di = float(c['plus_di'])
+    minus_di = float(c['minus_di'])
+    macd_line = float(c['macd_line'])
+    macd_signal = float(c['macd_signal'])
+
+    signals = []
+    if direction == 'buy':
+        if current_price < ema50:
+            signals.append("Price<EMA50")
+        if minus_di > plus_di:
+            signals.append("-DI>+DI")
+        if macd_line < macd_signal:
+            signals.append("MACD flip")
+    else:  # sell
+        if current_price > ema50:
+            signals.append("Price>EMA50")
+        if plus_di > minus_di:
+            signals.append("+DI>-DI")
+        if macd_line > macd_signal:
+            signals.append("MACD flip")
+
+    count = len(signals)
+    is_adverse = count >= REGIME_ADVERSE_MIN_SIGNALS
+    return is_adverse, signals, count
+
+
+# ============ MANAGE ACTIVE TRADE ============
 def manage_active_trade():
     global active_trade
     if active_trade is None:
@@ -1317,6 +1376,7 @@ def manage_active_trade():
         return
 
     entry = active_trade['entry_price']
+    setup_type = active_trade.get('setup_type', '')
 
     # === Mise à jour du peak profit (toujours en premier) ===
     if direction == 'buy':
@@ -1344,7 +1404,6 @@ def manage_active_trade():
 
     # === TP2 widening conditionnel ===
     tp2 = active_trade.get('tp2')
-    setup_type = active_trade.get('setup_type', '')
     if (tp2 is not None
             and setup_type in TP2_WIDEN_SETUPS
             and active_trade.get('tp1_hit', False)
@@ -1384,8 +1443,86 @@ def manage_active_trade():
                 print(msg)
                 save_status_json(force=True)
 
-    # === Time-lock partiel 11:05-12:30 ===
     now_check = datetime.now(tz)
+
+    # === Adverse regime check (universel, avant le time-lock) ===
+    if (not active_trade.get('regime_adverse_handled', False)
+            and not active_trade.get('tp1_hit', False)
+            and not active_trade.get('be_triggered', False)
+            and not active_trade.get('time_lock_done', False)):
+        init_risk = active_trade.get('initial_risk', 0)
+        peak = active_trade.get('peak_profit_pips', 0.0)
+        tp1_distance_pips = (TP1_R_MULT * init_risk) / 0.0001 if init_risk > 0 else 0
+
+        if tp1_distance_pips > 0:
+            peak_frac = peak / tp1_distance_pips
+            if peak_frac >= REGIME_ADVERSE_MIN_PEAK_FRACTION:
+                try:
+                    df_regime = get_candles(pair, count=EXECUTION_CANDLES, granularity=EXECUTION_GRANULARITY)
+                except Exception as e:
+                    print(f"⚠️ Regime check: candles fetch failed: {e}")
+                    df_regime = None
+
+                is_adverse, signals_list, signal_count = check_adverse_regime(
+                    direction, current_price, df_regime
+                )
+
+                if is_adverse:
+                    units_abs = abs(int(active_trade['units']))
+                    partial_units = max(1000, int(units_abs * REGIME_ADVERSE_CLOSE_PCT))
+                    remaining = units_abs - partial_units
+
+                    if partial_units >= units_abs or remaining < 1000:
+                        if close_full_position_market():
+                            msg = (
+                                f"⚠️ <b>Adverse regime (full close)</b> · {pair}\n"
+                                f"Setup {setup_type.upper()} · {signal_count}/3 signals · "
+                                f"peak {peak:.1f}p ({peak_frac:.0%} TP1)\n"
+                                f"Position too small to split → fully closed."
+                            )
+                            send_telegram_message(msg)
+                            active_trade['regime_adverse_handled'] = True
+                            time.sleep(2)
+                            check_closed_trade()
+                        else:
+                            print(f"⚠️ Regime adverse full close failed on {pair}")
+                    else:
+                        if close_partial_position(partial_units, expected_remaining=remaining):
+                            active_trade['units'] = remaining if direction == 'buy' else -remaining
+
+                            offset = REGIME_ADVERSE_SL_OFFSET_PIPS * 0.0001
+                            new_sl = (entry + offset) if direction == 'buy' else (entry - offset)
+
+                            if update_trade_sl_tp(active_trade['trade_id'], sl_price=new_sl):
+                                active_trade['sl'] = new_sl
+                                active_trade['regime_adverse_handled'] = True
+                                active_trade['be_triggered'] = True
+
+                                if direction == 'buy':
+                                    partial_pnl_usd = (current_price - entry) * partial_units
+                                else:
+                                    partial_pnl_usd = (entry - current_price) * partial_units
+                                usd_cad = get_usd_cad_rate()
+                                partial_pnl_cad = partial_pnl_usd * usd_cad
+
+                                signals_str = " · ".join(signals_list)
+                                msg = (
+                                    f"⚠️ <b>Adverse regime</b> · {pair} {direction.upper()} · {setup_type.upper()}\n"
+                                    f"{signal_count}/3 signals: {signals_str}\n"
+                                    f"Peak {peak:+.1f} pips ({peak_frac:.0%} TP1) · Now {profit_pips_now:+.1f}\n"
+                                    f"Closed 67% @ {profit_pips_now:+.1f} pips → {partial_pnl_cad:+.2f} CAD\n"
+                                    f"Runner 33% @ SL entry+{REGIME_ADVERSE_SL_OFFSET_PIPS:.0f} pips"
+                                )
+                                send_telegram_message(msg)
+                                print(msg)
+                                save_status_json(force=True)
+                            else:
+                                print(f"⚠️ Regime adverse SL move failed on {pair}")
+                                active_trade['regime_adverse_handled'] = True
+                        else:
+                            print(f"⚠️ Regime adverse partial close failed on {pair}")
+
+    # === Time-lock partiel 11:05-12:30 ===
     window_start = now_check.replace(
         hour=TIME_LOCK_WINDOW_START_H, minute=TIME_LOCK_WINDOW_START_M,
         second=0, microsecond=0)
@@ -1395,10 +1532,10 @@ def manage_active_trade():
 
     if (window_start <= now_check < window_end
             and not active_trade.get('time_lock_done', False)
+            and not active_trade.get('regime_adverse_handled', False)
             and not active_trade.get('tp1_hit', False)
             and not active_trade.get('be_triggered', False)):
 
-        # Vérification de l'ancienneté du trade
         opened_at_str = active_trade.get('opened_at')
         trade_age_min = None
         if opened_at_str:
@@ -1408,8 +1545,6 @@ def manage_active_trade():
             except (ValueError, TypeError):
                 trade_age_min = None
 
-        # Le trade doit avoir été ouvert >= 75 min avant 11:00 ET être encore en cours.
-        # En pratique : ouvert avant 09:45 ET on est dans la fenêtre.
         eleven_am = now_check.replace(hour=11, minute=0, second=0, microsecond=0)
         age_at_11am_min = None
         if opened_at_str:
@@ -1439,7 +1574,6 @@ def manage_active_trade():
                     remaining = units_abs - partial_units
 
                     if partial_units >= units_abs or remaining < 1000:
-                        # Position trop petite pour splitter → fermeture complète
                         if close_full_position_market():
                             msg = (
                                 f"🔒 <b>Time-lock (full close)</b> · {pair}\n"
@@ -1454,11 +1588,9 @@ def manage_active_trade():
                         else:
                             print(f"⚠️ Time-lock full close failed on {pair}")
                     else:
-                        # 1) Fermer 67 % au marché
                         if close_partial_position(partial_units, expected_remaining=remaining):
                             active_trade['units'] = remaining if direction == 'buy' else -remaining
 
-                            # 2) Verrouiller le SL du runner à entrée ± offset
                             offset = TIME_LOCK_SL_OFFSET_PIPS * 0.0001
                             new_sl = (entry + offset) if direction == 'buy' else (entry - offset)
 
@@ -1467,7 +1599,6 @@ def manage_active_trade():
                                 active_trade['time_lock_done'] = True
                                 active_trade['be_triggered'] = True
 
-                                # Estimation du P&L du partial (en CAD)
                                 if direction == 'buy':
                                     partial_pnl_usd = (current_price - entry) * partial_units
                                 else:
@@ -1487,7 +1618,6 @@ def manage_active_trade():
                                 save_status_json(force=True)
                             else:
                                 print(f"⚠️ Time-lock SL move failed on {pair}")
-                                # Position partiellement fermée mais SL non déplacé → on laisse le trailing actif
                                 active_trade['time_lock_done'] = True
                         else:
                             print(f"⚠️ Time-lock partial close failed on {pair}")
@@ -1510,7 +1640,6 @@ def manage_active_trade():
         else:
             line2 = f"Peak {peak:+.1f} pips ({peak_frac:.0%} TP1) · Now {profit_pips_now:+.1f}"
 
-        # Durée en trade
         opened_at_str = active_trade.get('opened_at')
         duration_str = "?"
         if opened_at_str:
@@ -1983,7 +2112,6 @@ def main():
 
     _now_check = datetime.now(tz)
 
-    # Filtre DST pour le cron saisonnier
     _event_schedule = os.environ.get('GITHUB_EVENT_SCHEDULE', '')
     if _event_schedule and _now_check.hour in (11, 13):
         print(f"⏭️ Cron hors fenêtre saisonnière ({_now_check.strftime('%H:%M')} ET) – sortie silencieuse.")
@@ -2022,7 +2150,6 @@ def main():
     future_events = [e for e in events if e["time"] > now and e["time"] - now < timedelta(hours=NEWS_CHECK_FUTURE_HOURS)]
 
     if _after_1205 and active_trade is not None:
-        # RELAY TAKEOVER
         at = active_trade
         direction_label = "BUY" if at['direction'] == 'buy' else "SELL"
         lines = [
@@ -2043,6 +2170,8 @@ def main():
             lines.append("🎯 TP2 widened ✅")
         if at.get('time_lock_done'):
             lines.append("🔒 Time-lock done ✅")
+        if at.get('regime_adverse_handled'):
+            lines.append("⚠️ Adverse regime handled ✅")
         try:
             pnl_oanda = fetch_position_pnl_from_oanda(at['pair'])
             if pnl_oanda is not None:
@@ -2550,6 +2679,7 @@ def place_trade(instrument, entry_price_signal, sl_signal, tp_signal, direction,
             'tp2_widened': False,
             'peak_profit_pips': 0.0,
             'time_lock_done': False,
+            'regime_adverse_handled': False,
             'checkpoint_sent': False,
             'trailing_distance': f"{TRAILING_ATR_MULT}x H1 ATR (server-side)",
             'atr': atr_val,
