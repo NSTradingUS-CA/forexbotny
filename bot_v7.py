@@ -53,8 +53,6 @@ BREAKOUT_LOOKBACK = 12
 BREAKOUT_BUFFER_ATR = 0.10
 MIN_SL_PIPS = 8
 MAX_SL_PIPS = 35
-# === Fenêtre news asymétrique : 7 min pré + 10 min post (cohérent avec
-# NEWS_CLOSE_BEFORE_MINUTES = 5 → 2 min de buffer fermeture avant la news) ===
 NEWS_BLOCK_PRE_MINUTES = 7
 NEWS_BLOCK_POST_MINUTES = 10
 HIGH_IMPACT_EVENTS = ["NFP", "CPI", "FOMC", "Interest Rate", "GDP", "Retail Sales", "Nonfarm Payrolls", "Employment", "Rate Decision"]
@@ -69,22 +67,35 @@ TP1_R_MULT = 0.8
 TP_PARTIAL_RATIO = 0.33
 TRAILING_ATR_MULT = 1.8
 
-# === Widening TP2 conditionnel : uniquement sur setups d'extension,
-# et seulement après BE + TP1 validés et prix ayant atteint 90 % de TP2.
-# Le trailing SL server-side reste le plancher de protection. ===
+# Widening TP2 conditionnel
 TP2_WIDEN_TRIGGER = 0.90
 TP2_WIDEN_FACTOR = 1.50
 TP2_WIDEN_SETUPS = {"Momentum", "Breakout", "ORB", "Trend Breakout"}
 
-# === Option A : fermeture partielle avant news, setup-aware ===
-# Les setups d'extension (Momentum, Breakout, ORB, Trend Breakout) gardent
-# une part plus importante du runner car la news a statistiquement plus de
-# chances de s'ajouter à la tendance détectée. Les autres setups (Pullback,
-# Pin Bar, Engulfing, SR, Inside Bar) ferment plus pour se protéger d'un
-# retournement sur zone identifiée.
-# Plus de fermeture 100 % — le runner conserve au minimum 50 % de la position.
-NEWS_CLOSE_PCT_EXTENSION = 0.33   # fermer 33 % (garder 67 %) sur setups d'extension
-NEWS_CLOSE_PCT_OTHER = 0.50       # fermer 50 % (garder 50 %) sur les autres setups
+# Option A : fermeture partielle avant news
+NEWS_CLOSE_PCT_EXTENSION = 0.33
+NEWS_CLOSE_PCT_OTHER = 0.50
+
+# === Time-lock partiel conditionnel (nouveau) ===
+# Fenêtre 11:05 → 12:30 ET. Déclenché uniquement pour un trade ouvert depuis
+# >= 75 min à 11:00 (donc ouvert avant 09:45), ayant atteint un peak de profit
+# entre 60% et 85% de TP1, avec un retracement >= 30% depuis ce peak, et sans
+# TP1 ni BE encore atteints. Action : fermer 67% au marché + SL runner fixé à
+# entrée+2 pips (le trailing SL est remplacé).
+TIME_LOCK_WINDOW_START_H = 11
+TIME_LOCK_WINDOW_START_M = 5
+TIME_LOCK_WINDOW_END_H = 12
+TIME_LOCK_WINDOW_END_M = 30
+TIME_LOCK_MIN_TRADE_AGE_MIN = 75
+TIME_LOCK_PEAK_MIN_FRACTION = 0.60
+TIME_LOCK_PEAK_MAX_FRACTION = 0.85
+TIME_LOCK_RETRACE_MIN = 0.30
+TIME_LOCK_CLOSE_PCT = 0.67
+TIME_LOCK_SL_OFFSET_PIPS = 2.0
+
+# === Session checkpoint 11:00 (informatif uniquement) ===
+CHECKPOINT_HOUR = 11
+CHECKPOINT_MINUTE = 0
 
 SLIPPAGE_ATR_FACTOR = 0.40
 SLIPPAGE_MIN_PIPS = 2.0
@@ -353,7 +364,6 @@ def check_and_block_news(now):
     global _current_blocked_pairs, _current_active_pairs, _current_news_event
     events = get_high_impact_news()
     for event in events:
-        # Fenêtre asymétrique : 7 min pré-news + 10 min post-news
         block_start = event["time"] - timedelta(minutes=NEWS_BLOCK_PRE_MINUTES)
         block_end = event["time"] + timedelta(minutes=NEWS_BLOCK_POST_MINUTES)
         if block_start <= now <= block_end:
@@ -659,6 +669,8 @@ def save_status_json(force=False):
             "be_triggered": active_trade.get('be_triggered', False),
             "tp1_hit": active_trade.get('tp1_hit', False),
             "tp2_widened": active_trade.get('tp2_widened', False),
+            "peak_profit_pips": active_trade.get('peak_profit_pips', 0.0),
+            "time_lock_done": active_trade.get('time_lock_done', False),
             "setup_type": active_trade.get('setup_type'),
             "risk_percent": active_trade.get('risk_percent'),
             "opened_at": active_trade.get('opened_at'),
@@ -701,6 +713,8 @@ def load_existing_open_position():
                         "be_triggered": saved_trade.get("be_triggered", False),
                         "tp1_hit": saved_trade.get("tp1_hit", False),
                         "tp2_widened": saved_trade.get("tp2_widened", False),
+                        "peak_profit_pips": saved_trade.get("peak_profit_pips", 0.0),
+                        "time_lock_done": saved_trade.get("time_lock_done", False),
                         "setup_type": saved_trade.get("setup_type"),
                         "risk_percent": saved_trade.get("risk_percent"),
                         "initial_risk": saved_trade.get("initial_risk"),
@@ -754,6 +768,9 @@ def load_existing_open_position():
                         'be_triggered': saved_flags.get("be_triggered", False),
                         'tp1_hit': saved_flags.get("tp1_hit", False),
                         'tp2_widened': saved_flags.get("tp2_widened", False),
+                        'peak_profit_pips': saved_flags.get("peak_profit_pips", 0.0),
+                        'time_lock_done': saved_flags.get("time_lock_done", False),
+                        'checkpoint_sent': False,
                         'opened_at': saved_flags.get("opened_at", str(trade.openTime) if getattr(trade, 'openTime', None) else None),
                         'trailing_distance': saved_flags.get("trailing_distance", "server-side"),
                         'atr': saved_flags.get("atr"),
@@ -1238,7 +1255,7 @@ def move_sl_to_entry():
         return False
 
 
-# ============ MANAGE ACTIVE TRADE : trailing server-side + TP1 + BE + TP2 widening ============
+# ============ MANAGE ACTIVE TRADE : trailing + TP1 + BE + TP2 widening + time-lock ============
 def manage_active_trade():
     global active_trade
     if active_trade is None:
@@ -1299,6 +1316,17 @@ def manage_active_trade():
     except Exception:
         return
 
+    entry = active_trade['entry_price']
+
+    # === Mise à jour du peak profit (toujours en premier) ===
+    if direction == 'buy':
+        profit_pips_now = (current_price - entry) / 0.0001
+    else:
+        profit_pips_now = (entry - current_price) / 0.0001
+
+    if profit_pips_now > active_trade.get('peak_profit_pips', 0.0):
+        active_trade['peak_profit_pips'] = profit_pips_now
+
     # === TP1 : fermeture partielle 33 % à 0.8R ===
     tp1 = active_trade.get('tp1')
     units = abs(int(active_trade['units']))
@@ -1315,14 +1343,6 @@ def manage_active_trade():
                 save_status_json(force=True)
 
     # === TP2 widening conditionnel ===
-    # Conditions cumulatives :
-    #   1) setup dans la whitelist des setups d'extension
-    #   2) TP1 déjà atteint (33 % sécurisés)
-    #   3) BE déjà atteint (SL au point d'entrée, position risk-free)
-    #   4) prix >= 90 % de la distance vers TP2
-    #   5) pas déjà widened
-    # Action : recule TP2 de +50 % de sa distance initiale (server-side).
-    # Le trailing SL reste inchangé et continue de protéger le runner.
     tp2 = active_trade.get('tp2')
     setup_type = active_trade.get('setup_type', '')
     if (tp2 is not None
@@ -1330,7 +1350,6 @@ def manage_active_trade():
             and active_trade.get('tp1_hit', False)
             and active_trade.get('be_triggered', False)
             and not active_trade.get('tp2_widened', False)):
-        entry = active_trade['entry_price']
         tp2_distance = abs(tp2 - entry)
         trigger_distance = TP2_WIDEN_TRIGGER * tp2_distance
 
@@ -1358,18 +1377,159 @@ def manage_active_trade():
                     f"🎯 <b>TP2 widened</b>\n"
                     f"Pair: {pair}\n"
                     f"Setup: {setup_type.upper()}\n"
-                    f"Type: {'Buy' if direction == 'buy' else 'Sell'}\n"
-                    f"Conditions: BE ✅ • TP1 ✅ • {TP2_WIDEN_TRIGGER:.0%} of TP2 ✅\n"
                     f"Old TP2: {old_tp2:.5f} ({old_rr:.1f}R)\n"
-                    f"New TP2: {new_tp2:.5f} ({new_rr:.1f}R)\n"
-                    f"Trailing SL remains active as floor.\n"
-                    f"Time: {datetime.now(tz).strftime('%H:%M:%S')}"
+                    f"New TP2: {new_tp2:.5f} ({new_rr:.1f}R)"
                 )
                 send_telegram_message(msg)
                 print(msg)
                 save_status_json(force=True)
-            else:
-                print(f"⚠️ TP2 widening FAILED on {pair} – OANDA still at {tp2:.5f}")
+
+    # === Time-lock partiel 11:05-12:30 ===
+    now_check = datetime.now(tz)
+    window_start = now_check.replace(
+        hour=TIME_LOCK_WINDOW_START_H, minute=TIME_LOCK_WINDOW_START_M,
+        second=0, microsecond=0)
+    window_end = now_check.replace(
+        hour=TIME_LOCK_WINDOW_END_H, minute=TIME_LOCK_WINDOW_END_M,
+        second=0, microsecond=0)
+
+    if (window_start <= now_check < window_end
+            and not active_trade.get('time_lock_done', False)
+            and not active_trade.get('tp1_hit', False)
+            and not active_trade.get('be_triggered', False)):
+
+        # Vérification de l'ancienneté du trade
+        opened_at_str = active_trade.get('opened_at')
+        trade_age_min = None
+        if opened_at_str:
+            try:
+                opened_dt = datetime.fromisoformat(opened_at_str.replace("Z", "+00:00")).astimezone(tz)
+                trade_age_min = (now_check - opened_dt).total_seconds() / 60.0
+            except (ValueError, TypeError):
+                trade_age_min = None
+
+        # Le trade doit avoir été ouvert >= 75 min avant 11:00 ET être encore en cours.
+        # En pratique : ouvert avant 09:45 ET on est dans la fenêtre.
+        eleven_am = now_check.replace(hour=11, minute=0, second=0, microsecond=0)
+        age_at_11am_min = None
+        if opened_at_str:
+            try:
+                opened_dt = datetime.fromisoformat(opened_at_str.replace("Z", "+00:00")).astimezone(tz)
+                age_at_11am_min = (eleven_am - opened_dt).total_seconds() / 60.0
+            except (ValueError, TypeError):
+                age_at_11am_min = None
+
+        if age_at_11am_min is not None and age_at_11am_min >= TIME_LOCK_MIN_TRADE_AGE_MIN:
+            init_risk = active_trade.get('initial_risk', 0)
+            if init_risk > 0:
+                tp1_distance_pips = (TP1_R_MULT * init_risk) / 0.0001
+                peak = active_trade.get('peak_profit_pips', 0.0)
+
+                peak_fraction = peak / tp1_distance_pips if tp1_distance_pips > 0 else 0.0
+                in_peak_zone = TIME_LOCK_PEAK_MIN_FRACTION <= peak_fraction <= TIME_LOCK_PEAK_MAX_FRACTION
+
+                retrace_fraction = 0.0
+                if peak > 0:
+                    retrace_fraction = (peak - profit_pips_now) / peak
+                retrace_ok = retrace_fraction >= TIME_LOCK_RETRACE_MIN
+
+                if in_peak_zone and retrace_ok:
+                    units_abs = abs(int(active_trade['units']))
+                    partial_units = max(1000, int(units_abs * TIME_LOCK_CLOSE_PCT))
+                    remaining = units_abs - partial_units
+
+                    if partial_units >= units_abs or remaining < 1000:
+                        # Position trop petite pour splitter → fermeture complète
+                        if close_full_position_market():
+                            msg = (
+                                f"🔒 <b>Time-lock (full close)</b> · {pair}\n"
+                                f"Setup {setup_type.upper()} · peak {peak:.1f}p "
+                                f"({peak_fraction:.0%} TP1) · retrace {retrace_fraction:.0%}\n"
+                                f"Position too small to split → fully closed."
+                            )
+                            send_telegram_message(msg)
+                            active_trade['time_lock_done'] = True
+                            time.sleep(2)
+                            check_closed_trade()
+                        else:
+                            print(f"⚠️ Time-lock full close failed on {pair}")
+                    else:
+                        # 1) Fermer 67 % au marché
+                        if close_partial_position(partial_units, expected_remaining=remaining):
+                            active_trade['units'] = remaining if direction == 'buy' else -remaining
+
+                            # 2) Verrouiller le SL du runner à entrée ± offset
+                            offset = TIME_LOCK_SL_OFFSET_PIPS * 0.0001
+                            new_sl = (entry + offset) if direction == 'buy' else (entry - offset)
+
+                            if update_trade_sl_tp(active_trade['trade_id'], sl_price=new_sl):
+                                active_trade['sl'] = new_sl
+                                active_trade['time_lock_done'] = True
+                                active_trade['be_triggered'] = True
+
+                                # Estimation du P&L du partial (en CAD)
+                                if direction == 'buy':
+                                    partial_pnl_usd = (current_price - entry) * partial_units
+                                else:
+                                    partial_pnl_usd = (entry - current_price) * partial_units
+                                usd_cad = get_usd_cad_rate()
+                                partial_pnl_cad = partial_pnl_usd * usd_cad
+
+                                msg = (
+                                    f"🔒 <b>Time-lock</b> · {pair} {direction.upper()} · {setup_type.upper()}\n"
+                                    f"Peak {peak:.1f} pips ({peak_fraction:.0%} TP1) · "
+                                    f"Retrace {retrace_fraction:.0%} · {int(trade_age_min)}m\n"
+                                    f"Closed 67% @ {profit_pips_now:+.1f} pips → {partial_pnl_cad:+.2f} CAD\n"
+                                    f"Runner 33% @ SL entry+{TIME_LOCK_SL_OFFSET_PIPS:.0f} pips"
+                                )
+                                send_telegram_message(msg)
+                                print(msg)
+                                save_status_json(force=True)
+                            else:
+                                print(f"⚠️ Time-lock SL move failed on {pair}")
+                                # Position partiellement fermée mais SL non déplacé → on laisse le trailing actif
+                                active_trade['time_lock_done'] = True
+                        else:
+                            print(f"⚠️ Time-lock partial close failed on {pair}")
+
+    # === Session checkpoint 11:00 (informatif) ===
+    if (now_check.hour == CHECKPOINT_HOUR and now_check.minute == CHECKPOINT_MINUTE
+            and not active_trade.get('checkpoint_sent', False)
+            and not active_trade.get('tp1_hit', False)
+            and not active_trade.get('be_triggered', False)):
+
+        init_risk = active_trade.get('initial_risk', 0)
+        tp1_distance_pips = (TP1_R_MULT * init_risk) / 0.0001 if init_risk > 0 else 0
+        peak = active_trade.get('peak_profit_pips', 0.0)
+        peak_frac = peak / tp1_distance_pips if tp1_distance_pips > 0 else 0.0
+
+        if peak > 0:
+            retrace_frac = max(0.0, (peak - profit_pips_now) / peak)
+            line2 = (f"Peak {peak:+.1f} pips ({peak_frac:.0%} TP1) · "
+                     f"Now {profit_pips_now:+.1f} · Retrace {retrace_frac:.0%}")
+        else:
+            line2 = f"Peak {peak:+.1f} pips ({peak_frac:.0%} TP1) · Now {profit_pips_now:+.1f}"
+
+        # Durée en trade
+        opened_at_str = active_trade.get('opened_at')
+        duration_str = "?"
+        if opened_at_str:
+            try:
+                opened_dt = datetime.fromisoformat(opened_at_str.replace("Z", "+00:00")).astimezone(tz)
+                dur_min = int((now_check - opened_dt).total_seconds() / 60.0)
+                duration_str = f"{dur_min // 60}h{dur_min % 60:02d}m"
+            except (ValueError, TypeError):
+                pass
+
+        msg = (
+            f"⏰ <b>11:00 checkpoint</b> · {pair} {direction.upper()} · {setup_type.upper()}\n"
+            f"{line2}\n"
+            f"BE ❌ · {duration_str}"
+        )
+        send_telegram_message(msg)
+        print(msg)
+        active_trade['checkpoint_sent'] = True
+        save_status_json(force=True)
 
 
 def compute_quality_score(signal, c, df, instrument, config, atr):
@@ -1823,13 +1983,7 @@ def main():
 
     _now_check = datetime.now(tz)
 
-    # === Filtre DST pour le cron saisonnier ===
-    # Le YAML déclare deux crons ('30 16' été / '30 17' hiver). En saison, l'un
-    # tombe à 12:30 ET (fenêtre relay) et l'autre à 11:30 ET (hiver avec cron
-    # été) ou 13:30 ET (été avec cron hiver). On rejette le cron hors saison
-    # silencieusement (sans notification), pour ne laisser que celui qui tombe
-    # dans la bonne fenêtre locale. Ne s'applique qu'aux déclenchements cron
-    # (variable GITHUB_EVENT_SCHEDULE non vide) — pas aux dispatch.
+    # Filtre DST pour le cron saisonnier
     _event_schedule = os.environ.get('GITHUB_EVENT_SCHEDULE', '')
     if _event_schedule and _now_check.hour in (11, 13):
         print(f"⏭️ Cron hors fenêtre saisonnière ({_now_check.strftime('%H:%M')} ET) – sortie silencieuse.")
@@ -1867,10 +2021,8 @@ def main():
     now = datetime.now(tz)
     future_events = [e for e in events if e["time"] > now and e["time"] - now < timedelta(hours=NEWS_CHECK_FUTURE_HOURS)]
 
-    # Le Relay ne démarre que si un trade est actif (l'early-return ci-dessus
-    # garantit déjà qu'on n'arrive ici avec active_trade=None après 12:05).
     if _after_1205 and active_trade is not None:
-        # === RELAY TAKEOVER ===
+        # RELAY TAKEOVER
         at = active_trade
         direction_label = "BUY" if at['direction'] == 'buy' else "SELL"
         lines = [
@@ -1889,6 +2041,8 @@ def main():
             lines.append("🎯 TP1 hit ✅")
         if at.get('tp2_widened'):
             lines.append("🎯 TP2 widened ✅")
+        if at.get('time_lock_done'):
+            lines.append("🔒 Time-lock done ✅")
         try:
             pnl_oanda = fetch_position_pnl_from_oanda(at['pair'])
             if pnl_oanda is not None:
@@ -1899,7 +2053,6 @@ def main():
         lines.append("Relay runs until 17:05 ET (forced close at 16:55).")
         start_msg = "\n".join(lines)
     else:
-        # === NORMAL STARTUP ===
         start_msg = (
             f"🟢 Forex Sniper 7-12 Multi-Setup started – max {MAX_TRADES_PER_DAY} trades/day, "
             f"buffer {MIN_MINUTES_BETWEEN_TRADES}min, 10 setups. Quality Score selection. "
@@ -1926,7 +2079,6 @@ def main():
                 send_telegram_message("🔴 Bot stopped – End of session (past 12:05), no active trade.")
                 break
 
-            # === Reminders pré-clôture : 16:50 → 16:54, un par minute, P&L depuis OANDA ===
             if now.hour == 16 and 50 <= now.minute <= 54:
                 if active_trade is not None and _last_reminder_minute != now.minute:
                     pnl_oanda = fetch_position_pnl_from_oanda(active_trade['pair'])
@@ -1944,7 +2096,6 @@ def main():
                     print(f"Reminder {now.strftime('%H:%M')} envoyé. P&L OANDA: {pnl_str}")
                     _last_reminder_minute = now.minute
 
-            # === 16:55-16:57 : clôture forcée, peu importe le P&L ===
             if now.hour == 16 and 55 <= now.minute <= 57:
                 if active_trade is not None:
                     pair = active_trade['pair']
@@ -1970,7 +2121,6 @@ def main():
                                 f"Please close manually before 16:59 NY."
                             )
 
-            # === 16:58 : alerte critique (une seule fois) si la position est encore ouverte ===
             if now.hour == 16 and now.minute == 58:
                 if active_trade is not None and not _critical_alert_sent:
                     send_telegram_message(
@@ -2074,7 +2224,6 @@ def main():
                                 news_title = news_event['title']
                                 news_time = news_event['time'].strftime('%H:%M')
 
-                                # Calcul du P&L actuel (en CAD via USD/CAD)
                                 try:
                                     resp = ctx.pricing.get(ACCOUNT_ID, instruments=pair)
                                     pi = resp.body['prices'][0]
@@ -2092,13 +2241,6 @@ def main():
                                 usd_cad = get_usd_cad_rate()
                                 pnl_cad = pnl_usd * usd_cad
 
-                                # === Option A : fermeture partielle setup-aware ===
-                                # Setups d'extension (Momentum/Breakout/ORB/Trend Breakout) :
-                                #   fermer 33 %, garder 67 % comme runner.
-                                # Autres setups (Pullback/Pin Bar/Engulfing/SR/Inside Bar) :
-                                #   fermer 50 %, garder 50 %.
-                                # Dans tous les cas, le SL (initial ou trailing si BE atteint)
-                                # reste en place sur le runner.
                                 if setup_type in TP2_WIDEN_SETUPS:
                                     close_pct = NEWS_CLOSE_PCT_EXTENSION
                                     setup_label = "extension"
@@ -2111,7 +2253,6 @@ def main():
                                 remaining = units_abs - partial_units
 
                                 if partial_units >= units_abs or remaining < 1000:
-                                    # Position trop petite pour splitter → fermeture complète
                                     if close_full_position_market():
                                         send_telegram_message(
                                             f"📰 <b>Imminent News – Full closure (too small to split)</b>\n"
@@ -2289,7 +2430,7 @@ def main():
         send_telegram_message("🔴 Bot stopped manually (Ctrl+C)")
 
 
-# ============ PLACE TRADE : trailing SL server-side dès l'ouverture ============
+# ============ PLACE TRADE ============
 def place_trade(instrument, entry_price_signal, sl_signal, tp_signal, direction, setup_type, risk_percent, reason, df, balance):
     global active_trade, trades_today, rejected_signals
 
@@ -2407,6 +2548,9 @@ def place_trade(instrument, entry_price_signal, sl_signal, tp_signal, direction,
             'be_triggered': False,
             'tp1_hit': False,
             'tp2_widened': False,
+            'peak_profit_pips': 0.0,
+            'time_lock_done': False,
+            'checkpoint_sent': False,
             'trailing_distance': f"{TRAILING_ATR_MULT}x H1 ATR (server-side)",
             'atr': atr_val,
             'opened_at': datetime.now(tz).isoformat(),
