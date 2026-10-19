@@ -110,6 +110,24 @@ st.markdown("""
         margin-top: -0.5rem;
         margin-bottom: 0.5rem;
     }
+    /* Style pour le tableau HTML natif (évite pyarrow) */
+    .perf-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.85rem;
+    }
+    .perf-table th, .perf-table td {
+        padding: 0.4rem 0.6rem;
+        border-bottom: 1px solid #333;
+        text-align: left;
+    }
+    .perf-table th {
+        color: #1E90FF;
+        font-weight: bold;
+    }
+    .perf-table tr:hover {
+        background-color: #1a1a1a;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -370,16 +388,16 @@ def render_dashboard():
     max_tr = sess.get('max_trades', 3)
 
     col1.markdown("#### Trades")
-    col1.metric("", f"{trades}/{max_tr}")
+    col1.metric("Trades", f"{trades}/{max_tr}", label_visibility="collapsed")
 
     col2.markdown("#### Session")
-    col2.metric("", f"07:00–12:00")
+    col2.metric("Session", "07:00–12:00", label_visibility="collapsed")
 
     col3.markdown("#### Status")
-    col3.metric("", "🟢" if bot_is_running else "🔴")
+    col3.metric("Status", "🟢" if bot_is_running else "🔴", label_visibility="collapsed")
 
     col4.markdown("#### Time")
-    col4.metric("", now_str)
+    col4.metric("Time", now_str, label_visibility="collapsed")
     st.markdown('</div>', unsafe_allow_html=True)
 
     # ---------- Paires ----------
@@ -624,7 +642,10 @@ def render_dashboard():
                 ]
 
             df_table = pd.DataFrame(metrics_data)
-            st.table(df_table)
+            
+            # Rendu HTML natif — évite la dépendance pyarrow
+            html_table = df_table.to_html(index=False, escape=False, classes="perf-table", border=0)
+            st.markdown(html_table, unsafe_allow_html=True)
 
 render_dashboard()
 
