@@ -1,5 +1,5 @@
 {
-  "time": "2026-10-20 10:43:07",
+  "time": "2026-10-20 10:48:15",
   "bot_status": "running",
   "session": {
     "trades_today": 1,
@@ -7,33 +7,7 @@
     "start": "07:00",
     "end": "11:00"
   },
-  "active_trade": {
-    "pair": "GBP_USD",
-    "type": "Buy",
-    "entry": 1.33411,
-    "sl": 1.33901,
-    "tp1": null,
-    "tp2": 1.3408702857142853,
-    "trailing_stop": "server-side (OANDA)",
-    "current_price": 1.34004,
-    "unrealized_pnl_usd": 749.59,
-    "unrealized_pnl_cad": 1052.76,
-    "usd_cad_rate": 1.4044,
-    "distance_to_sl_pips": 10.3,
-    "distance_to_tp2_pips": 8.3,
-    "atr": 0.0010242857142857156,
-    "be_triggered": true,
-    "tp1_hit": true,
-    "tp2_widened": true,
-    "peak_profit_pips": 68.90000000000063,
-    "time_lock_done": false,
-    "regime_adverse_handled": false,
-    "setup_type": "Momentum",
-    "risk_percent": 0.4,
-    "opened_at": "2026-10-20T07:00:21.364463-04:00",
-    "units": 126407,
-    "score": 64.3
-  },
+  "active_trade": null,
   "next_news_event": {
     "title": "CPI",
     "time": "02:00",
