@@ -25,6 +25,19 @@
       "entry": 1.33925,
       "exit": 1.3386,
       "score": null
+    },
+    {
+      "pair": "GBP_USD",
+      "type": "Buy",
+      "setup": "Momentum",
+      "pnl": -290.25,
+      "pnl_usd": -206.6,
+      "time": "14:58:50",
+      "r_multiple": -0.63,
+      "units": 202507,
+      "entry": 1.33933,
+      "exit": 1.33832,
+      "score": 62.5
     }
   ],
   "last_cleanup": "2026-10-21"
