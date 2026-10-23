@@ -14,6 +14,21 @@
       "rsi": 38.76267421783884,
       "atr": 0.0009000000000000119,
       "diagnostic": null
+    },
+    {
+      "time": "09:06:57",
+      "pair": "EUR_USD",
+      "buy_reason": "H1 not up",
+      "sell_reason": "No SELL setup triggered",
+      "spread": 0.0001500000000000945,
+      "adx": 22.9660879943637,
+      "plus_di": 21.258044729446265,
+      "minus_di": 25.281698530100794,
+      "ema50": 1.1215581306648434,
+      "ema200": 1.1216705607324646,
+      "rsi": 47.74792267601123,
+      "atr": 0.0010792857142856954,
+      "diagnostic": "[Best hypothetical: Pullback SELL score=63.1]"
     }
   ],
   "last_cleanup": "2026-10-23"
