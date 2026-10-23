@@ -71,6 +71,9 @@ TP2_WIDEN_TRIGGER = 0.90
 TP2_WIDEN_FACTOR = 1.50
 TP2_WIDEN_SETUPS = {"Momentum", "Breakout", "ORB", "Trend Breakout"}
 
+# === TP2 initial lock : sécurise le RR initial quand le prix dépasse TP2 initial ===
+TP2_INITIAL_LOCK_OFFSET_PIPS = 5.0
+
 NEWS_CLOSE_PCT_EXTENSION = 0.33
 NEWS_CLOSE_PCT_OTHER = 0.50
 
@@ -87,13 +90,6 @@ TIME_LOCK_CLOSE_PCT = 0.67
 TIME_LOCK_SL_OFFSET_PIPS = 2.0
 
 # === Adverse regime detection ===
-# 3 signaux évalués à chaque cycle (30 s) sur les bougies H1 clôturées :
-#   1. Prix courant vs EMA50 (H1)
-#   2. +DI vs -DI (H1)
-#   3. MACD line vs signal (H1)
-# Régime déclaré adverse si >= 2 signaux basculent contre la position.
-# Action (garde-fou : peak >= 40 % de TP1) : partial close 67 % + SL runner
-# fixé à entrée + 2 pips. Une seule fois par trade.
 REGIME_ADVERSE_MIN_SIGNALS = 2
 REGIME_ADVERSE_MIN_PEAK_FRACTION = 0.40
 REGIME_ADVERSE_CLOSE_PCT = 0.67
@@ -181,7 +177,6 @@ def _oanda_headers():
 
 
 def _oanda_http_retry(method, url, json_body=None, max_attempts=3):
-    """Retry HTTP générique pour OANDA. Retourne la réponse ou None."""
     for i in range(max_attempts):
         try:
             r = requests.request(method, url, headers=_oanda_headers(), json=json_body, timeout=15)
@@ -198,7 +193,6 @@ def _oanda_http_retry(method, url, json_body=None, max_attempts=3):
 
 
 def _extract_attr(obj, key, default=None):
-    """Extrait un attribut depuis un dict OU un objet (SDK v20)."""
     if obj is None:
         return default
     if isinstance(obj, dict):
@@ -207,10 +201,6 @@ def _extract_attr(obj, key, default=None):
 
 
 def fetch_position_pnl_from_oanda(instrument):
-    """
-    Récupère le P&L non réalisé directement depuis l'API OANDA.
-    Retourne le P&L en devise du compte (ex: CAD) ou None si indisponible.
-    """
     try:
         resp = retry_api_call(ctx.position.get, ACCOUNT_ID, instrument)
         body = getattr(resp, 'body', None)
@@ -246,7 +236,6 @@ def fetch_position_pnl_from_oanda(instrument):
 
 
 def fetch_trade_raw(trade_id):
-    """Récupère le trade via HTTP direct (structure JSON brute). Retourne un dict ou None."""
     url = f"https://{OANDA_URL}/v3/accounts/{ACCOUNT_ID}/trades/{trade_id}"
     r = _oanda_http_retry("GET", url)
     if r is None or r.status_code != 200:
@@ -664,6 +653,8 @@ def save_status_json(force=False):
             "sl": active_trade['sl'],
             "tp1": active_trade.get('tp1'),
             "tp2": active_trade.get('tp2'),
+            "tp2_initial": active_trade.get('tp2_initial'),
+            "tp2_initial_locked": active_trade.get('tp2_initial_locked', False),
             "trailing_stop": "server-side (OANDA)",
             "current_price": current_price,
             "unrealized_pnl_usd": round(unrealized_pnl_usd, 2),
@@ -720,6 +711,8 @@ def load_existing_open_position():
                         "be_triggered": saved_trade.get("be_triggered", False),
                         "tp1_hit": saved_trade.get("tp1_hit", False),
                         "tp2_widened": saved_trade.get("tp2_widened", False),
+                        "tp2_initial": saved_trade.get("tp2_initial"),
+                        "tp2_initial_locked": saved_trade.get("tp2_initial_locked", False),
                         "peak_profit_pips": saved_trade.get("peak_profit_pips", 0.0),
                         "time_lock_done": saved_trade.get("time_lock_done", False),
                         "regime_adverse_handled": saved_trade.get("regime_adverse_handled", False),
@@ -768,6 +761,8 @@ def load_existing_open_position():
                         'sl': sl_price,
                         'tp1': (entry_price + _tp1_dist) if direction == 'buy' else (entry_price - _tp1_dist),
                         'tp2': tp_price,
+                        'tp2_initial': saved_flags.get("tp2_initial", tp_price),
+                        'tp2_initial_locked': saved_flags.get("tp2_initial_locked", False),
                         'tp': tp_price,
                         'direction': direction,
                         'setup_type': saved_flags.get("setup_type", 'recovered'),
@@ -1266,14 +1261,6 @@ def move_sl_to_entry():
 
 # ============ ADVERSE REGIME DETECTION ============
 def check_adverse_regime(direction, current_price, df):
-    """
-    Évalue 3 signaux d'adversité pour la direction en cours :
-      1. Prix courant vs EMA50 (H1)
-      2. +DI vs -DI (H1)
-      3. MACD line vs signal (H1)
-    Retourne (is_adverse, signals_list, count).
-    Régime adverse si count >= REGIME_ADVERSE_MIN_SIGNALS.
-    """
     if df is None or df.empty:
         return False, [], 0
 
@@ -1301,7 +1288,7 @@ def check_adverse_regime(direction, current_price, df):
             signals.append("-DI>+DI")
         if macd_line < macd_signal:
             signals.append("MACD flip")
-    else:  # sell
+    else:
         if current_price > ema50:
             signals.append("Price>EMA50")
         if plus_di > minus_di:
@@ -1444,6 +1431,52 @@ def manage_active_trade():
                 save_status_json(force=True)
 
     now_check = datetime.now(tz)
+
+    # === TP2 initial lock ===
+    tp2_initial = active_trade.get('tp2_initial')
+    if (tp2_initial is not None
+            and active_trade.get('tp2_widened', False)
+            and not active_trade.get('tp2_initial_locked', False)):
+        offset = TP2_INITIAL_LOCK_OFFSET_PIPS * 0.0001
+
+        if direction == 'buy':
+            trigger_price = tp2_initial + offset
+            reached = current_price >= trigger_price
+        else:
+            trigger_price = tp2_initial - offset
+            reached = current_price <= trigger_price
+
+        if reached:
+            current_sl = active_trade.get('sl', 0) or 0
+            if direction == 'buy' and tp2_initial > current_sl:
+                better = True
+            elif direction == 'sell' and tp2_initial < current_sl:
+                better = True
+            else:
+                better = False
+
+            if better:
+                if update_trade_sl_tp(active_trade['trade_id'], sl_price=tp2_initial):
+                    old_sl = current_sl
+                    active_trade['sl'] = tp2_initial
+                    active_trade['tp2_initial_locked'] = True
+
+                    init_risk = active_trade.get('initial_risk', 1)
+                    rr_floor = abs(tp2_initial - entry) / init_risk if init_risk > 0 else 0
+
+                    msg = (
+                        f"🔐 <b>TP2 initial locked</b> · {pair} {direction.upper()} · {setup_type.upper()}\n"
+                        f"Price passed TP2+{TP2_INITIAL_LOCK_OFFSET_PIPS:.0f}p · SL moved to TP2 initial\n"
+                        f"SL: {old_sl:.5f} → {tp2_initial:.5f}\n"
+                        f"RR floor: {rr_floor:.1f}R guaranteed\n"
+                        f"Current profit: {profit_pips_now:+.1f} pips"
+                    )
+                    send_telegram_message(msg)
+                    print(msg)
+                    save_status_json(force=True)
+            else:
+                active_trade['tp2_initial_locked'] = True
+                print(f"🔐 TP2 initial lock: trailing already better than TP2 initial, skip")
 
     # === Adverse regime check (universel, avant le time-lock) ===
     if (not active_trade.get('regime_adverse_handled', False)
@@ -2168,6 +2201,8 @@ def main():
             lines.append("🎯 TP1 hit ✅")
         if at.get('tp2_widened'):
             lines.append("🎯 TP2 widened ✅")
+        if at.get('tp2_initial_locked'):
+            lines.append("🔐 TP2 initial locked ✅")
         if at.get('time_lock_done'):
             lines.append("🔒 Time-lock done ✅")
         if at.get('regime_adverse_handled'):
@@ -2670,6 +2705,8 @@ def place_trade(instrument, entry_price_signal, sl_signal, tp_signal, direction,
             'sl': new_sl,
             'tp1': (current_price + _tp1_dist) if direction == 'buy' else (current_price - _tp1_dist),
             'tp2': new_tp,
+            'tp2_initial': new_tp,
+            'tp2_initial_locked': False,
             'direction': direction,
             'setup_type': setup_type,
             'risk_percent': risk_percent,
