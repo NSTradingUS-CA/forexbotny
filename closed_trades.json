@@ -1,4 +1,18 @@
 {
-  "trades": [],
+  "trades": [
+    {
+      "pair": "EUR_USD",
+      "type": "Sell",
+      "setup": "Breakout",
+      "pnl": 54.25,
+      "pnl_usd": 38.7,
+      "time": "13:11:09",
+      "r_multiple": 3.0,
+      "units": 131187,
+      "entry": 1.11906,
+      "exit": 1.11876,
+      "score": 54.8
+    }
+  ],
   "last_cleanup": "2026-10-26"
 }
