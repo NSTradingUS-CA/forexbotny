@@ -1,4 +1,20 @@
 {
-  "signals": [],
+  "signals": [
+    {
+      "time": "07:00:28",
+      "pair": "EUR_USD",
+      "buy_reason": "H1 not up, MACD not bullish",
+      "sell_reason": "No SELL setup triggered",
+      "spread": 0.0001500000000000945,
+      "adx": 17.85991840781631,
+      "plus_di": 17.945249040449006,
+      "minus_di": 28.357173295505717,
+      "ema50": 1.121165458508475,
+      "ema200": 1.1213481232510611,
+      "rsi": 40.687052688317046,
+      "atr": 0.0008885714285714449,
+      "diagnostic": "[Best hypothetical: Engulfing SELL score=59.0]"
+    }
+  ],
   "last_cleanup": "2026-10-26"
 }
