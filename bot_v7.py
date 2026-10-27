@@ -671,6 +671,7 @@ def save_status_json(force=False):
             "regime_adverse_handled": active_trade.get('regime_adverse_handled', False),
             "setup_type": active_trade.get('setup_type'),
             "risk_percent": active_trade.get('risk_percent'),
+            "initial_risk": active_trade.get('initial_risk'),
             "opened_at": active_trade.get('opened_at'),
             "units": active_trade.get('units'),
             "score": active_trade.get('quality_score')
@@ -750,7 +751,16 @@ def load_existing_open_position():
 
                     tp_price = float(trade.takeProfitOrder.price) if trade.takeProfitOrder else None
                     direction = 'buy' if int(trade.currentUnits) > 0 else 'sell'
-                    initial_risk = abs(entry_price - sl_price) if sl_price is not None else saved_flags.get("initial_risk", 0.0)
+
+                    # --- Priorité au risque sauvegardé pour préserver les RR/flags ---
+                    saved_risk = saved_flags.get("initial_risk")
+                    if saved_risk is not None and saved_risk > 0:
+                        initial_risk = saved_risk
+                    elif sl_price is not None:
+                        initial_risk = abs(entry_price - sl_price)
+                    else:
+                        initial_risk = 0.0
+
                     _tp1_dist = initial_risk * TP1_R_MULT
                     active_trade = {
                         'trade_id': trade_id,
