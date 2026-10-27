@@ -3,15 +3,15 @@
     {
       "pair": "EUR_USD",
       "type": "Sell",
-      "setup": "Momentum",
+      "setup": "recovered",
       "pnl": 308.81,
-      "pnl_usd": 219.77,
-      "time": "16:55:20",
-      "r_multiple": 0.58,
+      "pnl_usd": 219.78,
+      "time": "16:55:15",
+      "r_multiple": 5.15,
       "units": 216217,
       "entry": 1.115,
       "exit": 1.11397,
-      "score": 78.2
+      "score": null
     }
   ],
   "last_cleanup": "2026-10-27"
