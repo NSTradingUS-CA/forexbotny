@@ -802,12 +802,30 @@ def send_telegram_message(text):
         return
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     payload = {"chat_id": TELEGRAM_CHAT_ID, "text": text, "parse_mode": "HTML"}
-    try:
-        resp = requests.post(url, json=payload, timeout=10)
-        if resp.status_code != 200:
-            print(f"Telegram send failed: {resp.text}")
-    except Exception as e:
-        print(f"Telegram error: {e}")
+    
+    # On tente jusqu'à 3 fois d'envoyer le message
+    for attempt in range(3):
+        try:
+            resp = requests.post(url, json=payload, timeout=10)
+            if resp.status_code == 200:
+                return  # Message envoyé avec succès
+            elif resp.status_code == 429:
+                # Telegram nous demande de ralentir
+                try:
+                    retry_after = resp.json().get("parameters", {}).get("retry_after", 5)
+                except Exception:
+                    retry_after = 5
+                print(f"⚠️ Telegram rate limit, pause de {retry_after}s...")
+                time.sleep(retry_after)
+            else:
+                print(f"Telegram send failed (status {resp.status_code}): {resp.text}")
+                break  # Erreur de format (ex: balise HTML fermée), inutile de réessayer
+        except Exception as e:
+            print(f"Telegram error (tentative {attempt+1}/3): {e}")
+            if attempt < 2:
+                time.sleep(2) # On attend 2 secondes avant de réessayer
+                
+    print(f"❌ Échec de l'envoi du message Telegram après 3 tentatives.")
 
 
 def get_finnhub_sentiment(pair):
