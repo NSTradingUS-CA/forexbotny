@@ -1,4 +1,18 @@
 {
-  "trades": [],
+  "trades": [
+    {
+      "pair": "GBP_USD",
+      "type": "Sell",
+      "setup": "Momentum",
+      "pnl": -442.38,
+      "pnl_usd": -314.82,
+      "time": "09:41:38",
+      "r_multiple": -0.8,
+      "units": 199829,
+      "entry": 1.32879,
+      "exit": 1.33035,
+      "score": 70.6
+    }
+  ],
   "last_cleanup": "2026-10-28"
 }
