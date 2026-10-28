@@ -1,21 +1,6 @@
 {
   "signals": [
     {
-      "time": "07:36:11",
-      "pair": "GBP_USD",
-      "buy_reason": "H1 not up, RSI 28.4 outside 30-70, MACD not bullish",
-      "sell_reason": "RSI 28.4 outside 30-70",
-      "spread": 0.00017000000000000348,
-      "adx": 44.66735056528009,
-      "plus_di": 9.973037527974467,
-      "minus_di": 34.097605963519364,
-      "ema50": 1.332037535459086,
-      "ema200": 1.3333579412173817,
-      "rsi": 28.43332638733824,
-      "atr": 0.0009014285714285927,
-      "diagnostic": "[Best hypothetical: Engulfing SELL score=75.0]"
-    },
-    {
       "time": "07:36:43",
       "pair": "EUR_USD",
       "buy_reason": "H1 not up",
@@ -1499,6 +1484,21 @@
       "rsi": 45.81365910207577,
       "atr": 0.0006671428571428344,
       "diagnostic": "[Best hypothetical: Pin Bar SELL score=75.4]"
+    },
+    {
+      "time": "09:56:51",
+      "pair": "EUR_USD",
+      "buy_reason": "H1 not up",
+      "sell_reason": "MACD not bearish",
+      "spread": 0.0001500000000000945,
+      "adx": 51.99438109171411,
+      "plus_di": 17.132008296628484,
+      "minus_di": 16.41083247580937,
+      "ema50": 1.1149051944161714,
+      "ema200": 1.1187905747462576,
+      "rsi": 49.778278015335424,
+      "atr": 0.0006942857142856791,
+      "diagnostic": "[Best hypothetical: Pullback SELL score=68.6]"
     }
   ],
   "last_cleanup": "2026-10-28"
