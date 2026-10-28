@@ -1,18 +1,5 @@
 {
-  "trades": [
-    {
-      "pair": "EUR_USD",
-      "type": "Sell",
-      "setup": "recovered",
-      "pnl": 308.81,
-      "pnl_usd": 219.78,
-      "time": "16:55:15",
-      "r_multiple": 5.15,
-      "units": 216217,
-      "entry": 1.115,
-      "exit": 1.11397,
-      "score": null
-    }
-  ],
-  "last_cleanup": "2026-10-27"
+  "trades": [],
+  "signals": [],
+  "last_cleanup": "2026-10-28"
 }
