@@ -1,21 +1,6 @@
 {
   "signals": [
     {
-      "time": "08:31:29",
-      "pair": "EUR_USD",
-      "buy_reason": "H1 not up",
-      "sell_reason": "No SELL setup triggered",
-      "spread": 0.0001500000000000945,
-      "adx": 19.379678162453104,
-      "plus_di": 19.943841667972034,
-      "minus_di": 17.016855424179845,
-      "ema50": 1.1146239417620578,
-      "ema200": 1.1177537688181531,
-      "rsi": 49.80866216621103,
-      "atr": 0.0013092857142857112,
-      "diagnostic": "[Best hypothetical: Breakout SELL score=52.1]"
-    },
-    {
       "time": "08:31:59",
       "pair": "EUR_USD",
       "buy_reason": "H1 not up",
@@ -1491,6 +1476,21 @@
       "buy_reason": "H1 not up",
       "sell_reason": "H1 not down",
       "spread": 0.000180000000000069,
+      "adx": 17.935915458070827,
+      "plus_di": 25.82281674513346,
+      "minus_di": 16.928702846281677,
+      "ema50": 1.3317797153045248,
+      "ema200": 1.3328212410906146,
+      "rsi": 52.2174589549783,
+      "atr": 0.0015492857142857292,
+      "diagnostic": null
+    },
+    {
+      "time": "09:49:46",
+      "pair": "GBP_USD",
+      "buy_reason": "H1 not up",
+      "sell_reason": "H1 not down",
+      "spread": 0.00019999999999997797,
       "adx": 17.935915458070827,
       "plus_di": 25.82281674513346,
       "minus_di": 16.928702846281677,
