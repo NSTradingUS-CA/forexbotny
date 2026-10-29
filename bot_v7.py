@@ -741,79 +741,73 @@ def load_existing_open_position():
                 resp_trades = retry_api_call(ctx.trade.list, ACCOUNT_ID, instrument=instrument, state='OPEN', count=10)
                 open_trades = resp_trades.body.get('trades', [])
                 if open_trades:
-                    runner_trade = None
-                    tp1_trade = None
-                    for t in open_trades:
-                        if getattr(t, 'trailingStopLossOrder', None) and t.trailingStopLossOrder:
-                            runner_trade = t
-                        else:
-                            tp1_trade = t
+                    trade = open_trades[0]
+                    entry_price = float(trade.price)
+                    trade_id = trade.id
                     
-                    if runner_trade is None and open_trades:
-                        runner_trade = open_trades[0]
+                    trade_json = fetch_trade_raw(trade_id)
+                    sl_price, sl_source = extract_sl_from_trade_json(trade_json)
+                    if sl_price is not None:
+                        print(f"🔍 SL loaded ({sl_source}): {sl_price:.5f}")
 
-                    if runner_trade:
-                        trade = runner_trade
-                        entry_price = float(trade.price)
+                    tp_price = float(trade.takeProfitOrder.price) if trade.takeProfitOrder else None
+                    direction = 'buy' if int(trade.currentUnits) > 0 else 'sell'
 
-                        trade_id = trade.id
-                        tp1_trade_id = tp1_trade.id if tp1_trade else None
+                    # --- Priorité au risque sauvegardé pour préserver les RR/flags ---
+                    saved_risk = saved_flags.get("initial_risk")
+                    if saved_risk is not None and saved_risk > 0:
+                        initial_risk = saved_risk
+                    elif sl_price is not None:
+                        initial_risk = abs(entry_price - sl_price)
+                    else:
+                        initial_risk = 0.0
 
-                        trade_json = fetch_trade_raw(trade_id)
-                        sl_price, sl_source = extract_sl_from_trade_json(trade_json)
-                        if sl_price is not None:
-                            print(f"🔍 SL loaded ({sl_source}): {sl_price:.5f}")
+                    _tp1_dist = initial_risk * TP1_R_MULT
+                    tp1_price = (entry_price + _tp1_dist) if direction == 'buy' else (entry_price - _tp1_dist)
 
-                        tp_price = float(trade.takeProfitOrder.price) if trade.takeProfitOrder else None
-                        direction = 'buy' if int(trade.currentUnits) > 0 else 'sell'
+                    # --- Recherche de l'ordre TP1 en attente ---
+                    tp1_order_id = None
+                    try:
+                        pending_orders = retry_api_call(ctx.order.list_pending, ACCOUNT_ID)
+                        for o in pending_orders.body.get('orders', []):
+                            if o.instrument == instrument and o.type == 'LIMIT' and int(o.units) != 0:
+                                if (direction == 'buy' and int(o.units) < 0) or (direction == 'sell' and int(o.units) > 0):
+                                    tp1_order_id = o.id
+                                    break
+                    except Exception as e:
+                        print(f"⚠️ Could not fetch pending orders for restore: {e}")
 
-                        # --- Priorité au risque sauvegardé pour préserver les RR/flags ---
-                        saved_risk = saved_flags.get("initial_risk")
-                        if saved_risk is not None and saved_risk > 0:
-                            initial_risk = saved_risk
-                        elif sl_price is not None:
-                            initial_risk = abs(entry_price - sl_price)
-                        else:
-                            initial_risk = 0.0
-
-                        _tp1_dist = initial_risk * TP1_R_MULT
-                        tp1_price = (entry_price + _tp1_dist) if direction == 'buy' else (entry_price - _tp1_dist)
-
-                        total_units = abs(int(trade.currentUnits))
-                        if tp1_trade:
-                            total_units += abs(int(tp1_trade.currentUnits))
-
-                        active_trade = {
-                            'trade_id': trade_id,
-                            'tp1_trade_id': tp1_trade_id,
-                            'pair': instrument,
-                            'units': int(trade.currentUnits),
-                            'initial_units': total_units,
-                            'entry_price': entry_price,
-                            'sl': sl_price,
-                            'tp1': tp1_price,
-                            'tp2': tp_price,
-                            'tp2_initial': saved_flags.get("tp2_initial", tp_price),
-                            'tp2_initial_locked': saved_flags.get("tp2_initial_locked", False),
-                            'tp': tp_price,
-                            'direction': direction,
-                            'setup_type': saved_flags.get("setup_type", 'recovered'),
-                            'risk_percent': saved_flags.get("risk_percent", RISK_PULLBACK),
-                            'initial_risk': initial_risk,
-                            'be_triggered': saved_flags.get("be_triggered", False),
-                            'tp1_hit': saved_flags.get("tp1_hit", tp1_trade is None),
-                            'tp2_widened': saved_flags.get("tp2_widened", False),
-                            'peak_profit_pips': saved_flags.get("peak_profit_pips", 0.0),
-                            'time_lock_done': saved_flags.get("time_lock_done", False),
-                            'regime_adverse_handled': saved_flags.get("regime_adverse_handled", False),
-                            'checkpoint_sent': False,
-                            'opened_at': saved_flags.get("opened_at", str(trade.openTime) if getattr(trade, 'openTime', None) else None),
-                            'trailing_distance': saved_flags.get("trailing_distance", "server-side"),
-                            'atr': saved_flags.get("atr"),
-                            'quality_score': saved_flags.get("quality_score")
-                        }
-                        print(f"Existing open position loaded: {instrument} {active_trade['direction']} with flags restored")
-                        return
+                    active_trade = {
+                        'trade_id': trade_id,
+                        'tp1_order_id': tp1_order_id,
+                        'pair': instrument,
+                        'units': int(trade.currentUnits),
+                        'initial_units': abs(int(trade.currentUnits)),
+                        'entry_price': entry_price,
+                        'sl': sl_price,
+                        'tp1': tp1_price,
+                        'tp2': tp_price,
+                        'tp2_initial': saved_flags.get("tp2_initial", tp_price),
+                        'tp2_initial_locked': saved_flags.get("tp2_initial_locked", False),
+                        'tp': tp_price,
+                        'direction': direction,
+                        'setup_type': saved_flags.get("setup_type", 'recovered'),
+                        'risk_percent': saved_flags.get("risk_percent", RISK_PULLBACK),
+                        'initial_risk': initial_risk,
+                        'be_triggered': saved_flags.get("be_triggered", False),
+                        'tp1_hit': saved_flags.get("tp1_hit", tp1_order_id is None),
+                        'tp2_widened': saved_flags.get("tp2_widened", False),
+                        'peak_profit_pips': saved_flags.get("peak_profit_pips", 0.0),
+                        'time_lock_done': saved_flags.get("time_lock_done", False),
+                        'regime_adverse_handled': saved_flags.get("regime_adverse_handled", False),
+                        'checkpoint_sent': False,
+                        'opened_at': saved_flags.get("opened_at", str(trade.openTime) if getattr(trade, 'openTime', None) else None),
+                        'trailing_distance': saved_flags.get("trailing_distance", "server-side"),
+                        'atr': saved_flags.get("atr"),
+                        'quality_score': saved_flags.get("quality_score")
+                    }
+                    print(f"Existing open position loaded: {instrument} {active_trade['direction']} with TP1 order {tp1_order_id}")
+                    return
     except Exception as e:
         print(f"Could not load existing position: {e}")
 
@@ -1355,48 +1349,21 @@ def manage_active_trade():
     if active_trade is None:
         return
 
-    # === TP1 : check server-side TP1 trade ===
-    tp1_trade_id = active_trade.get('tp1_trade_id')
-    if tp1_trade_id and not active_trade.get('tp1_hit', False):
+    # === TP1 : Vérification de l'ordre LIMIT côté serveur ===
+    tp1_order_id = active_trade.get('tp1_order_id')
+    if tp1_order_id and not active_trade.get('tp1_hit', False):
         try:
-            t_check = retry_api_call(ctx.trade.get, ACCOUNT_ID, tp1_trade_id)
-            state = getattr(t_check.body['trade'], 'state', 'OPEN')
-            if state == 'CLOSED':
+            o_check = retry_api_call(ctx.order.get, ACCOUNT_ID, tp1_order_id)
+            state = getattr(o_check.body['order'], 'state', 'PENDING')
+            if state in ('FILLED', 'CANCELLED', 'TRIGGERED'):
                 active_trade['tp1_hit'] = True
-                send_telegram_message(f"🎯 TP1 reached on {active_trade['pair']} (server-side OANDA). Runner continues.")
+                send_telegram_message(f"🎯 TP1 reached on {active_trade['pair']} (server-side order). Runner continues.")
                 save_status_json(force=True)
         except Exception as e:
             if "404" in str(e) or "not found" in str(e).lower():
                 if not active_trade.get('tp1_hit', False):
                     active_trade['tp1_hit'] = True
-                    send_telegram_message(f"🎯 TP1 reached on {active_trade['pair']} (server-side OANDA). Runner continues.")
-                    save_status_json(force=True)
-    
-    # Fallback si le TP1 n'a pas pu être scindé
-    elif not tp1_trade_id and not active_trade.get('tp1_hit', False):
-        pair = active_trade['pair']
-        direction = active_trade['direction']
-        try:
-            resp = ctx.pricing.get(ACCOUNT_ID, instruments=pair)
-            price_info = resp.body['prices'][0]
-            bid = float(price_info.bids[0].price)
-            ask = float(price_info.asks[0].price)
-            current_price = bid if direction == 'sell' else ask
-        except Exception:
-            current_price = None
-
-        tp1 = active_trade.get('tp1')
-        units = abs(int(active_trade['units']))
-        if current_price and tp1 is not None:
-            if (direction == 'buy' and current_price >= tp1) or (direction == 'sell' and current_price <= tp1):
-                partial_units = max(1000, int(units * TP_PARTIAL_RATIO))
-                if partial_units < units and close_partial_position(partial_units, expected_remaining=units - partial_units):
-                    remaining = units - partial_units
-                    active_trade['units'] = remaining if direction == 'buy' else -remaining
-                    active_trade['tp1_hit'] = True
-                    active_trade['tp1'] = None
-                    print(f"TP1 hit on {pair}, {partial_units} units closed, {remaining} remaining")
-                    send_telegram_message(f"🎯 TP1 reached on {pair}: {partial_units} units closed, {remaining} runner kept.")
+                    send_telegram_message(f"🎯 TP1 reached on {active_trade['pair']} (server-side order). Runner continues.")
                     save_status_json(force=True)
 
     try:
@@ -2616,7 +2583,7 @@ def main():
                                     "spread": spread,
                                 })
                                 save_rejected_to_file()
-                                continue # <-- On passe à la paire suivante
+                                continue
                             
                             candidates.append((score, pair, price, sl, tp, sl_pips, direction, setup_type, risk_pct, reason, df))
                         else:
@@ -2761,29 +2728,21 @@ def place_trade(instrument, entry_price_signal, sl_signal, tp_signal, direction,
     if trailing_distance < 0.0005:
         trailing_distance = 0.0005
 
-    # --- SCISSION DE L'ORDRE POUR LE TP1 SERVEUR ---
-    tp1_units = max(1000, int(new_units * TP_PARTIAL_RATIO))
-    runner_units = new_units - tp1_units
-
-    if runner_units < 1000 or tp1_units < 1000:
-        tp1_units = 0
-        runner_units = new_units
-
-    # 1. Ordre du Runner (avec Trailing Stop et TP2)
-    signed_runner_units = -abs(runner_units) if direction == 'sell' else abs(runner_units)
-    order_runner = {
+    # 1. Ordre unique avec Trailing Stop et TP2
+    signed_units = -abs(new_units) if direction == 'sell' else abs(new_units)
+    order = {
         "type": "MARKET",
         "instrument": instrument,
-        "units": str(signed_runner_units),
+        "units": str(signed_units),
         "stopLossOnFill": {"price": f"{new_sl:.5f}"},
         "takeProfitOnFill": {"price": f"{new_tp:.5f}"},
         "trailingStopLossOnFill": {"distance": f"{trailing_distance:.5f}"}
     }
 
-    r_runner = retry_api_call(ctx.order.create, ACCOUNT_ID, order=order_runner)
-    if hasattr(r_runner.body, 'errorMessage') and r_runner.body.errorMessage:
-        msg = r_runner.body.errorMessage
-        send_telegram_message(f"⚠️ Market order (runner) rejected: {msg}")
+    r = retry_api_call(ctx.order.create, ACCOUNT_ID, order=order)
+    if hasattr(r.body, 'errorMessage') and r.body.errorMessage:
+        msg = r.body.errorMessage
+        send_telegram_message(f"⚠️ Market order rejected: {msg}")
         rejected_signals.append({
             "time": datetime.now(tz).strftime("%H:%M:%S"),
             "pair": instrument,
@@ -2794,37 +2753,40 @@ def place_trade(instrument, entry_price_signal, sl_signal, tp_signal, direction,
         return False
 
     try:
-        fill_runner = r_runner.body.get('orderFillTransaction', r_runner.body.get('orderCreateTransaction'))
-        if not fill_runner:
-            print(f"Market order (runner) created but not filled immediately for {instrument}")
+        fill = r.body.get('orderFillTransaction', r.body.get('orderCreateTransaction'))
+        if not fill:
+            print(f"Market order created but not filled immediately for {instrument}")
             return False
-        trade_runner = fill_runner.tradeOpened
-        actual_entry_price = float(trade_runner.price)
+        trade = fill.tradeOpened
+        actual_entry_price = float(trade.price)
     except Exception as e:
-        send_telegram_message(f"⚠️ Error extracting runner trade details: {str(e)[:100]}")
+        send_telegram_message(f"⚠️ Error extracting trade details: {str(e)[:100]}")
         return False
 
-    # 2. Ordre du TP1 (Take Profit partiel)
-    tp1_trade_id = None
-    if tp1_units > 0:
+    # 2. Ordre LIMIT Reduce-Only pour le TP1 (sécurisé côté serveur OANDA)
+    tp1_order_id = None
+    tp1_units = int(new_units * TP_PARTIAL_RATIO)
+    
+    if tp1_units >= 1000:
         real_sl_distance = abs(actual_entry_price - new_sl)
         _tp1_dist = real_sl_distance * TP1_R_MULT
         tp1_price = (actual_entry_price + _tp1_dist) if direction == 'buy' else (actual_entry_price - _tp1_dist)
         
-        signed_tp1_units = -abs(tp1_units) if direction == 'sell' else abs(tp1_units)
+        signed_tp1_units = -tp1_units if direction == 'buy' else tp1_units
         order_tp1 = {
-            "type": "MARKET",
+            "type": "LIMIT",
             "instrument": instrument,
             "units": str(signed_tp1_units),
-            "stopLossOnFill": {"price": f"{new_sl:.5f}"},
-            "takeProfitOnFill": {"price": f"{tp1_price:.5f}"}
+            "price": f"{tp1_price:.5f}",
+            "positionFill": "REDUCE_ONLY",
+            "timeInForce": "GTC"
         }
         
         r_tp1 = retry_api_call(ctx.order.create, ACCOUNT_ID, order=order_tp1)
         if not hasattr(r_tp1.body, 'errorMessage') or not r_tp1.body.errorMessage:
-            fill_tp1 = r_tp1.body.get('orderFillTransaction', r_tp1.body.get('orderCreateTransaction'))
-            if fill_tp1 and hasattr(fill_tp1, 'tradeOpened'):
-                tp1_trade_id = fill_tp1.tradeOpened.tradeID
+            create_tx = r_tp1.body.get('orderCreateTransaction')
+            if create_tx:
+                tp1_order_id = create_tx.id
 
     score_match = re.search(r'score\s+([\d.]+)', reason, re.IGNORECASE)
     quality_score = float(score_match.group(1)) if score_match else None
@@ -2834,10 +2796,10 @@ def place_trade(instrument, entry_price_signal, sl_signal, tp_signal, direction,
     real_tp1_price = (actual_entry_price + real_tp1_dist) if direction == 'buy' else (actual_entry_price - real_tp1_dist)
 
     active_trade = {
-        'trade_id': trade_runner.tradeID,
-        'tp1_trade_id': tp1_trade_id,
+        'trade_id': trade.tradeID,
+        'tp1_order_id': tp1_order_id,
         'pair': instrument,
-        'units': int(trade_runner.units),
+        'units': int(trade.units),
         'initial_units': new_units,
         'entry_price': actual_entry_price,
         'sl': new_sl,
@@ -2850,7 +2812,7 @@ def place_trade(instrument, entry_price_signal, sl_signal, tp_signal, direction,
         'risk_percent': risk_percent,
         'initial_risk': real_sl_distance,
         'be_triggered': False,
-        'tp1_hit': False if tp1_trade_id else True,
+        'tp1_hit': False if tp1_order_id else True,
         'tp2_widened': False,
         'peak_profit_pips': 0.0,
         'time_lock_done': False,
@@ -2870,13 +2832,11 @@ def place_trade(instrument, entry_price_signal, sl_signal, tp_signal, direction,
            f"Setup: {setup_type.upper()}\n"
            f"Type: {'Buy' if direction == 'buy' else 'Sell'}\n"
            f"Risk: {risk_percent:.2f}%\n"
-           f"Volume Total: {new_units} units\n"
-           f"  • Runner: {runner_units} units (TP2 + Trailing)\n"
-           f"  • TP1 partiel: {tp1_units} units (Server-side)\n"
+           f"Volume: {new_units} units\n"
            f"Entry: {actual_entry_price:.5f} (market, slippage {slippage_pips:.1f} pips)\n"
            f"SL initial: {new_sl:.5f}\n"
            f"Trailing server-side: {trailing_distance/0.0001:.1f} pips\n"
-           f"TP1: {real_tp1_price:.5f} ({TP1_R_MULT:.2f}R, {TP_PARTIAL_RATIO:.0%})\n"
+           f"TP1: {real_tp1_price:.5f} ({TP1_R_MULT:.2f}R, {TP_PARTIAL_RATIO:.0%}) - Server-side Limit\n"
            f"TP2: {new_tp:.5f} ({rr_ratio:.1f}R)\n"
            f"R/R: 1:{rr_ratio:.1f}\n"
            f"Quality score: {quality_score:.1f}\n"
@@ -2909,6 +2869,15 @@ def check_closed_trade():
     time.sleep(1)
 
     try:
+        # Annulation de l'ordre TP1 s'il est encore en attente
+        tp1_order_id = active_trade.get('tp1_order_id')
+        if tp1_order_id:
+            try:
+                retry_api_call(ctx.order.cancel, ACCOUNT_ID, tp1_order_id)
+                print(f"🧹 TP1 Limit order {tp1_order_id} canceled (trade closed).")
+            except Exception as e:
+                print(f"⚠️ Could not cancel TP1 order {tp1_order_id}: {e}")
+
         resp = retry_api_call(ctx.trade.list, ACCOUNT_ID, instrument=pair, count=50, state='CLOSED')
         closed_trades = resp.body.get('trades', [])
         if not closed_trades:
@@ -2928,16 +2897,6 @@ def check_closed_trade():
 
         latest = our_trade
         total_pnl_cad = float(latest.realizedPL)
-
-        # Ajout du P&L du TP1 s'il existe
-        tp1_trade_id = active_trade.get('tp1_trade_id')
-        if tp1_trade_id:
-            try:
-                tp1_check = retry_api_call(ctx.trade.get, ACCOUNT_ID, tp1_trade_id)
-                tp1_pnl = float(tp1_check.body['trade'].realizedPL)
-                total_pnl_cad += tp1_pnl
-            except Exception as e:
-                print(f"⚠️ Could not fetch TP1 trade P&L: {e}")
 
         entry = active_trade['entry_price']
 
@@ -3032,8 +2991,8 @@ def check_closed_trade():
                f"Type: {'Buy' if direction == 'buy' else 'Sell'}\n"
                f"Entry: {entry:.5f}\n"
                f"{exit_lines}\n"
-               f"Volume Total: {abs(units)}\n"
-               f"P&L Total (TP1+Runner): {total_pnl_cad:.2f} CAD\n"
+               f"Volume: {abs(units)}\n"
+               f"P&L: {total_pnl_cad:.2f} CAD\n"
                f"R: {realized_r:+.2f}R\n"
                f"Time: {datetime.now(tz).strftime('%Y-%m-%d %H:%M:%S')}")
         send_telegram_message(msg)
