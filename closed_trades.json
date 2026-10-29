@@ -1,4 +1,18 @@
 {
-  "trades": [],
+  "trades": [
+    {
+      "pair": "EUR_USD",
+      "type": "Sell",
+      "setup": "Pullback",
+      "pnl": -94.17,
+      "pnl_usd": -67.25,
+      "time": "09:34:34",
+      "r_multiple": -0.11,
+      "units": 221933,
+      "entry": 1.11279,
+      "exit": 1.11309,
+      "score": 55.4
+    }
+  ],
   "last_cleanup": "2026-10-29"
 }
