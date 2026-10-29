@@ -1165,8 +1165,25 @@ def get_account_balance(response):
         return float(response.body['account'].balance)
 
 
-# ============ FIX PARTIAL CLOSE : HTTP direct avec fallback ============
+# ============ GESTION SECURISEE DES FERMETURES ============
+def cancel_tp1_order():
+    global active_trade
+    if active_trade is None:
+        return
+    tp1_order_id = active_trade.get('tp1_order_id')
+    if tp1_order_id:
+        try:
+            retry_api_call(ctx.order.cancel, ACCOUNT_ID, tp1_order_id)
+            print(f"🧹 TP1 Limit order {tp1_order_id} canceled.")
+        except Exception as e:
+            # S'il est déjà rempli ou annulé, on s'en fiche
+            pass
+        active_trade['tp1_order_id'] = None
+        active_trade['tp1_hit'] = True
+
 def close_partial_position(units_to_close, expected_remaining=None):
+    cancel_tp1_order() # <-- SECURITÉ : Annule l'ordre TP1 avant de faire une fermeture manuelle
+    
     pair = active_trade['pair']
     direction = active_trade['direction']
     url = f"https://{OANDA_URL}/v3/accounts/{ACCOUNT_ID}/positions/{pair}/close"
@@ -1205,6 +1222,8 @@ def close_full_position_market():
     global active_trade
     if active_trade is None:
         return False
+    cancel_tp1_order() # <-- SECURITÉ : Annule l'ordre TP1 avant la fermeture totale
+
     pair = active_trade['pair']
     direction = active_trade['direction']
     url = f"https://{OANDA_URL}/v3/accounts/{ACCOUNT_ID}/positions/{pair}/close"
@@ -2869,15 +2888,8 @@ def check_closed_trade():
     time.sleep(1)
 
     try:
-        # Annulation de l'ordre TP1 s'il est encore en attente
-        tp1_order_id = active_trade.get('tp1_order_id')
-        if tp1_order_id:
-            try:
-                retry_api_call(ctx.order.cancel, ACCOUNT_ID, tp1_order_id)
-                print(f"🧹 TP1 Limit order {tp1_order_id} canceled (trade closed).")
-            except Exception as e:
-                print(f"⚠️ Could not cancel TP1 order {tp1_order_id}: {e}")
-
+        cancel_tp1_order() # <-- SECURITÉ : Annule l'ordre TP1 s'il n'a pas été touché
+        
         resp = retry_api_call(ctx.trade.list, ACCOUNT_ID, instrument=pair, count=50, state='CLOSED')
         closed_trades = resp.body.get('trades', [])
         if not closed_trades:
