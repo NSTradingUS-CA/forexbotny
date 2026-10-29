@@ -12,6 +12,19 @@
       "entry": 1.11279,
       "exit": 1.11309,
       "score": 55.4
+    },
+    {
+      "pair": "EUR_USD",
+      "type": "Sell",
+      "setup": "Pullback",
+      "pnl": -842.9,
+      "pnl_usd": -602.43,
+      "time": "10:22:17",
+      "r_multiple": -0.95,
+      "units": 221721,
+      "entry": 1.11263,
+      "exit": 1.11532,
+      "score": 55.4
     }
   ],
   "last_cleanup": "2026-10-29"
