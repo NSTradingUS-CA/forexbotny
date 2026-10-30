@@ -1,8 +1,8 @@
 {
-  "time": "2026-10-29 17:57:32",
-  "bot_status": "stopped",
+  "time": "2026-10-30 06:30:47",
+  "bot_status": "running",
   "session": {
-    "trades_today": 2,
+    "trades_today": 0,
     "max_trades": 3,
     "start": "07:00",
     "end": "11:00"
