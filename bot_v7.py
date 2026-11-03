@@ -65,7 +65,7 @@ USE_VOLUME_FILTER = False
 
 TP1_R_MULT = 0.75
 TP_PARTIAL_RATIO = 0.33
-TRAILING_ATR_MULT = 2.0
+TRAILING_SL_MULT = 1.0  # <--- CORRIGÉ : Le TS sera à 1.0x la distance du SL, donc plus proche de l'entrée
 
 TP2_WIDEN_TRIGGER = 0.90
 TP2_WIDEN_FACTOR = 1.50
@@ -1176,13 +1176,12 @@ def cancel_tp1_order():
             retry_api_call(ctx.order.cancel, ACCOUNT_ID, tp1_order_id)
             print(f"🧹 TP1 Limit order {tp1_order_id} canceled.")
         except Exception as e:
-            # S'il est déjà rempli ou annulé, on s'en fiche
             pass
         active_trade['tp1_order_id'] = None
         active_trade['tp1_hit'] = True
 
 def close_partial_position(units_to_close, expected_remaining=None):
-    cancel_tp1_order() # <-- SECURITÉ : Annule l'ordre TP1 avant de faire une fermeture manuelle
+    cancel_tp1_order()
     
     pair = active_trade['pair']
     direction = active_trade['direction']
@@ -1222,7 +1221,7 @@ def close_full_position_market():
     global active_trade
     if active_trade is None:
         return False
-    cancel_tp1_order() # <-- SECURITÉ : Annule l'ordre TP1 avant la fermeture totale
+    cancel_tp1_order()
 
     pair = active_trade['pair']
     direction = active_trade['direction']
@@ -2743,7 +2742,8 @@ def place_trade(instrument, entry_price_signal, sl_signal, tp_signal, direction,
         print(msg)
         return False
 
-    trailing_distance = atr_val * TRAILING_ATR_MULT
+    # <--- CORRECTION ICI : Le TS est calculé sur la distance du SL, pas sur l'ATR
+    trailing_distance = sl_distance * TRAILING_SL_MULT
     if trailing_distance < 0.0005:
         trailing_distance = 0.0005
 
@@ -2837,7 +2837,7 @@ def place_trade(instrument, entry_price_signal, sl_signal, tp_signal, direction,
         'time_lock_done': False,
         'regime_adverse_handled': False,
         'checkpoint_sent': False,
-        'trailing_distance': f"{TRAILING_ATR_MULT}x H1 ATR (server-side)",
+        'trailing_distance': f"{TRAILING_SL_MULT}x SL Distance (server-side)",
         'atr': atr_val,
         'opened_at': datetime.now(tz).isoformat(),
         'quality_score': quality_score
@@ -2854,7 +2854,7 @@ def place_trade(instrument, entry_price_signal, sl_signal, tp_signal, direction,
            f"Volume: {new_units} units\n"
            f"Entry: {actual_entry_price:.5f} (market, slippage {slippage_pips:.1f} pips)\n"
            f"SL initial: {new_sl:.5f}\n"
-           f"Trailing server-side: {trailing_distance/0.0001:.1f} pips\n"
+           f"Trailing server-side: {trailing_distance/0.0001:.1f} pips (based on SL)\n"
            f"TP1: {real_tp1_price:.5f} ({TP1_R_MULT:.2f}R, {TP_PARTIAL_RATIO:.0%}) - Server-side Limit\n"
            f"TP2: {new_tp:.5f} ({rr_ratio:.1f}R)\n"
            f"R/R: 1:{rr_ratio:.1f}\n"
@@ -2888,7 +2888,7 @@ def check_closed_trade():
     time.sleep(1)
 
     try:
-        cancel_tp1_order() # <-- SECURITÉ : Annule l'ordre TP1 s'il n'a pas été touché
+        cancel_tp1_order()
         
         resp = retry_api_call(ctx.trade.list, ACCOUNT_ID, instrument=pair, count=50, state='CLOSED')
         closed_trades = resp.body.get('trades', [])
