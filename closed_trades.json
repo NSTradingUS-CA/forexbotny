@@ -1,4 +1,18 @@
 {
-  "trades": [],
+  "trades": [
+    {
+      "pair": "GBP_USD",
+      "type": "Buy",
+      "setup": "Support",
+      "pnl": 118.01,
+      "pnl_usd": 84.31,
+      "time": "10:27:34",
+      "r_multiple": 0.18,
+      "units": 222084,
+      "entry": 1.3412,
+      "exit": 1.34159,
+      "score": 46.5
+    }
+  ],
   "last_cleanup": "2026-11-03"
 }
