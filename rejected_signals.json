@@ -1,4 +1,20 @@
 {
-  "signals": [],
+  "signals": [
+    {
+      "time": "07:00:08",
+      "pair": "EUR_USD",
+      "buy_reason": "No BUY setup triggered",
+      "sell_reason": "H1 not down",
+      "spread": 0.00017000000000000348,
+      "adx": 47.549099550608375,
+      "plus_di": 24.871794189414054,
+      "minus_di": 8.995733701550098,
+      "ema50": 1.120925059260013,
+      "ema200": 1.1190816719971186,
+      "rsi": 66.46363477469608,
+      "atr": 0.0022578571428571526,
+      "diagnostic": "[Best hypothetical: Breakout BUY score=60.6]"
+    }
+  ],
   "last_cleanup": "2026-11-04"
 }
