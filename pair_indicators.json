@@ -12,5 +12,19 @@
     "ema_orientation": "bullish",
     "macd_signal": "bearish",
     "last_signal": null
+  },
+  "GBP_USD": {
+    "price": 1.33639,
+    "spread": 0.0001900000000001345,
+    "adx": 48.635352157168086,
+    "plus_di": 6.667849261328973,
+    "minus_di": 47.00909986772724,
+    "ema50": 1.3434967676792127,
+    "ema200": 1.3413376230406457,
+    "rsi": 24.111317285300416,
+    "atr": 0.0016000000000000142,
+    "ema_orientation": "bullish",
+    "macd_signal": "bearish",
+    "last_signal": null
   }
 }
