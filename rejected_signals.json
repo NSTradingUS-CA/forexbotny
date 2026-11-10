@@ -2,21 +2,6 @@
   "signals": [
     {
       "time": "08:14:32",
-      "pair": "EUR_USD",
-      "buy_reason": "MACD not bullish",
-      "sell_reason": "H1 not down",
-      "spread": 0.0001500000000000945,
-      "adx": 47.538261202750235,
-      "plus_di": 23.56288549220981,
-      "minus_di": 20.1227028663578,
-      "ema50": 1.1206130045997222,
-      "ema200": 1.1198323287795322,
-      "rsi": 50.0215929239402,
-      "atr": 0.0010028571428571467,
-      "diagnostic": "[Best hypothetical: Pullback BUY score=66.3]"
-    },
-    {
-      "time": "08:14:32",
       "pair": "GBP_USD",
       "buy_reason": "H1 not up, MACD not bullish",
       "sell_reason": "H1 not down",
@@ -1499,6 +1484,21 @@
       "rsi": 45.47288901948248,
       "atr": 0.0010107142857142617,
       "diagnostic": null
+    },
+    {
+      "time": "08:40:06",
+      "pair": "EUR_USD",
+      "buy_reason": "MACD not bullish",
+      "sell_reason": "H1 not down",
+      "spread": 0.0001500000000000945,
+      "adx": 47.538261202750235,
+      "plus_di": 23.56288549220981,
+      "minus_di": 20.1227028663578,
+      "ema50": 1.1206130045997222,
+      "ema200": 1.1198323287795322,
+      "rsi": 50.0215929239402,
+      "atr": 0.0010028571428571467,
+      "diagnostic": "[Best hypothetical: Pullback BUY score=66.3]"
     }
   ],
   "last_cleanup": "2026-11-10"
