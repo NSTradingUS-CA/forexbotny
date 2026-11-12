@@ -65,7 +65,10 @@ USE_VOLUME_FILTER = False
 
 TP1_R_MULT = 0.75
 TP_PARTIAL_RATIO = 0.33
-TRAILING_SL_MULT = 1.0  # <--- CORRIGÉ : Le TS sera à 1.0x la distance du SL, donc plus proche de l'entrée
+TRAILING_SL_MULT = 1.0  
+
+# === Stagnation Lock ===
+STAGNATION_MINUTES = 60 # <--- AJOUTÉ : Temps de stagnation avant de verrouiller le TS à BE
 
 TP2_WIDEN_TRIGGER = 0.90
 TP2_WIDEN_FACTOR = 1.50
@@ -724,7 +727,8 @@ def load_existing_open_position():
                         "trailing_distance": saved_trade.get("trailing_stop", "server-side"),
                         "atr": saved_trade.get("atr"),
                         "units": saved_trade.get("units"),
-                        "quality_score": saved_trade.get("score")
+                        "quality_score": saved_trade.get("score"),
+                        "last_peak_time": saved_trade.get("last_peak_time") # <-- NOUVEAU
                     }
         except Exception as e:
             print(f"Could not read status.json for restore: {e}")
@@ -798,6 +802,7 @@ def load_existing_open_position():
                         'tp1_hit': saved_flags.get("tp1_hit", tp1_order_id is None),
                         'tp2_widened': saved_flags.get("tp2_widened", False),
                         'peak_profit_pips': saved_flags.get("peak_profit_pips", 0.0),
+                        'last_peak_time': saved_flags.get("last_peak_time", datetime.now(tz).isoformat()), # <-- NOUVEAU
                         'time_lock_done': saved_flags.get("time_lock_done", False),
                         'regime_adverse_handled': saved_flags.get("regime_adverse_handled", False),
                         'checkpoint_sent': False,
@@ -1318,6 +1323,62 @@ def move_sl_to_entry():
         print(f"⚠️ SL move FAILED on {pair} – OANDA still at {active_trade['sl']:.5f}")
         return False
 
+# ============ STAGNATION LOCK (TS) ============
+def lock_ts_to_breakeven():
+    global active_trade
+    if active_trade is None:
+        return False
+    
+    pair = active_trade['pair']
+    direction = active_trade['direction']
+    
+    try:
+        resp = ctx.pricing.get(ACCOUNT_ID, instruments=pair)
+        price_info = resp.body['prices'][0]
+        bid = float(price_info.bids[0].price)
+        ask = float(price_info.asks[0].price)
+        current_price = bid if direction == 'sell' else ask
+    except Exception as e:
+        print(f"⚠️ Could not fetch price for TS lock: {e}")
+        return False
+
+    entry = active_trade['entry_price']
+    
+    # On calcule la distance exacte entre le prix actuel et l'Entry
+    distance_to_entry = abs(current_price - entry)
+    if distance_to_entry <= 0:
+        return False
+
+    # Pour être sûr que le TS se déclenche EXACTEMENT à l'Entry (ou 0.5 pip au-dessus/en-dessous)
+    # On ajoute une petite marge de sécurité
+    buffer = 0.5 * 0.0001
+    ts_distance = distance_to_entry - buffer if distance_to_entry > buffer else distance_to_entry
+
+    body = {
+        "trailingStopLoss": {"distance": f"{ts_distance:.5f}"}
+    }
+
+    try:
+        r = retry_api_call(ctx.trade.set_dependent_orders, ACCOUNT_ID, active_trade['trade_id'], **body)
+        if getattr(r, "status", None) != 200:
+            print(f"⚠️ set_dependent_orders (TS) status={getattr(r,'status',None)}")
+            return False
+    except Exception as e:
+        print(f"❌ set_dependent_orders (TS) failed: {e}")
+        return False
+
+    print(f"🔒 TS locked to Breakeven on {pair} (Distance = {ts_distance:.5f})")
+    send_telegram_message(
+        f"🔒 <b>Stagnation Lock</b> · {pair} {direction.upper()}\n"
+        f"Price stagnant for {STAGNATION_MINUTES}m.\n"
+        f"Trailing Stop moved to <b>Breakeven</b>.\n"
+        f"Risk on remaining position: ~0"
+    )
+    
+    # On considère le BE comme atteint pour que le bot ne réessaie pas
+    active_trade['be_triggered'] = True 
+    save_status_json(force=True)
+    return True
 
 # ============ ADVERSE REGIME DETECTION ============
 def check_adverse_regime(direction, current_price, df):
@@ -1442,7 +1503,7 @@ def manage_active_trade():
     entry = active_trade['entry_price']
     setup_type = active_trade.get('setup_type', '')
 
-    # === Mise à jour du peak profit (toujours en premier) ===
+    # === Mise à jour du peak profit et du last_peak_time ===
     if direction == 'buy':
         profit_pips_now = (current_price - entry) / 0.0001
     else:
@@ -1450,6 +1511,25 @@ def manage_active_trade():
 
     if profit_pips_now > active_trade.get('peak_profit_pips', 0.0):
         active_trade['peak_profit_pips'] = profit_pips_now
+        active_trade['last_peak_time'] = datetime.now(tz).isoformat() # <-- UPDATE TIME
+
+    # === STAGNATION LOCK (TS to BE) ===
+    if (active_trade.get('tp1_hit', False)
+            and not active_trade.get('be_triggered', False)
+            and not active_trade.get('regime_adverse_handled', False)
+            and not active_trade.get('time_lock_done', False)):
+        
+        last_peak_str = active_trade.get('last_peak_time')
+        if last_peak_str:
+            try:
+                last_peak_dt = datetime.fromisoformat(last_peak_str.replace("Z", "+00:00")).astimezone(tz)
+                time_since_peak = (datetime.now(tz) - last_peak_dt).total_seconds() / 60.0
+                
+                if time_since_peak >= STAGNATION_MINUTES:
+                    print(f"⏳ Stagnation detected ({time_since_peak:.0f}m). Locking TS to BE...")
+                    lock_ts_to_breakeven()
+            except Exception as e:
+                print(f"⚠️ Error parsing last_peak_time: {e}")
 
     # === TP2 widening conditionnel ===
     tp2 = active_trade.get('tp2')
@@ -2742,7 +2822,6 @@ def place_trade(instrument, entry_price_signal, sl_signal, tp_signal, direction,
         print(msg)
         return False
 
-    # <--- CORRECTION ICI : Le TS est calculé sur la distance du SL, pas sur l'ATR
     trailing_distance = sl_distance * TRAILING_SL_MULT
     if trailing_distance < 0.0005:
         trailing_distance = 0.0005
@@ -2834,6 +2913,7 @@ def place_trade(instrument, entry_price_signal, sl_signal, tp_signal, direction,
         'tp1_hit': False if tp1_order_id else True,
         'tp2_widened': False,
         'peak_profit_pips': 0.0,
+        'last_peak_time': datetime.now(tz).isoformat(), # <-- NOUVEAU
         'time_lock_done': False,
         'regime_adverse_handled': False,
         'checkpoint_sent': False,
