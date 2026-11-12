@@ -1,4 +1,20 @@
 {
-  "signals": [],
+  "signals": [
+    {
+      "time": "07:00:01",
+      "pair": "EUR_USD",
+      "buy_reason": "H1 not up",
+      "sell_reason": "MACD not bearish",
+      "spread": 0.0001500000000000945,
+      "adx": 44.32785847319822,
+      "plus_di": 21.127947719441533,
+      "minus_di": 26.33986839191368,
+      "ema50": 1.1123268870212453,
+      "ema200": 1.1167374010591327,
+      "rsi": 43.471225949116835,
+      "atr": 0.0011071428571428463,
+      "diagnostic": "[Best hypothetical: Breakout SELL score=62.6]"
+    }
+  ],
   "last_cleanup": "2026-11-12"
 }
