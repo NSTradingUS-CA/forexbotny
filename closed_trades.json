@@ -12,6 +12,19 @@
       "entry": 1.3225,
       "exit": 1.32476,
       "score": 63.0
+    },
+    {
+      "pair": "EUR_USD",
+      "type": "Sell",
+      "setup": "Pin Bar",
+      "pnl": -211.81,
+      "pnl_usd": -148.81,
+      "time": "10:01:35",
+      "r_multiple": -0.28,
+      "units": 245544,
+      "entry": 1.10496,
+      "exit": 1.10556,
+      "score": 47.4
     }
   ],
   "last_cleanup": "2026-11-13"
