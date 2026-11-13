@@ -1,50 +1,6 @@
 {
   "signals": [
     {
-      "time": "08:51:16",
-      "pair": "GBP_USD",
-      "buy_reason": "",
-      "sell_reason": "Anti-revenge rule: Previous Momentum trade on GBP_USD was a loss (-558.71 CAD). Setup rejected.",
-      "spread": 0.000180000000000069
-    },
-    {
-      "time": "08:51:27",
-      "pair": "EUR_USD",
-      "buy_reason": "H1 not up",
-      "sell_reason": "No SELL setup triggered",
-      "spread": 0.00015999999999993797,
-      "adx": 23.289019968399707,
-      "plus_di": 11.612929266276966,
-      "minus_di": 20.027585264885147,
-      "ema50": 1.1082606430365616,
-      "ema200": 1.1141445775754464,
-      "rsi": 37.48514440206434,
-      "atr": 0.0009857142857142406,
-      "diagnostic": "[Best hypothetical: Engulfing SELL score=52.8]"
-    },
-    {
-      "time": "08:51:27",
-      "pair": "GBP_USD",
-      "buy_reason": "",
-      "sell_reason": "Anti-revenge rule: Previous Momentum trade on GBP_USD was a loss (-558.71 CAD). Setup rejected.",
-      "spread": 0.00017999999999984695
-    },
-    {
-      "time": "08:51:37",
-      "pair": "EUR_USD",
-      "buy_reason": "H1 not up",
-      "sell_reason": "No SELL setup triggered",
-      "spread": 0.00015999999999993797,
-      "adx": 23.289019968399707,
-      "plus_di": 11.612929266276966,
-      "minus_di": 20.027585264885147,
-      "ema50": 1.1082606430365616,
-      "ema200": 1.1141445775754464,
-      "rsi": 37.48514440206434,
-      "atr": 0.0009857142857142406,
-      "diagnostic": "[Best hypothetical: Engulfing SELL score=52.8]"
-    },
-    {
       "time": "08:51:37",
       "pair": "GBP_USD",
       "buy_reason": "",
@@ -1099,6 +1055,50 @@
       "rsi": 37.48514440206434,
       "atr": 0.0009857142857142406,
       "diagnostic": "[Best hypothetical: Engulfing SELL score=52.8]"
+    },
+    {
+      "time": "09:00:02",
+      "pair": "GBP_USD",
+      "buy_reason": "",
+      "sell_reason": "Anti-revenge rule: Previous Momentum trade on GBP_USD was a loss (-558.71 CAD). Setup rejected.",
+      "spread": 0.00019999999999997797
+    },
+    {
+      "time": "09:00:14",
+      "pair": "EUR_USD",
+      "buy_reason": "H1 not up",
+      "sell_reason": "No SELL setup triggered",
+      "spread": 0.00016000000000016001,
+      "adx": 23.289019968399707,
+      "plus_di": 11.612929266276966,
+      "minus_di": 20.027585264885147,
+      "ema50": 1.1082606430365616,
+      "ema200": 1.1141445775754464,
+      "rsi": 37.48514440206434,
+      "atr": 0.0009857142857142406,
+      "diagnostic": "[Best hypothetical: Engulfing SELL score=52.8]"
+    },
+    {
+      "time": "09:00:14",
+      "pair": "GBP_USD",
+      "buy_reason": "",
+      "sell_reason": "Anti-revenge rule: Previous Momentum trade on GBP_USD was a loss (-558.71 CAD). Setup rejected.",
+      "spread": 0.00018999999999991246
+    },
+    {
+      "time": "09:00:25",
+      "pair": "GBP_USD",
+      "buy_reason": "H1 not up",
+      "sell_reason": "MACD not bearish",
+      "spread": 0.00019999999999997797,
+      "adx": 40.15528175947463,
+      "plus_di": 17.981313055090776,
+      "minus_di": 17.05574923588113,
+      "ema50": 1.3261469805863408,
+      "ema200": 1.3337301396284194,
+      "rsi": 43.56333421854668,
+      "atr": 0.0012457142857143103,
+      "diagnostic": "[Best hypothetical: Pullback SELL score=55.8]"
     }
   ],
   "last_cleanup": "2026-11-13"
