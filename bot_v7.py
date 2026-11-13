@@ -68,7 +68,7 @@ TP_PARTIAL_RATIO = 0.33
 TRAILING_SL_MULT = 1.0  
 
 # === Stagnation Lock ===
-STAGNATION_MINUTES = 60 # <--- AJOUTÉ : Temps de stagnation avant de verrouiller le TS à BE
+STAGNATION_MINUTES = 60 
 
 TP2_WIDEN_TRIGGER = 0.90
 TP2_WIDEN_FACTOR = 1.50
@@ -728,7 +728,7 @@ def load_existing_open_position():
                         "atr": saved_trade.get("atr"),
                         "units": saved_trade.get("units"),
                         "quality_score": saved_trade.get("score"),
-                        "last_peak_time": saved_trade.get("last_peak_time") # <-- NOUVEAU
+                        "last_peak_time": saved_trade.get("last_peak_time")
                     }
         except Exception as e:
             print(f"Could not read status.json for restore: {e}")
@@ -802,7 +802,7 @@ def load_existing_open_position():
                         'tp1_hit': saved_flags.get("tp1_hit", tp1_order_id is None),
                         'tp2_widened': saved_flags.get("tp2_widened", False),
                         'peak_profit_pips': saved_flags.get("peak_profit_pips", 0.0),
-                        'last_peak_time': saved_flags.get("last_peak_time", datetime.now(tz).isoformat()), # <-- NOUVEAU
+                        'last_peak_time': saved_flags.get("last_peak_time", datetime.now(tz).isoformat()),
                         'time_lock_done': saved_flags.get("time_lock_done", False),
                         'regime_adverse_handled': saved_flags.get("regime_adverse_handled", False),
                         'checkpoint_sent': False,
@@ -2775,6 +2775,9 @@ def place_trade(instrument, entry_price_signal, sl_signal, tp_signal, direction,
         send_telegram_message(f"⚠️ Could not get current price for {instrument}: {e}")
         return False
 
+    # --- NOUVEAU : Calcul du spread actuel ---
+    current_spread = ask - bid
+
     slippage_pips = abs(current_price - entry_price_signal) / 0.0001
 
     try:
@@ -2822,9 +2825,13 @@ def place_trade(instrument, entry_price_signal, sl_signal, tp_signal, direction,
         print(msg)
         return False
 
-    trailing_distance = sl_distance * TRAILING_SL_MULT
-    if trailing_distance < 0.0005:
-        trailing_distance = 0.0005
+    # --- CORRECTION ICI : Ajustement de la distance du TS pour qu'il colle au SL ---
+    # On soustrait le spread de la distance du SL
+    trailing_distance = (sl_distance * TRAILING_SL_MULT) - current_spread
+    
+    # Sécurité : on s'assure que la distance du TS n'est pas nulle ou négative
+    if trailing_distance < 0.0001: 
+        trailing_distance = 0.0001
 
     # 1. Ordre unique avec Trailing Stop et TP2
     signed_units = -abs(new_units) if direction == 'sell' else abs(new_units)
@@ -2913,11 +2920,11 @@ def place_trade(instrument, entry_price_signal, sl_signal, tp_signal, direction,
         'tp1_hit': False if tp1_order_id else True,
         'tp2_widened': False,
         'peak_profit_pips': 0.0,
-        'last_peak_time': datetime.now(tz).isoformat(), # <-- NOUVEAU
+        'last_peak_time': datetime.now(tz).isoformat(),
         'time_lock_done': False,
         'regime_adverse_handled': False,
         'checkpoint_sent': False,
-        'trailing_distance': f"{TRAILING_SL_MULT}x SL Distance (server-side)",
+        'trailing_distance': f"{TRAILING_SL_MULT}x SL Distance (adjusted for spread)",
         'atr': atr_val,
         'opened_at': datetime.now(tz).isoformat(),
         'quality_score': quality_score
@@ -2934,7 +2941,7 @@ def place_trade(instrument, entry_price_signal, sl_signal, tp_signal, direction,
            f"Volume: {new_units} units\n"
            f"Entry: {actual_entry_price:.5f} (market, slippage {slippage_pips:.1f} pips)\n"
            f"SL initial: {new_sl:.5f}\n"
-           f"Trailing server-side: {trailing_distance/0.0001:.1f} pips (based on SL)\n"
+           f"Trailing server-side: {trailing_distance/0.0001:.1f} pips\n"
            f"TP1: {real_tp1_price:.5f} ({TP1_R_MULT:.2f}R, {TP_PARTIAL_RATIO:.0%}) - Server-side Limit\n"
            f"TP2: {new_tp:.5f} ({rr_ratio:.1f}R)\n"
            f"R/R: 1:{rr_ratio:.1f}\n"
