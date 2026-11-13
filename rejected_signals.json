@@ -1,21 +1,6 @@
 {
   "signals": [
     {
-      "time": "07:52:24",
-      "pair": "GBP_USD",
-      "buy_reason": "H1 not up",
-      "sell_reason": "MACD not bearish",
-      "spread": 0.00018999999999991246,
-      "adx": 44.06917007601779,
-      "plus_di": 8.82551958304784,
-      "minus_di": 21.02371246282821,
-      "ema50": 1.3264169168790452,
-      "ema200": 1.3339522947503453,
-      "rsi": 42.4118285599866,
-      "atr": 0.0010950000000000207,
-      "diagnostic": "[Best hypothetical: Pin Bar SELL score=70.0]"
-    },
-    {
       "time": "07:52:35",
       "pair": "EUR_USD",
       "buy_reason": "H1 not up",
@@ -1487,6 +1472,21 @@
     },
     {
       "time": "08:01:09",
+      "pair": "EUR_USD",
+      "buy_reason": "H1 not up",
+      "sell_reason": "No SELL setup triggered",
+      "spread": 0.00015999999999993797,
+      "adx": 23.289019968399707,
+      "plus_di": 11.612929266276966,
+      "minus_di": 20.027585264885147,
+      "ema50": 1.1082606430365616,
+      "ema200": 1.1141445775754464,
+      "rsi": 37.48514440206434,
+      "atr": 0.0009857142857142406,
+      "diagnostic": "[Best hypothetical: Engulfing SELL score=52.8]"
+    },
+    {
+      "time": "08:49:51",
       "pair": "EUR_USD",
       "buy_reason": "H1 not up",
       "sell_reason": "No SELL setup triggered",
