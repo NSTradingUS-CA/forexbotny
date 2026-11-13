@@ -1,13 +1,6 @@
 {
   "signals": [
     {
-      "time": "08:51:37",
-      "pair": "GBP_USD",
-      "buy_reason": "",
-      "sell_reason": "Anti-revenge rule: Previous Momentum trade on GBP_USD was a loss (-558.71 CAD). Setup rejected.",
-      "spread": 0.00017999999999984695
-    },
-    {
       "time": "08:51:47",
       "pair": "EUR_USD",
       "buy_reason": "H1 not up",
@@ -1099,6 +1092,21 @@
       "rsi": 43.56333421854668,
       "atr": 0.0012457142857143103,
       "diagnostic": "[Best hypothetical: Pullback SELL score=55.8]"
+    },
+    {
+      "time": "10:16:40",
+      "pair": "EUR_USD",
+      "buy_reason": "H1 not up",
+      "sell_reason": "No SELL setup triggered",
+      "spread": 0.00017000000000000348,
+      "adx": 20.368148196486167,
+      "plus_di": 19.25177775874293,
+      "minus_di": 18.862432746088757,
+      "ema50": 1.1080365870654254,
+      "ema200": 1.1139676430942236,
+      "rsi": 44.17355552268948,
+      "atr": 0.0011485714285713877,
+      "diagnostic": "[Best hypothetical: Pullback SELL score=51.9]"
     }
   ],
   "last_cleanup": "2026-11-13"
