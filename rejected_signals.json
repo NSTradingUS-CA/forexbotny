@@ -1,4 +1,20 @@
 {
-  "signals": [],
+  "signals": [
+    {
+      "time": "07:00:00",
+      "pair": "GBP_USD",
+      "buy_reason": "H1 not up, MACD not bullish",
+      "sell_reason": "No SELL setup triggered",
+      "spread": 0.00018999999999991246,
+      "adx": 21.21519620441393,
+      "plus_di": 12.085351995580977,
+      "minus_di": 21.44485286352248,
+      "ema50": 1.3229937044532465,
+      "ema200": 1.3312566313296914,
+      "rsi": 39.496868198606265,
+      "atr": 0.0012871428571428517,
+      "diagnostic": "[Best hypothetical: Pin Bar SELL score=59.7]"
+    }
+  ],
   "last_cleanup": "2026-11-16"
 }
