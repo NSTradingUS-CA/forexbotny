@@ -1,5 +1,5 @@
 {
-  "time": "2026-11-16 08:58:11",
+  "time": "2026-11-16 09:03:19",
   "bot_status": "running",
   "session": {
     "trades_today": 2,
@@ -17,12 +17,12 @@
     "tp2_initial": 1.0964942857142856,
     "tp2_initial_locked": false,
     "trailing_stop": "server-side (OANDA)",
-    "current_price": 1.10091,
-    "unrealized_pnl_usd": 20.46,
-    "unrealized_pnl_cad": 29.25,
+    "current_price": 1.10121,
+    "unrealized_pnl_usd": -35.34,
+    "unrealized_pnl_cad": -50.52,
     "usd_cad_rate": 1.4297,
-    "distance_to_sl_pips": 18.9,
-    "distance_to_tp2_pips": 44.2,
+    "distance_to_sl_pips": 15.9,
+    "distance_to_tp2_pips": 47.2,
     "atr": 0.0010285714285714423,
     "be_triggered": false,
     "tp1_hit": false,
@@ -38,7 +38,7 @@
     "score": 59.0
   },
   "next_news_event": {
-    "title": "CPI",
+    "title": "Retail Sales",
     "time": "08:30",
     "impact": "High"
   },
