@@ -837,7 +837,7 @@ def manage_active_trade():
             safe_ts_pips = compute_early_secure_ts(profit_pips_now, init_risk_pips, EARLY_TS_PIPS)
             if replace_trailing_distance(safe_ts_pips, allow_widen=False):
                 active_trade['early_secure_done'] = True
-                send_telegram_message(f"🛡️ <b>Early Secure</b> · {pair} {direction.upper()}\nProfit {profit_pips_now:+.1f} pips · TP1 pas atteint\nTS -> {safe_ts_pips:.1f} pips ({profit_pips_now - safe_ts_pips:+.1f} pips garantis)")
+                send_telegram_message(f"🛡️ <b>Early Secure</b> · {pair} {direction.upper()}\nProfit {profit_pips_now:+.1f} pips · TP1 not reached yet\nTS -> {safe_ts_pips:.1f} pips ({profit_pips_now - safe_ts_pips:+.1f} pips locked)")
                 save_status_json(force=True)
 
     # EARLY WIDEN
@@ -846,7 +846,7 @@ def manage_active_trade():
         if init_risk > 0 and profit_pips_now >= (EARLY_WIDEN_R * init_risk) / 0.0001:
             if replace_trailing_distance(EARLY_WIDEN_PIPS, allow_widen=True):
                 active_trade['early_widen_done'] = True
-                send_telegram_message(f"📈 <b>Early Widen</b> · {pair} {direction.upper()}\nProfit {profit_pips_now:+.1f} pips (1.0R atteint)\nTS élargi à {EARLY_WIDEN_PIPS:.0f} pips pour laisser courir vers TP2")
+                send_telegram_message(f"📈 <b>Early Widen</b> · {pair} {direction.upper()}\nProfit {profit_pips_now:+.1f} pips (1.0R reached)\nTS widened to {EARLY_WIDEN_PIPS:.0f} pips to let it run towards TP2")
                 save_status_json(force=True)
 
     # Stagnation
@@ -1320,7 +1320,7 @@ def main():
                                     send_telegram_message(f"📰 <b>Imminent News – Partial close</b>\nPair: {pair}\nSetup: {setup_type.upper()} ({setup_label})\nNews: {news_title} at {news_time}\nClosed: {int(close_pct*100)}% ({partial_units} units)\nRunner: {remaining} units ({sl_state} intact)\nP&L: {pnl_cad:+.2f} CAD"); print(f"News imminent – {pair}: {int(close_pct*100)}% fermé.")
                                 else: send_telegram_message(f"⚠️ Partial close failed before news on {pair}. Please monitor.")
                 # --- FIN LOGIQUE NEWS ---
-                
+
                 if not hasattr(main,"next_news_check"): main.next_news_check=now
                 if now>=main.next_news_check:
                     for pair in PAIRS:
@@ -1349,12 +1349,29 @@ def main():
                         except Exception as e: print(f"Candles failed {pair}: {e}"); continue
                         signal,price,sl,tp,sl_pips,direction,setup_type,risk_pct,score,reason=check_signal(df,pair)
                         if signal:
-                            last_trade=None
+                            # ========================================================
+                            # RÈGLE STRICTE : 1 SEUL TRADE PAR SETUP ET PAR PAIRE PAR JOUR
+                            # ========================================================
+                            last_trade = None
                             for t in reversed(closed_trades_today):
-                                if t.get('pair')==pair: last_trade=t; break
-                            if last_trade and last_trade.get('pnl',0)<0 and last_trade.get('setup','').lower()==setup_type.lower():
-                                msg=f"Anti-revenge: Previous {setup_type} on {pair} was loss ({last_trade.get('pnl'):.2f} CAD). Rejected."; print(f" -> REJECTED {pair}: {msg}")
-                                rejected_signals.append({"time":now.strftime("%H:%M:%S"),"pair":pair,"buy_reason":msg if direction=='buy' else "","sell_reason":msg if direction=='sell' else "","spread":spread}); save_rejected_to_file(); continue
+                                if t.get('pair') == pair:
+                                    last_trade = t
+                                    break
+                            
+                            # On vérifie si le dernier trade sur cette paire avait le même setup (gagnant OU perdant)
+                            if last_trade and last_trade.get('setup', '').lower() == setup_type.lower():
+                                msg = f"Single Setup Rule: Already took a {setup_type} trade on {pair} today. Setup rejected."
+                                print(f" -> REJECTED {pair}: {msg}")
+                                rejected_signals.append({
+                                    "time": now.strftime("%H:%M:%S"),
+                                    "pair": pair,
+                                    "buy_reason": msg if direction == 'buy' else "",
+                                    "sell_reason": msg if direction == 'sell' else "",
+                                    "spread": spread,
+                                })
+                                save_rejected_to_file()
+                                continue
+                            
                             candidates.append((score,pair,price,sl,tp,sl_pips,direction,setup_type,risk_pct,reason,df))
                         else:
                             c=df.iloc[-1]; parts=reason.split("|"); buy_reason=parts[0].strip() if len(parts)>0 else reason; sell_reason=""; diagnostic=""
