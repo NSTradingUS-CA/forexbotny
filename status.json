@@ -1,5 +1,5 @@
 {
-  "time": "2026-11-17 08:35:48",
+  "time": "2026-11-17 08:40:49",
   "bot_status": "running",
   "session": {
     "trades_today": 1,
@@ -11,23 +11,23 @@
     "pair": "EUR_USD",
     "type": "Sell",
     "entry": 1.09902,
-    "sl": 1.09766,
+    "sl": 1.09839,
     "tp1": 1.0975285714285716,
     "tp2": 1.0946451428571429,
     "tp2_initial": 1.0946451428571429,
     "tp2_initial_locked": false,
     "trailing_stop": "server-side (OANDA)",
-    "current_price": 1.09703,
-    "unrealized_pnl_usd": 256.68,
-    "unrealized_pnl_cad": 367.13,
-    "usd_cad_rate": 1.4303,
-    "distance_to_sl_pips": 6.3,
-    "distance_to_tp2_pips": 23.8,
+    "current_price": 1.09723,
+    "unrealized_pnl_usd": 230.88,
+    "unrealized_pnl_cad": 330.28,
+    "usd_cad_rate": 1.4305,
+    "distance_to_sl_pips": 11.6,
+    "distance_to_tp2_pips": 25.8,
     "atr": 0.000994285714285757,
     "be_triggered": true,
     "tp1_hit": true,
     "tp2_widened": false,
-    "peak_profit_pips": 19.900000000001583,
+    "peak_profit_pips": 22.700000000002163,
     "time_lock_done": false,
     "regime_adverse_handled": false,
     "setup_type": "Momentum",
@@ -48,9 +48,9 @@
   "strategy": "H1 Multi-Setup (9 types) - Quality Score based",
   "max_risk_per_trade_percent": 0.65,
   "daily_loss_limit_percent": 2.0,
-  "blocked_pairs": [
+  "blocked_pairs": [],
+  "active_pairs": [
     "EUR_USD",
     "GBP_USD"
-  ],
-  "active_pairs": []
+  ]
 }
