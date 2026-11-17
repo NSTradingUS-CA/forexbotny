@@ -1,5 +1,5 @@
 {
-  "time": "2026-11-17 08:55:58",
+  "time": "2026-11-17 09:01:00",
   "bot_status": "running",
   "session": {
     "trades_today": 1,
@@ -17,12 +17,12 @@
     "tp2_initial": 1.0946451428571429,
     "tp2_initial_locked": false,
     "trailing_stop": "server-side (OANDA)",
-    "current_price": 1.09788,
-    "unrealized_pnl_usd": 147.04,
-    "unrealized_pnl_cad": 210.22,
-    "usd_cad_rate": 1.4297,
-    "distance_to_sl_pips": 5.1,
-    "distance_to_tp2_pips": 32.3,
+    "current_price": 1.09803,
+    "unrealized_pnl_usd": 127.7,
+    "unrealized_pnl_cad": 182.54,
+    "usd_cad_rate": 1.4295,
+    "distance_to_sl_pips": 3.6,
+    "distance_to_tp2_pips": 33.8,
     "atr": 0.000994285714285757,
     "be_triggered": true,
     "tp1_hit": true,
@@ -41,8 +41,8 @@
     "early_widen_done": true
   },
   "next_news_event": {
-    "title": "Retail Sales",
-    "time": "08:30",
+    "title": "CPI",
+    "time": "02:00",
     "impact": "High"
   },
   "strategy": "H1 Multi-Setup (9 types) - Quality Score based",
