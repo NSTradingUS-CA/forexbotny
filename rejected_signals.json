@@ -6,6 +6,129 @@
       "buy_reason": "",
       "sell_reason": "Anti-revenge: Previous Momentum on EUR_USD was loss (-546.28 CAD). Rejected.",
       "spread": 0.0001500000000000945
+    },
+    {
+      "time": "10:58:24",
+      "pair": "GBP_USD",
+      "buy_reason": "Slippage too high (11.1p) on GBP_USD \u2013 rejected. Max: 5.5p.",
+      "sell_reason": "Slippage too high (11.1p) on GBP_USD \u2013 rejected. Max: 5.5p."
+    },
+    {
+      "time": "10:58:34",
+      "pair": "EUR_USD",
+      "buy_reason": "",
+      "sell_reason": "Anti-revenge: Previous Momentum on EUR_USD was loss (-546.28 CAD). Rejected.",
+      "spread": 0.0001500000000000945
+    },
+    {
+      "time": "10:58:35",
+      "pair": "GBP_USD",
+      "buy_reason": "Slippage too high (11.4p) on GBP_USD \u2013 rejected. Max: 5.5p.",
+      "sell_reason": "Slippage too high (11.4p) on GBP_USD \u2013 rejected. Max: 5.5p."
+    },
+    {
+      "time": "10:58:45",
+      "pair": "EUR_USD",
+      "buy_reason": "",
+      "sell_reason": "Anti-revenge: Previous Momentum on EUR_USD was loss (-546.28 CAD). Rejected.",
+      "spread": 0.0001500000000000945
+    },
+    {
+      "time": "10:58:45",
+      "pair": "GBP_USD",
+      "buy_reason": "Slippage too high (11.1p) on GBP_USD \u2013 rejected. Max: 5.5p.",
+      "sell_reason": "Slippage too high (11.1p) on GBP_USD \u2013 rejected. Max: 5.5p."
+    },
+    {
+      "time": "10:58:55",
+      "pair": "EUR_USD",
+      "buy_reason": "",
+      "sell_reason": "Anti-revenge: Previous Momentum on EUR_USD was loss (-546.28 CAD). Rejected.",
+      "spread": 0.00015999999999993797
+    },
+    {
+      "time": "10:58:55",
+      "pair": "GBP_USD",
+      "buy_reason": "Slippage too high (11.2p) on GBP_USD \u2013 rejected. Max: 5.5p.",
+      "sell_reason": "Slippage too high (11.2p) on GBP_USD \u2013 rejected. Max: 5.5p."
+    },
+    {
+      "time": "10:59:05",
+      "pair": "EUR_USD",
+      "buy_reason": "",
+      "sell_reason": "Anti-revenge: Previous Momentum on EUR_USD was loss (-546.28 CAD). Rejected.",
+      "spread": 0.00015999999999993797
+    },
+    {
+      "time": "10:59:05",
+      "pair": "GBP_USD",
+      "buy_reason": "Slippage too high (10.5p) on GBP_USD \u2013 rejected. Max: 5.5p.",
+      "sell_reason": "Slippage too high (10.5p) on GBP_USD \u2013 rejected. Max: 5.5p."
+    },
+    {
+      "time": "10:59:15",
+      "pair": "EUR_USD",
+      "buy_reason": "",
+      "sell_reason": "Anti-revenge: Previous Momentum on EUR_USD was loss (-546.28 CAD). Rejected.",
+      "spread": 0.0001500000000000945
+    },
+    {
+      "time": "10:59:16",
+      "pair": "GBP_USD",
+      "buy_reason": "Slippage too high (9.8p) on GBP_USD \u2013 rejected. Max: 5.5p.",
+      "sell_reason": "Slippage too high (9.8p) on GBP_USD \u2013 rejected. Max: 5.5p."
+    },
+    {
+      "time": "10:59:26",
+      "pair": "EUR_USD",
+      "buy_reason": "",
+      "sell_reason": "Anti-revenge: Previous Momentum on EUR_USD was loss (-546.28 CAD). Rejected.",
+      "spread": 0.0001500000000000945
+    },
+    {
+      "time": "10:59:26",
+      "pair": "GBP_USD",
+      "buy_reason": "Slippage too high (10.3p) on GBP_USD \u2013 rejected. Max: 5.5p.",
+      "sell_reason": "Slippage too high (10.3p) on GBP_USD \u2013 rejected. Max: 5.5p."
+    },
+    {
+      "time": "10:59:36",
+      "pair": "EUR_USD",
+      "buy_reason": "",
+      "sell_reason": "Anti-revenge: Previous Momentum on EUR_USD was loss (-546.28 CAD). Rejected.",
+      "spread": 0.00016000000000016001
+    },
+    {
+      "time": "10:59:37",
+      "pair": "GBP_USD",
+      "buy_reason": "Slippage too high (9.9p) on GBP_USD \u2013 rejected. Max: 5.5p.",
+      "sell_reason": "Slippage too high (9.9p) on GBP_USD \u2013 rejected. Max: 5.5p."
+    },
+    {
+      "time": "10:59:47",
+      "pair": "EUR_USD",
+      "buy_reason": "",
+      "sell_reason": "Anti-revenge: Previous Momentum on EUR_USD was loss (-546.28 CAD). Rejected.",
+      "spread": 0.00015999999999993797
+    },
+    {
+      "time": "10:59:47",
+      "pair": "GBP_USD",
+      "buy_reason": "Slippage too high (11.2p) on GBP_USD \u2013 rejected. Max: 5.5p.",
+      "sell_reason": "Slippage too high (11.2p) on GBP_USD \u2013 rejected. Max: 5.5p."
+    },
+    {
+      "time": "10:59:57",
+      "pair": "EUR_USD",
+      "buy_reason": "",
+      "sell_reason": "Anti-revenge: Previous Momentum on EUR_USD was loss (-546.28 CAD). Rejected.",
+      "spread": 0.00015999999999993797
+    },
+    {
+      "time": "10:59:57",
+      "pair": "GBP_USD",
+      "buy_reason": "Slippage too high (11.2p) on GBP_USD \u2013 rejected. Max: 5.5p.",
+      "sell_reason": "Slippage too high (11.2p) on GBP_USD \u2013 rejected. Max: 5.5p."
     }
   ],
   "last_cleanup": "2026-11-17"
