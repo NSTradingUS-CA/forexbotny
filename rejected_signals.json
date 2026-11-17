@@ -1,4 +1,12 @@
 {
-  "signals": [],
+  "signals": [
+    {
+      "time": "10:58:21",
+      "pair": "EUR_USD",
+      "buy_reason": "",
+      "sell_reason": "Anti-revenge: Previous Momentum on EUR_USD was loss (-546.28 CAD). Rejected.",
+      "spread": 0.0001500000000000945
+    }
+  ],
   "last_cleanup": "2026-11-17"
 }
