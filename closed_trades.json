@@ -12,6 +12,19 @@
       "entry": 1.09615,
       "exit": 1.09719,
       "score": 79.7
+    },
+    {
+      "pair": "GBP_USD",
+      "type": "Sell",
+      "setup": "Momentum",
+      "pnl": 121.03,
+      "pnl_usd": 84.48,
+      "time": "10:52:24",
+      "r_multiple": 0.22,
+      "units": 142203,
+      "entry": 1.3164,
+      "exit": 1.3158,
+      "score": 63.7
     }
   ],
   "last_cleanup": "2026-11-18"
