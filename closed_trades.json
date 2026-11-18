@@ -1,4 +1,18 @@
 {
-  "trades": [],
+  "trades": [
+    {
+      "pair": "EUR_USD",
+      "type": "Sell",
+      "setup": "Momentum",
+      "pnl": -292.02,
+      "pnl_usd": -204.17,
+      "time": "08:12:41",
+      "r_multiple": -0.53,
+      "units": 194365,
+      "entry": 1.09615,
+      "exit": 1.09719,
+      "score": 79.7
+    }
+  ],
   "last_cleanup": "2026-11-18"
 }
