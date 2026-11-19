@@ -1,4 +1,18 @@
 {
-  "trades": [],
+  "trades": [
+    {
+      "pair": "GBP_USD",
+      "type": "Sell",
+      "setup": "Pin Bar",
+      "pnl": 537.38,
+      "pnl_usd": 375.44,
+      "time": "10:26:08",
+      "r_multiple": 0.72,
+      "units": 160022,
+      "entry": 1.31395,
+      "exit": 1.31158,
+      "score": 53.6
+    }
+  ],
   "last_cleanup": "2026-11-19"
 }
