@@ -12,6 +12,19 @@
       "entry": 1.31395,
       "exit": 1.31158,
       "score": 53.6
+    },
+    {
+      "pair": "GBP_USD",
+      "type": "Sell",
+      "setup": "recovered",
+      "pnl": 537.38,
+      "pnl_usd": 374.77,
+      "time": "10:26:03",
+      "r_multiple": 0.72,
+      "units": 160022,
+      "entry": 1.31395,
+      "exit": 1.31158,
+      "score": null
     }
   ],
   "last_cleanup": "2026-11-19"
