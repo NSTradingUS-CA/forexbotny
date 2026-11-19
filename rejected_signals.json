@@ -1,12 +1,5 @@
 {
-  "signals": [
-    {
-      "time": "08:27:48",
-      "pair": "EUR_USD",
-      "buy_reason": "",
-      "sell_reason": "Single Setup Rule: Already took a Momentum trade on EUR_USD today. Setup rejected.",
-      "spread": 0.00015999999999993797
-    }
-  ],
-  "last_cleanup": "2026-11-18"
+  "trades": [],
+  "signals": [],
+  "last_cleanup": "2026-11-19"
 }
