@@ -188,12 +188,12 @@ def push_file_to_github(local_path, remote_path):
         url = f"https://api.github.com/repos/{os.getenv('GITHUB_REPOSITORY')}/contents/{remote_path}"
         headers = {'Authorization': f'token {GH_PAT}', 'Accept': 'application/vnd.github.v3+json', 'Cache-Control': 'no-cache'}
         status = _github_put_with_retry(url, headers, content, f'Update {remote_path}')
-        print(f'✅ Push {remote_path} réussi' if status in (200, 201) else f'Push {remote_path} failed: {status}')
+        print(f'✅ Push {remote_path} succeeded' if status in (200, 201) else f'Push {remote_path} failed: {status}')
     except Exception as e:
         print(f'Error pushing {remote_path}: {e}')
 
 def live_log(msg, force=False):
-    """Log console + buffer + push GitHub en direct (throttle 60s sauf force). Affiche dans live_log.md."""
+    """Console log + buffer + live GitHub push (60s throttle unless forced). Shown in live_log.md."""
     global _last_live_push
     ts = datetime.now(tz).strftime('%H:%M:%S')
     line = f'- `{ts}` {msg}'
@@ -495,7 +495,7 @@ def get_usd_cad_rate():
 def save_status_json(force=False):
     global BOT_STATUS
     now = datetime.now(tz)
-    status = {'time': now.strftime('%Y-%m-%d %H:%M:%S'), 'bot_status': BOT_STATUS, 'session': {'trades_today': trades_today, 'max_trades': MAX_TRADES_PER_DAY, 'start': f'{TRADING_HOURS_START:02d}:00', 'end': f'{TRADING_HOURS_END:02d}:00'}, 'active_trade': None, 'next_news_event': None, 'strategy': 'H1 Multi-Setup — Machine a etats v2 (stop fixe -> BE+2 -> TP1 -> trailing ATR)', 'max_risk_per_trade_percent': max(RISK_PULLBACK, RISK_BREAKOUT, RISK_PINBAR, RISK_INSIDE_BAR, RISK_SUPPORT_RESISTANCE, RISK_MOMENTUM_CONTINU, RISK_ENGULFING, RISK_ORB, RISK_TREND_BREAKOUT, RISK_COUNTER_TREND_BREAKOUT), 'daily_loss_limit_percent': DAILY_LOSS_LIMIT_PERCENT, 'blocked_pairs': _current_blocked_pairs, 'active_pairs': _current_active_pairs}
+    status = {'time': now.strftime('%Y-%m-%d %H:%M:%S'), 'bot_status': BOT_STATUS, 'session': {'trades_today': trades_today, 'max_trades': MAX_TRADES_PER_DAY, 'start': f'{TRADING_HOURS_START:02d}:00', 'end': f'{TRADING_HOURS_END:02d}:00'}, 'active_trade': None, 'next_news_event': None, 'strategy': 'H1 Multi-Setup — State machine v2 (stop fixe -> BE+2 -> TP1 -> trailing ATR)', 'max_risk_per_trade_percent': max(RISK_PULLBACK, RISK_BREAKOUT, RISK_PINBAR, RISK_INSIDE_BAR, RISK_SUPPORT_RESISTANCE, RISK_MOMENTUM_CONTINU, RISK_ENGULFING, RISK_ORB, RISK_TREND_BREAKOUT, RISK_COUNTER_TREND_BREAKOUT), 'daily_loss_limit_percent': DAILY_LOSS_LIMIT_PERCENT, 'blocked_pairs': _current_blocked_pairs, 'active_pairs': _current_active_pairs}
     if _current_news_event:
         status['next_news_event'] = {'title': _current_news_event['title'], 'time': _current_news_event['time'].strftime('%H:%M'), 'impact': 'High'}
     elif news_cache['events']:
@@ -534,7 +534,7 @@ def count_all_trades_today():
             if str(t.openTime if isinstance(t.openTime, str) else str(t.openTime)).startswith(today_str):
                 count += 1
     except Exception as e:
-        print(f'Erreur comptage: {e}')
+        print(f'Count error: {e}')
     return count
 
 def load_existing_open_position():
@@ -627,7 +627,7 @@ def send_telegram_message(text):
             print(f'Telegram error {attempt + 1}/3: {e}')
             if attempt < 2:
                 time.sleep(2)
-    print('❌ Échec envoi Telegram après 3 tentatives.')
+    print('❌ Telegram send failed after 3 attempts.')
 
 def get_finnhub_sentiment(pair):
     if not FINNHUB_API_KEY:
@@ -885,23 +885,23 @@ def close_partial_position(units_to_close, expected_remaining=None):
     r = _oanda_http_retry('PUT', url, json_body={field: units_abs})
     if r is None or r.status_code != 200:
         if r is not None:
-            print(f'⚠ {field} refusé {r.status_code}: {r.text[:150]}')
+            print(f'⚠ {field} rejected {r.status_code}: {r.text[:150]}')
         print(f'↻ Fallback units pour partial {pair}')
         r = _oanda_http_retry('PUT', url, json_body={'units': units_abs})
     if r is None or r.status_code != 200:
-        print(f'❌ Partial close échoué {pair}')
+        print(f'❌ Partial close failed {pair}')
         return False
     if expected_remaining is not None:
         try:
             check = retry_api_call(ctx.trade.get, ACCOUNT_ID, active_trade['trade_id'])
             server_units = int(check.body['trade'].currentUnits)
             if abs(server_units) != expected_remaining:
-                print(f'❌ VÉRIF PARTIAL ÉCHOUÉE serveur={server_units} attendu=±{expected_remaining}')
-                send_telegram_message(f'🚨 Partial close non appliqué {pair}: serveur={server_units} attendu=±{expected_remaining}')
+                print(f'❌ PARTIAL CHECK FAILED server={server_units} expected=±{expected_remaining}')
+                send_telegram_message(f'🚨 Partial close NOT applied {pair}: server={server_units} expected=±{expected_remaining}')
                 return False
-            print(f'🔍 Vérifié serveur après partial: {server_units}')
+            print(f'🔍 Verified server after partial: {server_units}')
         except Exception as e:
-            print(f'⚠ Vérif partial impossible: {e}')
+            print(f'⚠ Partial verification impossible: {e}')
     print(f'Partial close OK: {units_to_close} on {pair}')
     return True
 
@@ -917,13 +917,13 @@ def close_full_position_market():
     r = _oanda_http_retry('PUT', url, json_body={field: 'ALL'})
     if r is None or r.status_code != 200:
         if r is not None:
-            print(f'⚠ {field}=ALL refusé {r.status_code}')
+            print(f'⚠ {field}=ALL rejected {r.status_code}')
             print(f'↻ Fallback units=ALL {pair}')
             r = _oanda_http_retry('PUT', url, json_body={'units': 'ALL'})
     if r is not None and r.status_code == 200:
         print(f'Full close OK {pair}')
         return True
-    print(f'❌ Full close échoué {pair}')
+    print(f'❌ Full close failed {pair}')
     return False
 
 def update_trade_sl_tp(trade_id, sl_price=None, tp_price=None):
@@ -950,16 +950,16 @@ def update_trade_sl_tp(trade_id, sl_price=None, tp_price=None):
             if getattr(trade, 'stopLossOrder', None) and trade.stopLossOrder:
                 server_sl = float(trade.stopLossOrder.price)
             if server_sl is None or abs(server_sl - sl_price) > 5e-05:
-                print(f'❌ VÉRIF SL ÉCHOUÉE serveur={server_sl} attendu={sl_price:.5f}')
-                send_telegram_message(f'🚨 SL non transmis {trade_id}: serveur={server_sl} attendu={sl_price:.5f}')
+                print(f'❌ SL CHECK FAILED server={server_sl} expected={sl_price:.5f}')
+                send_telegram_message(f'🚨 SL NOT transmitted {trade_id}: server={server_sl} expected={sl_price:.5f}')
                 return False
-            print(f'🔍 Vérifié SL={server_sl:.5f}')
+            print(f'🔍 Verified SL={server_sl:.5f}')
         except Exception as e:
-            print(f'⚠ Vérif SL impossible: {e}')
+            print(f'⚠ SL verification impossible: {e}')
     return True
 
 def move_sl_to_be():
-    """v2 Early Secure : SL fixe -> BE + 2 pips. Jamais de trailing serre."""
+    """v2 Early Secure: fixed SL -> BE + 2 pips. Never tight trailing."""
     global active_trade
     if active_trade is None:
         return False
@@ -980,7 +980,7 @@ def move_sl_to_be():
     return False
 
 def set_trailing_atr(atr_mult, allow_widen=False):
-    """Trailing ATR, uniquement apres TP1. Retourne True si applique."""
+    """ATR trailing, only after TP1. Returns True if applied."""
     global active_trade
     if active_trade is None or active_trade.get('phase', 0) < 3:
         return False
@@ -1048,7 +1048,7 @@ def lock_ts_to_breakeven():
     return True
 
 def check_adverse_regime_closed(direction, current_price, df):
-    """v2 : ne lit QUE la derniere bougie H1 FERMEE (iloc[-2] si -1 en cours, sinon -1 cloturee via cache). On exige REGIME_CONFIRM_BARS via streak gere dans manage."""
+    """v2: reads ONLY the last CLOSED H1 candle (iloc[-2] if -1 is in progress, else -1 closed via cache). REGIME_CONFIRM_BARS required via streak handled in manage."""
     if df is None or df.empty:
         return (False, [], 0)
     try:
@@ -1088,7 +1088,7 @@ def manage_active_trade():
             if state in ('FILLED', 'CANCELLED', 'TRIGGERED'):
                 active_trade['tp1_hit'] = True
                 active_trade['phase'] = 3
-                live_log(f"🎯 TP1 atteint {active_trade['pair']} — Passage Phase 3 (Runner)", force=True)
+                live_log(f"🎯 TP1 reached {active_trade['pair']} — Entering Phase 3 (Runner)", force=True)
                 send_telegram_message(f"🎯 TP1 reached on {active_trade['pair']} (server-side). Runner continues.")
                 save_status_json(force=True)
         except Exception as e:
@@ -1096,7 +1096,7 @@ def manage_active_trade():
                 if not active_trade.get('tp1_hit', False):
                     active_trade['tp1_hit'] = True
                     active_trade['phase'] = 3
-                    live_log(f"🎯 TP1 atteint {active_trade['pair']} — Phase 3", force=True)
+                    live_log(f"🎯 TP1 reached {active_trade['pair']} — Phase 3", force=True)
                     send_telegram_message(f"🎯 TP1 reached on {active_trade['pair']}. Runner continues.")
                     save_status_json(force=True)
     try:
@@ -1147,7 +1147,7 @@ def manage_active_trade():
             if move_sl_to_be():
                 active_trade['early_secure_done'] = True
                 active_trade['phase'] = 1
-                send_telegram_message(f'🛡 <b>Early Secure</b> · {pair} {direction.upper()}\nProfit {profit_pips_now:+.1f} pips · SL -> BE+{EARLY_SECURE_BE_OFFSET_PIPS:.0f}p (Phase 1). Trailing toujours OFF avant TP1.')
+                send_telegram_message(f'🛡 <b>Early Secure</b> · {pair} {direction.upper()}\nProfit {profit_pips_now:+.1f} pips · SL -> BE+{EARLY_SECURE_BE_OFFSET_PIPS:.0f}p (Phase 1). Trailing still OFF before TP1.')
                 save_status_json(force=True)
     if active_trade.get('tp1_hit', False):
         active_trade['phase'] = 3
@@ -1156,7 +1156,7 @@ def manage_active_trade():
         if not active_trade.get('early_widen_done', False) and init_risk > 0 and (profit_pips_now >= EARLY_WIDEN_R * init_risk / 0.0001):
             if set_trailing_atr(EARLY_WIDEN_ATR_MULT, allow_widen=True):
                 active_trade['early_widen_done'] = True
-                send_telegram_message(f'📈 <b>Early Widen</b> · {pair} {direction.upper()}\nProfit {profit_pips_now:+.1f} pips (1,0R) — Trailing elargi a {EARLY_WIDEN_ATR_MULT}x ATR (Phase 3)')
+                send_telegram_message(f'📈 <b>Early Widen</b> · {pair} {direction.upper()}\nProfit {profit_pips_now:+.1f} pips (1,0R) — Trailing widened to {EARLY_WIDEN_ATR_MULT}x ATR (Phase 3)')
                 save_status_json(force=True)
         if not active_trade.get('be_triggered', False) or True:
             last_peak_str = active_trade.get('last_peak_time')
@@ -1231,8 +1231,8 @@ def manage_active_trade():
                 peak_frac = peak / tp1_distance_pips
                 if partial_units >= units_abs or remaining < 1000:
                     if close_full_position_market():
-                        send_telegram_message(f'⚠ <b>Adverse regime (full close, confirme {REGIME_CONFIRM_BARS} bougies)</b> · {pair}\nSetup {setup_type.upper()} · {signal_count}/3 · peak {peak:.1f}p ({peak_frac:.0%} TP1)')
-                        live_log(f'⚠ Adverse Regime confirme — Full close {pair}', force=True)
+                        send_telegram_message(f'⚠ <b>Adverse regime (full close, confirmed {REGIME_CONFIRM_BARS} candles)</b> · {pair}\nSetup {setup_type.upper()} · {signal_count}/3 · peak {peak:.1f}p ({peak_frac:.0%} TP1)')
+                        live_log(f'⚠ Adverse Regime confirmed - Full close {pair}', force=True)
                         active_trade['regime_adverse_handled'] = True
                         time.sleep(2)
                         check_closed_trade()
@@ -1248,7 +1248,7 @@ def manage_active_trade():
                         partial_pnl_usd = (current_price - entry) * partial_units if direction == 'buy' else (entry - current_price) * partial_units
                         usd_cad = get_usd_cad_rate()
                         partial_pnl_cad = partial_pnl_usd * usd_cad
-                        msg = f"⚠ <b>Adverse regime (confirme)</b> · {pair} {direction.upper()} · {setup_type.upper()}\n{signal_count}/3: {' · '.join(signals_list)}\nPeak {peak:+.1f}p ({peak_frac:.0%} TP1) · Now {profit_pips_now:+.1f}\nClosed 67% @ {profit_pips_now:+.1f}p → {partial_pnl_cad:+.2f} CAD\nRunner 33% @ SL BE+{REGIME_ADVERSE_SL_OFFSET_PIPS:.0f}p"
+                        msg = f"⚠ <b>Adverse regime (confirmed)</b> · {pair} {direction.upper()} · {setup_type.upper()}\n{signal_count}/3: {' · '.join(signals_list)}\nPeak {peak:+.1f}p ({peak_frac:.0%} TP1) · Now {profit_pips_now:+.1f}\nClosed 67% @ {profit_pips_now:+.1f}p → {partial_pnl_cad:+.2f} CAD\nRunner 33% @ SL BE+{REGIME_ADVERSE_SL_OFFSET_PIPS:.0f}p"
                         send_telegram_message(msg)
                         live_log(msg, force=True)
                         save_status_json(force=True)
@@ -1365,7 +1365,7 @@ def _best_hypothetical_setup(c, df, instrument, config, atr, h1_up, h1_down, sen
     return best
 
 def get_orb_range_exact(instrument):
-    """ORB EXACT 7h00-8h00 heure de Toronto, sur bougies M15. Retourne (high, low) ou (None, None)."""
+    """ORB EXACT 7:00-8:00 Toronto time, on M15 candles. Returns (high, low) or (None, None)."""
     try:
         params = {'count': 200, 'granularity': 'M15', 'price': 'M'}
         response = retry_api_call(ctx.instrument.candles, instrument, **params)
@@ -1422,7 +1422,7 @@ def check_signal(df, instrument):
             orb_range['high'] = _orb_high
             orb_range['low'] = _orb_low
             orb_range['recorded'] = True
-            live_log(f"📦 ORB EXACT {instrument} : 7h-8h Toronto high={_orb_high:.5f} low={_orb_low:.5f} (M15 x4, conserve jusqu'a minuit)")
+            live_log(f"📦 ORB EXACT {instrument} : 7h-8h Toronto high={_orb_high:.5f} low={_orb_low:.5f} (M15 x4, kept until midnight)")
     signals = []
 
     def add(direction, cond, key, name, risk):
@@ -1661,7 +1661,7 @@ def place_trade(instrument, entry_price_signal, sl_signal, tp_signal, direction,
     rr_ratio = SETUP_RR.get(setup_type.lower().replace(' ', '').replace('/', ''), 2.0)
     msg = f"<b>✅ Trade opened ({trades_today}/{MAX_TRADES_PER_DAY})</b>\nPair: {instrument}\nSetup: {setup_type.upper()}\nType: {('Buy' if direction == 'buy' else 'Sell')}\nRisk: {risk_percent:.2f}%\nVolume: {new_units} units\nEntry: {actual_entry_price:.5f} (slippage {slippage_pips:.1f}p)\nSL initial (FIXE): {new_sl:.5f} — Phase 0, trailing OFF\nTP1: {real_tp1_price:.5f} ({TP1_R_MULT:.2f}R, {TP_PARTIAL_RATIO:.0%}) - Server-side Limit\nTP2: {new_tp:.5f} ({rr_ratio:.1f}R)\nR/R: 1:{rr_ratio:.1f}\nQuality: {quality_score:.1f}\nTime: {datetime.now(tz).strftime('%Y-%m-%d %H:%M:%S')}\n🛡 v2 : Early Secure -> SL BE+2p a 0.5R · Trailing ATR apres TP1 seulement"
     send_telegram_message(msg)
-    live_log(f'✅ Trade ouvert {instrument} {direction} {setup_type} @ {actual_entry_price:.5f} SL {new_sl:.5f} TP1 {real_tp1_price:.5f} TP2 {new_tp:.5f} — Phase 0', force=True)
+    live_log(f'✅ Trade opened {instrument} {direction} {setup_type} @ {actual_entry_price:.5f} SL {new_sl:.5f} TP1 {real_tp1_price:.5f} TP2 {new_tp:.5f} — Phase 0', force=True)
     log_trade({'time': datetime.now(tz).isoformat(), 'pair': instrument, 'setup': setup_type, 'entry': actual_entry_price, 'sl': new_sl, 'tp1': real_tp1_price, 'tp2': new_tp, 'units': new_units, 'direction': direction, 'risk_percent': risk_percent, 'status': 'OPEN'})
     return True
 
@@ -1738,7 +1738,7 @@ def check_closed_trade():
         if abs(close_price - entry) < 1e-06 and abs(total_pnl_cad) > 0.1 and (abs(units) > 0):
             close_price = entry + total_pnl_cad / abs(units) if direction == 'buy' else entry - total_pnl_cad / abs(units)
             source = 'forced_from_pnl'
-        print(f'✅ Trade {our_trade_id} fermé – Exit from {source}: {close_price:.5f}')
+        print(f'✅ Trade {our_trade_id} closed – Exit from {source}: {close_price:.5f}')
         realized_r = ((close_price - entry) / init_risk if direction == 'buy' else (entry - close_price) / init_risk) if init_risk > 0 else 0.0
         usd_cad = get_usd_cad_rate()
         total_pnl_usd = total_pnl_cad / usd_cad if usd_cad > 0 else total_pnl_cad
@@ -1749,9 +1749,9 @@ def check_closed_trade():
                 exit_lines += f"\n  • Fill {i}: {cf['units']} units @ {cf['price']:.5f}"
         else:
             exit_lines = f'Exit: {close_price:.5f}'
-        msg = f"<b>🔴 Trade closed ({trades_today}/{MAX_TRADES_PER_DAY})</b>\nPair: {pair}\nSetup: {setup.upper()}\nType: {('Buy' if direction == 'buy' else 'Sell')}\nEntry: {entry:.5f}\n{exit_lines}\nVolume: {abs(units)}\nP&L: {total_pnl_cad:.2f} CAD\nR: {realized_r:+.2f}R\nPhase finale: {active_trade.get('phase', 0)}\nTime: {datetime.now(tz).strftime('%Y-%m-%d %H:%M:%S')}"
+        msg = f"<b>🔴 Trade closed ({trades_today}/{MAX_TRADES_PER_DAY})</b>\nPair: {pair}\nSetup: {setup.upper()}\nType: {('Buy' if direction == 'buy' else 'Sell')}\nEntry: {entry:.5f}\n{exit_lines}\nVolume: {abs(units)}\nP&L: {total_pnl_cad:.2f} CAD\nR: {realized_r:+.2f}R\nFinal phase: {active_trade.get('phase', 0)}\nTime: {datetime.now(tz).strftime('%Y-%m-%d %H:%M:%S')}"
         send_telegram_message(msg)
-        live_log(f"🔴 Trade ferme {pair} {direction} {setup} Exit {close_price:.5f} PnL {total_pnl_cad:+.2f} CAD R {realized_r:+.2f} Phase {active_trade.get('phase', 0)}", force=True)
+        live_log(f"🔴 Trade closed {pair} {direction} {setup} Exit {close_price:.5f} PnL {total_pnl_cad:+.2f} CAD R {realized_r:+.2f} Phase {active_trade.get('phase', 0)}", force=True)
         closed_trades_today.append({'pair': pair, 'type': 'Buy' if direction == 'buy' else 'Sell', 'setup': setup, 'pnl': round(total_pnl_cad, 2), 'pnl_usd': round(total_pnl_usd, 2), 'time': datetime.now(tz).strftime('%H:%M:%S'), 'r_multiple': round(realized_r, 2), 'units': abs(units), 'entry': entry, 'exit': close_price, 'score': active_trade.get('quality_score')})
         save_closed_trades_to_file()
         last_close_time = datetime.now(tz)
@@ -1762,14 +1762,14 @@ def check_closed_trade():
     active_trade = None
 
 def _handle_sigterm(signum, frame):
-    print('⚠ SIGTERM – push final avant arrêt.')
+    print('⚠ SIGTERM - final push before stop.')
     try:
         save_status_json(force=True)
         save_closed_trades_to_file()
         save_rejected_to_file()
-        live_log('🔴 Bot arrete (SIGTERM) — push final', force=True)
+        live_log('🔴 Bot stopped (SIGTERM) - final push', force=True)
     except Exception as e:
-        print(f'Erreur push final: {e}')
+        print(f'Final push error: {e}')
     raise SystemExit(0)
 signal.signal(signal.SIGTERM, _handle_sigterm)
 
@@ -1791,7 +1791,7 @@ def main():
     _now_check = datetime.now(tz)
     _after_1205 = _now_check.hour > 12 or (_now_check.hour == 12 and _now_check.minute >= 5)
     if _after_1205 and active_trade is None:
-        print(f"🕒 Démarré à {_now_check.strftime('%H:%M')} sans trade – sortie.")
+        print(f"🕒 Started at {_now_check.strftime('%H:%M')} with no trade - exit.")
         BOT_STATUS = 'stopped'
         save_status_json()
         return
@@ -1840,50 +1840,50 @@ def main():
         lines.append('Relay runs until 17:05 ET (forced close at 16:55).')
         start_msg = '\n'.join(lines)
     else:
-        start_msg = f'🟢 Forex Sniper 7-12 Multi-Setup v2 started – max {MAX_TRADES_PER_DAY} trades/day, buffer {MIN_MINUTES_BETWEEN_TRADES}min. Machine a etats : Phase 0 stop fixe -> Phase 1 BE+2 a 0.5R -> Phase 2 TP1 -> Phase 3 trailing ATR. ({trades_today} already taken)\n📅 News pause: {NEWS_BLOCK_PRE_MINUTES} min pre + {NEWS_BLOCK_POST_MINUTES} min post.'
+        start_msg = f'🟢 Forex Sniper 7-12 Multi-Setup v2 started – max {MAX_TRADES_PER_DAY} trades/day, buffer {MIN_MINUTES_BETWEEN_TRADES}min. State machine: Phase 0 fixed stop -> Phase 1 BE+2 at 0.5R -> Phase 2 TP1 -> Phase 3 ATR trailing. ({trades_today} already taken)\n📅 News pause: {NEWS_BLOCK_PRE_MINUTES} min pre + {NEWS_BLOCK_POST_MINUTES} min post.'
         if future_events:
             start_msg += '\n\n📰 <b>Upcoming high-impact news:</b>\n'
             for e in future_events:
                 start_msg += f"• {e['title']} at {e['time'].strftime('%H:%M')} ({e['time'].strftime('%a %d %b')})\n"
     print(start_msg)
     send_telegram_message(start_msg)
-    live_log(f'🟢 Demarrage session v2 — {start_msg}', force=True)
+    live_log(f'🟢 Session start v2 — {start_msg}', force=True)
     try:
         while True:
             now = datetime.now(tz)
             if (now.hour > 12 or (now.hour == 12 and now.minute >= 5)) and active_trade is None:
-                print('🕒 Après 12:05 sans trade – arrêt.')
+                print('🕒 After 12:05 with no trade - stop.')
                 BOT_STATUS = 'stopped'
                 save_status_json()
                 send_telegram_message('🔴 Bot stopped – End of session (past 12:05), no active trade.')
-                live_log('🔴 Fin session 12:05 — aucun trade actif', force=True)
+                live_log('🔴 End of session 12:05 - no active trade', force=True)
                 break
             if now.hour == 16 and 50 <= now.minute <= 54 and (active_trade is not None) and (_last_reminder_minute != now.minute):
                 pnl_oanda = fetch_position_pnl_from_oanda(active_trade['pair'])
                 pnl_str = f'{pnl_oanda:.2f} CAD' if pnl_oanda is not None else 'unavailable (OANDA API)'
                 send_telegram_message(f"⏰ <b>Reminder {now.strftime('%H:%M')}</b>\nPair: {active_trade['pair']}\nP&L (OANDA): {pnl_str}\nMarket closes at 16:59 NY.\nAutomatic forced closure at 16:55-16:57.")
-                print(f"Reminder {now.strftime('%H:%M')} envoyé.")
+                print(f"Reminder {now.strftime('%H:%M')} sent.")
                 _last_reminder_minute = now.minute
-                live_log(f"⏰ Reminder {now.strftime('%H:%M')} — PnL {pnl_str}")
+                live_log(f"⏰ Reminder {now.strftime('%H:%M')} - PnL {pnl_str}")
             if now.hour == 16 and 55 <= now.minute <= 57 and (active_trade is not None):
                 pair = active_trade['pair']
                 if not has_open_position(pair):
-                    print(f'Position {pair} déjà fermée.')
+                    print(f'Position {pair} already closed.')
                     check_closed_trade()
                 else:
                     pnl_oanda = fetch_position_pnl_from_oanda(pair)
                     pnl_str = f'{pnl_oanda:.2f} CAD' if pnl_oanda is not None else 'indisponible'
-                    print(f'16:{now.minute:02d} – Clôture forcée. P&L: {pnl_str}')
+                    print(f'16:{now.minute:02d} – Forced close. P&L: {pnl_str}')
                     if close_full_position_market():
                         send_telegram_message(f'🔒 <b>Trade closed (forced, end of session)</b>\nPair: {pair}\nP&L: {pnl_str}\nReason: End of session')
-                        live_log(f'🔒 Cloture forcee {pair} PnL {pnl_str}', force=True)
+                        live_log(f'🔒 Forced close {pair} PnL {pnl_str}', force=True)
                         time.sleep(2)
                         check_closed_trade()
                     else:
                         send_telegram_message(f'⚠ <b>Forced closure failed on {pair}.</b>\nPlease close manually before 16:59 NY.')
             if now.hour == 16 and now.minute == 58 and (active_trade is not None) and (not _critical_alert_sent):
                 send_telegram_message(f"🚨 <b>CRITICAL: trade still open at 16:58</b>\nPair: {active_trade['pair']}\nForced closure failed. ~60s to close manually before 16:59 NY.")
-                print('🚨 Alerte 16:58 envoyée.')
+                print('🚨 16:58 alert sent.')
                 _critical_alert_sent = True
             if now.hour > BOT_SHUTDOWN_HOUR or (now.hour == BOT_SHUTDOWN_HOUR and now.minute >= 5):
                 if active_trade is not None:
@@ -1892,7 +1892,7 @@ def main():
                 BOT_STATUS = 'stopped'
                 save_status_json()
                 send_telegram_message('🔴 Bot stopped – End of session (17:05).')
-                live_log('🔴 Fin session 17:05', force=True)
+                live_log('🔴 End of session 17:05', force=True)
                 break
             (blocked, news_event, time_until, blocked_pairs) = check_and_block_news(now)
             if blocked:
@@ -1973,7 +1973,7 @@ def main():
                             if partial_units >= units_abs or remaining < 1000:
                                 if close_full_position_market():
                                     send_telegram_message(f'📰 <b>Imminent News – Full closure</b>\nPair: {pair}\nSetup: {setup_type.upper()}\nNews: {news_title} at {news_time}\nP&L: {pnl_cad:+.2f} CAD')
-                                    live_log(f'📰 News imminente — Full close {pair} {pnl_cad:+.2f} CAD', force=True)
+                                    live_log(f'📰 Imminent news - Full close {pair} {pnl_cad:+.2f} CAD', force=True)
                                     time.sleep(2)
                                     check_closed_trade()
                                 else:
@@ -1982,8 +1982,8 @@ def main():
                                 active_trade['units'] = remaining if active_trade['direction'] == 'buy' else -remaining
                                 sl_state = 'trailing (BE)' if active_trade.get('be_triggered') else 'initial SL'
                                 send_telegram_message(f'📰 <b>Imminent News – Partial close</b>\nPair: {pair}\nSetup: {setup_type.upper()} ({setup_label})\nNews: {news_title} at {news_time}\nClosed: {int(close_pct * 100)}% ({partial_units} units)\nRunner: {remaining} units ({sl_state} intact)\nP&L: {pnl_cad:+.2f} CAD')
-                                live_log(f'📰 News imminente — Partial {int(close_pct * 100)}% {pair}')
-                                print(f'News imminent – {pair}: {int(close_pct * 100)}% fermé.')
+                                live_log(f'📰 Imminent news - Partial {int(close_pct * 100)}% {pair}')
+                                print(f'Imminent news - {pair}: {int(close_pct * 100)}% closed.')
                             else:
                                 send_telegram_message(f'⚠ Partial close failed before news on {pair}. Please monitor.')
                 if not hasattr(main, 'next_news_check'):
@@ -2077,7 +2077,7 @@ def main():
                     save_status_json(force=True)
                     save_closed_trades_to_file()
                     save_rejected_to_file()
-                    live_log('💾 Sauvegarde 12:50 — status + trades + rejected', force=True)
+                    live_log('💾 Backup 12:50 - status + trades + rejected', force=True)
                     main.next_trade_save = now + timedelta(seconds=30)
                 else:
                     save_status_json()
@@ -2086,20 +2086,20 @@ def main():
                 if now >= main.next_trade_save:
                     save_closed_trades_to_file()
                     save_rejected_to_file()
-                    live_log('💾 Sauvegarde periodique — trades + rejected')
+                    live_log('💾 Periodic backup - trades + rejected')
                     main.next_trade_save = now + timedelta(minutes=5)
-                live_log(f"💓 Heartbeat {now.strftime('%H:%M:%S')} — Phase {(active_trade.get('phase', '—') if active_trade else 'aucun trade')} — Trades {trades_today}/{MAX_TRADES_PER_DAY}")
+                live_log(f"💓 Heartbeat {now.strftime('%H:%M:%S')} - Phase {(active_trade.get('phase', '—') if active_trade else 'no trade')} — Trades {trades_today}/{MAX_TRADES_PER_DAY}")
                 time.sleep(10)
             except Exception as inner_e:
                 print(f'⚠ Error in main loop: {inner_e}')
                 traceback.print_exc()
-                live_log(f'⚠ Erreur boucle : {inner_e}', force=True)
+                live_log(f'⚠ Loop error: {inner_e}', force=True)
                 time.sleep(60)
                 continue
     except KeyboardInterrupt:
         BOT_STATUS = 'stopped'
         save_status_json()
         send_telegram_message('🔴 Bot stopped manually (Ctrl+C)')
-        live_log('🔴 Bot arrete manuellement (Ctrl+C)', force=True)
+        live_log('🔴 Bot stopped manually (Ctrl+C)', force=True)
 if __name__ == '__main__':
     main()
