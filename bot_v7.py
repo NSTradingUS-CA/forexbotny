@@ -1840,7 +1840,7 @@ def main():
         lines.append('Relay runs until 17:05 ET (forced close at 16:55).')
         start_msg = '\n'.join(lines)
     else:
-        start_msg = f'🟢 Forex Sniper 7-12 Multi-Setup v2 started – max {MAX_TRADES_PER_DAY} trades/day, buffer {MIN_MINUTES_BETWEEN_TRADES}min. State machine: Phase 0 fixed stop -> Phase 1 BE+2 at 0.5R -> Phase 2 TP1 -> Phase 3 ATR trailing. ({trades_today} already taken)\n📅 News pause: {NEWS_BLOCK_PRE_MINUTES} min pre + {NEWS_BLOCK_POST_MINUTES} min post.'
+        start_msg = f'🟢 Forex Sniper 7-12 Multi-Setup v2 started – max {MAX_TRADES_PER_DAY} trades/day, buffer {MIN_MINUTES_BETWEEN_TRADES}min. State machine: Phase 0 fixed SL -> Phase 1 BE+2 at 0.5R -> Phase 2 TP1 (partial closure) -> Phase 3 ATR trailing. ({trades_today} already taken)\n📅 News pause: {NEWS_BLOCK_PRE_MINUTES} min pre + {NEWS_BLOCK_POST_MINUTES} min post.'
         if future_events:
             start_msg += '\n\n📰 <b>Upcoming high-impact news:</b>\n'
             for e in future_events:
