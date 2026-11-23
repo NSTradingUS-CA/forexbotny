@@ -1,6 +1,6 @@
 # Live Log — Forex Sniper
 
-Session du 2026-11-23 — MAJ 06:42:14 ET — Bot: running
+Session du 2026-11-23 — MAJ 06:43:16 ET — Bot: running
 
 - `06:30:47` 🟢 Session start v2 — 🟢 Forex Sniper 7-12 Multi-Setup v2 started – max 3 trades/day, buffer 15min. State machine: Phase 0 fixed stop -> Phase 1 BE+2 at 0.5R -> Phase 2 TP1 -> Phase 3 ATR trailing. (0 already taken)
 📅 News pause: 7 min pre + 10 min post.
@@ -74,3 +74,9 @@ Session du 2026-11-23 — MAJ 06:42:14 ET — Bot: running
 - `06:41:53` 💓 Heartbeat 06:41:53 - Phase no trade — Trades 0/3
 - `06:42:03` 💓 Heartbeat 06:42:03 - Phase no trade — Trades 0/3
 - `06:42:14` 💓 Heartbeat 06:42:13 - Phase no trade — Trades 0/3
+- `06:42:25` 💓 Heartbeat 06:42:25 - Phase no trade — Trades 0/3
+- `06:42:35` 💓 Heartbeat 06:42:35 - Phase no trade — Trades 0/3
+- `06:42:45` 💓 Heartbeat 06:42:45 - Phase no trade — Trades 0/3
+- `06:42:55` 💓 Heartbeat 06:42:55 - Phase no trade — Trades 0/3
+- `06:43:05` 💓 Heartbeat 06:43:05 - Phase no trade — Trades 0/3
+- `06:43:16` 💓 Heartbeat 06:43:15 - Phase no trade — Trades 0/3
