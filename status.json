@@ -1,6 +1,6 @@
 {
-  "time": "2026-11-20 18:17:36",
-  "bot_status": "stopped",
+  "time": "2026-11-23 06:30:49",
+  "bot_status": "running",
   "session": {
     "trades_today": 0,
     "max_trades": 3,
@@ -8,7 +8,11 @@
     "end": "11:00"
   },
   "active_trade": null,
-  "next_news_event": null,
+  "next_news_event": {
+    "title": "CPI",
+    "time": "19:30",
+    "impact": "High"
+  },
   "strategy": "H1 Multi-Setup \u2014 State machine v2 (stop fixe -> BE+2 -> TP1 -> trailing ATR)",
   "max_risk_per_trade_percent": 0.65,
   "daily_loss_limit_percent": 2.0,
