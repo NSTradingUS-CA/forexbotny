@@ -1,16 +1,7 @@
 # Live Log — Forex Sniper
 
-Session du 2026-11-25 — MAJ 09:38:16 ET — Bot: running
+Session du 2026-11-25 — MAJ 09:39:19 ET — Bot: running
 
-- `08:31:06` 💓 Heartbeat 08:31:06 - Phase 3 — Trades 1/3
-- `08:31:16` 💓 Heartbeat 08:31:16 - Phase 3 — Trades 1/3
-- `08:31:27` 💓 Heartbeat 08:31:26 - Phase 3 — Trades 1/3
-- `08:31:37` 💓 Heartbeat 08:31:37 - Phase 3 — Trades 1/3
-- `08:31:48` 💓 Heartbeat 08:31:48 - Phase 3 — Trades 1/3
-- `08:31:59` 💓 Heartbeat 08:31:58 - Phase 3 — Trades 1/3
-- `08:32:09` 💓 Heartbeat 08:32:09 - Phase 3 — Trades 1/3
-- `08:32:19` 💓 Heartbeat 08:32:19 - Phase 3 — Trades 1/3
-- `08:32:30` 💓 Heartbeat 08:32:29 - Phase 3 — Trades 1/3
 - `08:32:40` 💓 Heartbeat 08:32:40 - Phase 3 — Trades 1/3
 - `08:32:51` 💓 Heartbeat 08:32:51 - Phase 3 — Trades 1/3
 - `08:33:01` 💓 Heartbeat 08:33:01 - Phase 3 — Trades 1/3
@@ -402,3 +393,12 @@ Session du 2026-11-25 — MAJ 09:38:16 ET — Bot: running
 - `09:37:55` 💓 Heartbeat 09:37:55 - Phase no trade — Trades 1/3
 - `09:38:06` 💓 Heartbeat 09:38:05 - Phase no trade — Trades 1/3
 - `09:38:16` 💓 Heartbeat 09:38:16 - Phase no trade — Trades 1/3
+- `09:38:26` 💓 Heartbeat 09:38:26 - Phase no trade — Trades 1/3
+- `09:38:37` 💓 Heartbeat 09:38:36 - Phase no trade — Trades 1/3
+- `09:38:47` 💓 Heartbeat 09:38:47 - Phase no trade — Trades 1/3
+- `09:38:57` 📦 ORB EXACT EUR_USD : 7h-8h Toronto high=1.09544 low=1.09373 (M15 x4, kept until midnight)
+- `09:38:58` 📶 SIGNAL sell GBP_USD [Pin Bar] Pin Bar selected (score 60.0)
+- `09:38:58` 💓 Heartbeat 09:38:57 - Phase no trade — Trades 1/3
+- `09:39:09` 📶 SIGNAL sell GBP_USD [Pin Bar] Pin Bar selected (score 60.0)
+- `09:39:09` 💓 Heartbeat 09:39:08 - Phase no trade — Trades 1/3
+- `09:39:19` 📶 SIGNAL sell GBP_USD [Pin Bar] Pin Bar selected (score 60.0)
