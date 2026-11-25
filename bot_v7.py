@@ -132,6 +132,8 @@ _last_news_block_message_sent = False
 _last_reminder_minute = None
 _critical_alert_sent = False
 _regime_adverse_streak = 0
+NEWS_DAY_HALF_SIZE = False
+NEWS_DAY_HALF_SIZE_INFO = ''
 
 def _oanda_headers():
     return {'Authorization': f'Bearer {API_KEY}', 'Content-Type': 'application/json'}
@@ -363,10 +365,7 @@ def check_and_block_news(now):
             _current_blocked_pairs = aff
             _current_active_pairs = [p for p in PAIRS if p not in aff]
             _current_news_event = event
-            if first and active_trade is not None:
-                msg = f"📅 High-impact news: {event['title']} at {event['time'].strftime('%H:%M')}"
-                send_telegram_message(msg)
-                live_log(msg, force=True)
+            # No Telegram here: main() sends exactly ONE pause message (with or without active trade).
             return (True, event, event['time'] - now, aff)
     if get_pause_until() > 0 and now.timestamp() >= get_pause_until():
         set_pause_until(0)
@@ -495,7 +494,7 @@ def get_usd_cad_rate():
 def save_status_json(force=False):
     global BOT_STATUS
     now = datetime.now(tz)
-    status = {'time': now.strftime('%Y-%m-%d %H:%M:%S'), 'bot_status': BOT_STATUS, 'session': {'trades_today': trades_today, 'max_trades': MAX_TRADES_PER_DAY, 'start': f'{TRADING_HOURS_START:02d}:00', 'end': f'{TRADING_HOURS_END:02d}:00'}, 'active_trade': None, 'next_news_event': None, 'strategy': 'H1 Multi-Setup — State machine v2 (stop fixe -> BE+2 -> TP1 -> trailing ATR)', 'max_risk_per_trade_percent': max(RISK_PULLBACK, RISK_BREAKOUT, RISK_PINBAR, RISK_INSIDE_BAR, RISK_SUPPORT_RESISTANCE, RISK_MOMENTUM_CONTINU, RISK_ENGULFING, RISK_ORB, RISK_TREND_BREAKOUT, RISK_COUNTER_TREND_BREAKOUT), 'daily_loss_limit_percent': DAILY_LOSS_LIMIT_PERCENT, 'blocked_pairs': _current_blocked_pairs, 'active_pairs': _current_active_pairs}
+    status = {'time': now.strftime('%Y-%m-%d %H:%M:%S'), 'bot_status': BOT_STATUS, 'session': {'trades_today': trades_today, 'max_trades': MAX_TRADES_PER_DAY, 'start': f'{TRADING_HOURS_START:02d}:00', 'end': f'{TRADING_HOURS_END:02d}:00'}, 'active_trade': None, 'next_news_event': None, 'strategy': 'H1 Multi-Setup — State machine v2 (stop fixe -> BE+2 -> TP1 -> trailing ATR)', 'max_risk_per_trade_percent': max(RISK_PULLBACK, RISK_BREAKOUT, RISK_PINBAR, RISK_INSIDE_BAR, RISK_SUPPORT_RESISTANCE, RISK_MOMENTUM_CONTINU, RISK_ENGULFING, RISK_ORB, RISK_TREND_BREAKOUT, RISK_COUNTER_TREND_BREAKOUT), 'daily_loss_limit_percent': DAILY_LOSS_LIMIT_PERCENT, 'blocked_pairs': _current_blocked_pairs, 'active_pairs': _current_active_pairs, 'news_day_half_size': NEWS_DAY_HALF_SIZE, 'news_day_half_size_info': NEWS_DAY_HALF_SIZE_INFO}
     if _current_news_event:
         status['next_news_event'] = {'title': _current_news_event['title'], 'time': _current_news_event['time'].strftime('%H:%M'), 'impact': 'High'}
     elif news_cache['events']:
@@ -518,7 +517,7 @@ def save_status_json(force=False):
         units_abs = abs(int(active_trade['units']))
         unreal = (active_trade['entry_price'] - current_price) * units_abs if active_trade['direction'] == 'sell' else (current_price - active_trade['entry_price']) * units_abs
         usd_cad = get_usd_cad_rate()
-        status['active_trade'] = {'pair': pair, 'type': 'Buy' if active_trade['direction'] == 'buy' else 'Sell', 'entry': active_trade['entry_price'], 'sl': active_trade['sl'], 'tp1': active_trade.get('tp1'), 'tp2': active_trade.get('tp2'), 'tp2_initial': active_trade.get('tp2_initial'), 'tp2_initial_locked': active_trade.get('tp2_initial_locked', False), 'trailing_stop': 'ATR after TP1 only', 'phase': active_trade.get('phase', 0), 'current_price': current_price, 'unrealized_pnl_usd': round(unreal, 2), 'unrealized_pnl_cad': round(unreal * usd_cad, 2), 'usd_cad_rate': round(usd_cad, 4), 'distance_to_sl_pips': round(sl_distance / 0.0001, 1), 'distance_to_tp2_pips': round(tp_distance / 0.0001, 1) if tp_distance else 0, 'atr': active_trade.get('atr'), 'be_triggered': active_trade.get('be_triggered', False), 'tp1_hit': active_trade.get('tp1_hit', False), 'tp2_widened': active_trade.get('tp2_widened', False), 'peak_profit_pips': active_trade.get('peak_profit_pips', 0.0), 'time_lock_done': active_trade.get('time_lock_done', False), 'regime_adverse_handled': active_trade.get('regime_adverse_handled', False), 'setup_type': active_trade.get('setup_type'), 'risk_percent': active_trade.get('risk_percent'), 'initial_risk': active_trade.get('initial_risk'), 'opened_at': active_trade.get('opened_at'), 'units': active_trade.get('units'), 'score': active_trade.get('quality_score'), 'news_partial_done': active_trade.get('news_partial_done', False), 'early_secure_done': active_trade.get('early_secure_done', False), 'early_widen_done': active_trade.get('early_widen_done', False)}
+        status['active_trade'] = {'pair': pair, 'type': 'Buy' if active_trade['direction'] == 'buy' else 'Sell', 'entry': active_trade['entry_price'], 'sl': active_trade['sl'], 'tp1': active_trade.get('tp1'), 'tp2': active_trade.get('tp2'), 'tp2_initial': active_trade.get('tp2_initial'), 'tp2_initial_locked': active_trade.get('tp2_initial_locked', False), 'trailing_stop': 'ATR after TP1 only (v2)', 'phase': active_trade.get('phase', 0), 'current_price': current_price, 'unrealized_pnl_usd': round(unreal, 2), 'unrealized_pnl_cad': round(unreal * usd_cad, 2), 'usd_cad_rate': round(usd_cad, 4), 'distance_to_sl_pips': round(sl_distance / 0.0001, 1), 'distance_to_tp2_pips': round(tp_distance / 0.0001, 1) if tp_distance else 0, 'atr': active_trade.get('atr'), 'be_triggered': active_trade.get('be_triggered', False), 'tp1_hit': active_trade.get('tp1_hit', False), 'tp2_widened': active_trade.get('tp2_widened', False), 'peak_profit_pips': active_trade.get('peak_profit_pips', 0.0), 'time_lock_done': active_trade.get('time_lock_done', False), 'regime_adverse_handled': active_trade.get('regime_adverse_handled', False), 'setup_type': active_trade.get('setup_type'), 'risk_percent': active_trade.get('risk_percent'), 'initial_risk': active_trade.get('initial_risk'), 'opened_at': active_trade.get('opened_at'), 'units': active_trade.get('units'), 'score': active_trade.get('quality_score'), 'news_partial_done': active_trade.get('news_partial_done', False), 'news_partial_close': active_trade.get('news_partial_close', False), 'half_size': active_trade.get('half_size', False), 'early_secure_done': active_trade.get('early_secure_done', False), 'early_widen_done': active_trade.get('early_widen_done', False)}
     push_status_json(status, force=force)
 
 def count_all_trades_today():
@@ -546,7 +545,7 @@ def load_existing_open_position():
                 status_data = json.load(f)
             saved_trade = status_data.get('active_trade')
             if saved_trade:
-                saved_flags = {'be_triggered': saved_trade.get('be_triggered', False), 'tp1_hit': saved_trade.get('tp1_hit', False), 'tp2_widened': saved_trade.get('tp2_widened', False), 'tp2_initial': saved_trade.get('tp2_initial'), 'tp2_initial_locked': saved_trade.get('tp2_initial_locked', False), 'peak_profit_pips': saved_trade.get('peak_profit_pips', 0.0), 'time_lock_done': saved_trade.get('time_lock_done', False), 'regime_adverse_handled': saved_trade.get('regime_adverse_handled', False), 'setup_type': saved_trade.get('setup_type'), 'risk_percent': saved_trade.get('risk_percent'), 'initial_risk': saved_trade.get('initial_risk'), 'opened_at': saved_trade.get('opened_at'), 'atr': saved_trade.get('atr'), 'units': saved_trade.get('units'), 'quality_score': saved_trade.get('score'), 'last_peak_time': saved_trade.get('last_peak_time'), 'news_partial_done': saved_trade.get('news_partial_done', False), 'early_secure_done': saved_trade.get('early_secure_done', False), 'early_widen_done': saved_trade.get('early_widen_done', False), 'phase': saved_trade.get('phase', 0)}
+                saved_flags = {'be_triggered': saved_trade.get('be_triggered', False), 'tp1_hit': saved_trade.get('tp1_hit', False), 'tp2_widened': saved_trade.get('tp2_widened', False), 'tp2_initial': saved_trade.get('tp2_initial'), 'tp2_initial_locked': saved_trade.get('tp2_initial_locked', False), 'peak_profit_pips': saved_trade.get('peak_profit_pips', 0.0), 'time_lock_done': saved_trade.get('time_lock_done', False), 'regime_adverse_handled': saved_trade.get('regime_adverse_handled', False), 'setup_type': saved_trade.get('setup_type'), 'risk_percent': saved_trade.get('risk_percent'), 'initial_risk': saved_trade.get('initial_risk'), 'opened_at': saved_trade.get('opened_at'), 'atr': saved_trade.get('atr'), 'units': saved_trade.get('units'), 'quality_score': saved_trade.get('score'), 'last_peak_time': saved_trade.get('last_peak_time'), 'news_partial_done': saved_trade.get('news_partial_done', False), 'news_partial_close': saved_trade.get('news_partial_close', False), 'half_size': saved_trade.get('half_size', False), 'early_secure_done': saved_trade.get('early_secure_done', False), 'early_widen_done': saved_trade.get('early_widen_done', False), 'phase': saved_trade.get('phase', 0)}
         except Exception as e:
             print(f'Could not read status.json: {e}')
     try:
@@ -873,7 +872,7 @@ def cancel_tp1_order():
         except:
             pass
         active_trade['tp1_order_id'] = None
-        active_trade['tp1_hit'] = True
+        # NEVER set tp1_hit here: cancelling the TP1 Limit (News partial, Regime, Time-lock, full close) is NOT a real TP1 fill. tp1_hit is set ONLY when OANDA reports the TP1 order FILLED.
 
 def close_partial_position(units_to_close, expected_remaining=None):
     cancel_tp1_order()
@@ -959,7 +958,7 @@ def update_trade_sl_tp(trade_id, sl_price=None, tp_price=None):
     return True
 
 def move_sl_to_be():
-    """v2 Early Secure: fixed SL -> BE + 2 pips. Never tight trailing."""
+    """Early Secure: fixed SL -> BE + 2 pips. Never tight trailing."""
     global active_trade
     if active_trade is None:
         return False
@@ -1085,7 +1084,7 @@ def manage_active_trade():
         try:
             o_check = retry_api_call(ctx.order.get, ACCOUNT_ID, tp1_order_id)
             state = getattr(o_check.body['order'], 'state', 'PENDING')
-            if state in ('FILLED', 'CANCELLED', 'TRIGGERED'):
+            if state in ('FILLED', 'TRIGGERED'):
                 active_trade['tp1_hit'] = True
                 active_trade['phase'] = 3
                 live_log(f"🎯 TP1 reached {active_trade['pair']} — Entering Phase 3 (Runner)", force=True)
@@ -1156,7 +1155,7 @@ def manage_active_trade():
         if not active_trade.get('early_widen_done', False) and init_risk > 0 and (profit_pips_now >= EARLY_WIDEN_R * init_risk / 0.0001):
             if set_trailing_atr(EARLY_WIDEN_ATR_MULT, allow_widen=True):
                 active_trade['early_widen_done'] = True
-                send_telegram_message(f'📈 <b>Early Widen</b> · {pair} {direction.upper()}\nProfit {profit_pips_now:+.1f} pips (1,0R) — Trailing widened to {EARLY_WIDEN_ATR_MULT}x ATR (Phase 3)')
+                send_telegram_message(f'📈 <b>Early Widen</b> · {pair} {direction.upper()}\nProfit {profit_pips_now:+.1f} pips (1.0R) — Trailing widened to {EARLY_WIDEN_ATR_MULT}x ATR (Phase 3)')
                 save_status_json(force=True)
         if not active_trade.get('be_triggered', False) or True:
             last_peak_str = active_trade.get('last_peak_time')
@@ -1616,6 +1615,10 @@ def place_trade(instrument, entry_price_signal, sl_signal, tp_signal, direction,
     if sl_distance <= 0:
         return False
     new_units = calculate_units(balance, sl_distance, instrument, risk_percent)
+    _half_size_applied = False
+    if NEWS_DAY_HALF_SIZE:
+        new_units = max(1000, int(new_units * 0.5))
+        _half_size_applied = True
     if new_units < 1000:
         print(f'Volume too low ({new_units}) {instrument}')
         return False
@@ -1656,10 +1659,10 @@ def place_trade(instrument, entry_price_signal, sl_signal, tp_signal, direction,
     real_sl_distance = abs(actual_entry_price - new_sl)
     real_tp1_dist = real_sl_distance * TP1_R_MULT
     real_tp1_price = actual_entry_price + real_tp1_dist if direction == 'buy' else actual_entry_price - real_tp1_dist
-    active_trade = {'trade_id': trade.tradeID, 'tp1_order_id': tp1_order_id, 'pair': instrument, 'units': int(trade.units), 'initial_units': new_units, 'entry_price': actual_entry_price, 'sl': new_sl, 'tp1': real_tp1_price, 'tp2': new_tp, 'tp2_initial': new_tp, 'tp2_initial_locked': False, 'direction': direction, 'setup_type': setup_type, 'risk_percent': risk_percent, 'initial_risk': real_sl_distance, 'be_triggered': False, 'tp1_hit': False if tp1_order_id else True, 'tp2_widened': False, 'peak_profit_pips': 0.0, 'last_peak_time': datetime.now(tz).isoformat(), 'time_lock_done': False, 'regime_adverse_handled': False, 'checkpoint_sent': False, 'trailing_active': False, 'atr': atr_val, 'opened_at': datetime.now(tz).isoformat(), 'quality_score': quality_score, 'news_partial_done': False, 'early_secure_done': False, 'early_widen_done': False, 'phase': 0, 'stagnation_done': False}
+    active_trade = {'trade_id': trade.tradeID, 'tp1_order_id': tp1_order_id, 'pair': instrument, 'units': int(trade.units), 'initial_units': new_units, 'entry_price': actual_entry_price, 'sl': new_sl, 'tp1': real_tp1_price, 'tp2': new_tp, 'tp2_initial': new_tp, 'tp2_initial_locked': False, 'direction': direction, 'setup_type': setup_type, 'risk_percent': risk_percent, 'initial_risk': real_sl_distance, 'be_triggered': False, 'tp1_hit': False if tp1_order_id else True, 'tp2_widened': False, 'peak_profit_pips': 0.0, 'last_peak_time': datetime.now(tz).isoformat(), 'time_lock_done': False, 'regime_adverse_handled': False, 'checkpoint_sent': False, 'trailing_active': False, 'atr': atr_val, 'opened_at': datetime.now(tz).isoformat(), 'quality_score': quality_score, 'news_partial_done': False, 'news_partial_close': False, 'half_size': _half_size_applied, 'early_secure_done': False, 'early_widen_done': False, 'phase': 0, 'stagnation_done': False}
     trades_today += 1
     rr_ratio = SETUP_RR.get(setup_type.lower().replace(' ', '').replace('/', ''), 2.0)
-    msg = f"<b>✅ Trade opened ({trades_today}/{MAX_TRADES_PER_DAY})</b>\nPair: {instrument}\nSetup: {setup_type.upper()}\nType: {('Buy' if direction == 'buy' else 'Sell')}\nRisk: {risk_percent:.2f}%\nVolume: {new_units} units\nEntry: {actual_entry_price:.5f} (slippage {slippage_pips:.1f}p)\nSL initial (FIXE): {new_sl:.5f} — Phase 0, trailing OFF\nTP1: {real_tp1_price:.5f} ({TP1_R_MULT:.2f}R, {TP_PARTIAL_RATIO:.0%}) - Server-side Limit\nTP2: {new_tp:.5f} ({rr_ratio:.1f}R)\nR/R: 1:{rr_ratio:.1f}\nQuality: {quality_score:.1f}\nTime: {datetime.now(tz).strftime('%Y-%m-%d %H:%M:%S')}\n🛡 : Early Secure -> SL (BE+2p at 0.5R) · ATR Trailing only after TP1"
+    msg = f"<b>✅ Trade opened ({trades_today}/{MAX_TRADES_PER_DAY})</b>\nPair: {instrument}\nSetup: {setup_type.upper()}\nType: {('Buy' if direction == 'buy' else 'Sell')}\nRisk: {risk_percent:.2f}%\nVolume: {new_units} units\nEntry: {actual_entry_price:.5f} (slippage {slippage_pips:.1f}p)\nInitial SL (Fixed): {new_sl:.5f} — Phase 0, trailing OFF\nTP1: {real_tp1_price:.5f} ({TP1_R_MULT:.2f}R, {TP_PARTIAL_RATIO:.0%}) - Server-side Limit\nTP2: {new_tp:.5f} ({rr_ratio:.1f}R)\nR/R: 1:{rr_ratio:.1f}\nQuality: {quality_score:.1f}\nTime: {datetime.now(tz).strftime('%Y-%m-%d %H:%M:%S')}\n🛡 Early Secure -> SL (BE+2p at 0.5R) · ATR Trailing after TP1 only"
     send_telegram_message(msg)
     live_log(f'✅ Trade opened {instrument} {direction} {setup_type} @ {actual_entry_price:.5f} SL {new_sl:.5f} TP1 {real_tp1_price:.5f} TP2 {new_tp:.5f} — Phase 0', force=True)
     log_trade({'time': datetime.now(tz).isoformat(), 'pair': instrument, 'setup': setup_type, 'entry': actual_entry_price, 'sl': new_sl, 'tp1': real_tp1_price, 'tp2': new_tp, 'units': new_units, 'direction': direction, 'risk_percent': risk_percent, 'status': 'OPEN'})
@@ -1774,7 +1777,7 @@ def _handle_sigterm(signum, frame):
 signal.signal(signal.SIGTERM, _handle_sigterm)
 
 def main():
-    global trades_today, last_trade_date, last_close_time, active_trade, closed_trades_today, rejected_signals, late_shutdown_required, trade_opened_during_window_today, daily_start_balance, BOT_STATUS, orb_range, _last_news_block_message_sent, _last_reminder_minute, _critical_alert_sent
+    global trades_today, last_trade_date, last_close_time, active_trade, closed_trades_today, rejected_signals, late_shutdown_required, trade_opened_during_window_today, daily_start_balance, BOT_STATUS, orb_range, _last_news_block_message_sent, _last_reminder_minute, _critical_alert_sent, NEWS_DAY_HALF_SIZE, NEWS_DAY_HALF_SIZE_INFO
     load_closed_trades_from_file()
     load_rejected_from_file()
     recover_recent_closed_trades(hours=24)
@@ -1807,6 +1810,15 @@ def main():
     late_shutdown_required = active_trade is not None and trade_opened_during_window_today and (datetime.now(tz).hour >= TRADING_HOURS_END)
     events = get_high_impact_news()
     now = datetime.now(tz)
+    NEWS_DAY_HALF_SIZE = False
+    NEWS_DAY_HALF_SIZE_INFO = ''
+    for _ev in events:
+        if _ev['time'].date() == now.date():
+            _ev_hm = _ev['time'].hour * 60 + _ev['time'].minute
+            if 7 * 60 <= _ev_hm <= 16 * 60 + 55:
+                NEWS_DAY_HALF_SIZE = True
+                NEWS_DAY_HALF_SIZE_INFO = f"{_ev['title']} at {_ev['time'].strftime('%H:%M')}"
+                break
     future_events = [e for e in events if e['time'] > now and e['time'] - now < timedelta(hours=NEWS_CHECK_FUTURE_HOURS)]
     if _after_1205 and active_trade is not None:
         at = active_trade
@@ -1840,7 +1852,7 @@ def main():
         lines.append('Relay runs until 17:05 ET (forced close at 16:55).')
         start_msg = '\n'.join(lines)
     else:
-        start_msg = f'🟢 Forex Sniper 7-12 Multi-Setup started – max {MAX_TRADES_PER_DAY} trades/day, buffer {MIN_MINUTES_BETWEEN_TRADES}min. State machine: Phase 0 (Fixed SL) -> Phase 1 (BE+2 at 0.5R) -> Phase 2 TP1 (Partial Closure) -> Phase 3 (ATR Trailing). ({trades_today} already taken)\n📅 News pause: {NEWS_BLOCK_PRE_MINUTES} min pre + {NEWS_BLOCK_POST_MINUTES} min post.'
+        start_msg = (f'📉 Half-Size Day (50%): news detected {NEWS_DAY_HALF_SIZE_INFO} (07:00-16:55). All trades today at 50% size.\n' if NEWS_DAY_HALF_SIZE else '') + f'🟢 Forex Sniper 7-12 Multi-Setup v2 started – max {MAX_TRADES_PER_DAY} trades/day, buffer {MIN_MINUTES_BETWEEN_TRADES}min. State machine: Phase 0 (Fixed SL)-> Phase 1 (BE+2 at 0.5R) -> Phase 2 TP1 (Partial closure) -> Phase 3 (ATR Trailing). ({trades_today} already taken)\n📅 News pause: {NEWS_BLOCK_PRE_MINUTES} min pre + {NEWS_BLOCK_POST_MINUTES} min post.'
         if future_events:
             start_msg += '\n\n📰 <b>Upcoming high-impact news:</b>\n'
             for e in future_events:
@@ -1872,7 +1884,7 @@ def main():
                     check_closed_trade()
                 else:
                     pnl_oanda = fetch_position_pnl_from_oanda(pair)
-                    pnl_str = f'{pnl_oanda:.2f} CAD' if pnl_oanda is not None else 'indisponible'
+                    pnl_str = f'{pnl_oanda:.2f} CAD' if pnl_oanda is not None else 'unavailable'
                     print(f'16:{now.minute:02d} – Forced close. P&L: {pnl_str}')
                     if close_full_position_market():
                         send_telegram_message(f'🔒 <b>Trade closed (forced, end of session)</b>\nPair: {pair}\nP&L: {pnl_str}\nReason: End of session')
@@ -1896,19 +1908,22 @@ def main():
                 break
             (blocked, news_event, time_until, blocked_pairs) = check_and_block_news(now)
             if blocked:
-                if active_trade is None and (not _last_news_block_message_sent):
+                if not _last_news_block_message_sent:
+                    _pause_start = news_event['time'] - timedelta(minutes=NEWS_BLOCK_PRE_MINUTES)
+                    _pause_end = news_event['time'] + timedelta(minutes=NEWS_BLOCK_POST_MINUTES)
                     if set(blocked_pairs) == set(PAIRS):
-                        msg = f"📅 <b>High-impact news:</b> {news_event['title']} at {news_event['time'].strftime('%H:%M')} – Trading paused on <b>ALL pairs</b> until {datetime.fromtimestamp(get_pause_until(), tz).strftime('%H:%M')}."
+                        msg = f"📅 High-impact news: {news_event['title']} at {news_event['time'].strftime('%H:%M')} - Trading paused on ALL pairs from {_pause_start.strftime('%H:%M')} to {_pause_end.strftime('%H:%M')}."
                     else:
-                        active = [p for p in PAIRS if p not in blocked_pairs]
-                        msg = f"📅 <b>High-impact news:</b> {news_event['title']} at {news_event['time'].strftime('%H:%M')} – Paused on {', '.join(blocked_pairs)} until {datetime.fromtimestamp(get_pause_until(), tz).strftime('%H:%M')}.\n(Active: {', '.join(active)})"
+                        _act = [x for x in PAIRS if x not in blocked_pairs]
+                        msg = f"📅 High-impact news: {news_event['title']} at {news_event['time'].strftime('%H:%M')} - Trading paused on {', '.join(blocked_pairs)} from {_pause_start.strftime('%H:%M')} to {_pause_end.strftime('%H:%M')}. (Active: {', '.join(_act)})"
                     send_telegram_message(msg)
                     _last_news_block_message_sent = True
-                    live_log(msg)
+                    live_log(msg, force=True)
                 can_trade = False
             elif _last_news_block_message_sent:
-                send_telegram_message('🟢 News pause lifted – trading resumed')
+                send_telegram_message('🟢News pause lifted – Trading resumed.')
                 _last_news_block_message_sent = False
+                live_log('🟢News pause lifted – Trading resumed.', force=True)
             try:
                 today = now.date()
                 if last_trade_date != today:
@@ -1979,9 +1994,10 @@ def main():
                                 else:
                                     send_telegram_message(f'⚠ Closing failed {pair} before news. Please monitor.')
                             elif close_partial_position(partial_units, expected_remaining=remaining):
+                                active_trade['news_partial_close'] = True
                                 active_trade['units'] = remaining if active_trade['direction'] == 'buy' else -remaining
                                 sl_state = 'trailing (BE)' if active_trade.get('be_triggered') else 'initial SL'
-                                send_telegram_message(f'📰 <b>Imminent News – Partial close</b>\nPair: {pair}\nSetup: {setup_type.upper()} ({setup_label})\nNews: {news_title} at {news_time}\nClosed: {int(close_pct * 100)}% ({partial_units} units)\nRunner: {remaining} units ({sl_state} intact)\nP&L: {pnl_cad:+.2f} CAD')
+                                send_telegram_message(f'📰 <b>Imminent News – Partial close (NOT TP1)</b>\nPair: {pair}\nSetup: {setup_type.upper()} ({setup_label})\nNews: {news_title} at {news_time}\nClosed: {int(close_pct * 100)}% ({partial_units} units)\nRunner: {remaining} units ({sl_state} intact)\nP&L: {pnl_cad:+.2f} CAD')
                                 live_log(f'📰 Imminent news - Partial {int(close_pct * 100)}% {pair}')
                                 print(f'Imminent news - {pair}: {int(close_pct * 100)}% closed.')
                             else:
@@ -2036,13 +2052,29 @@ def main():
                             continue
                         (signal, price, sl, tp, sl_pips, direction, setup_type, risk_pct, score, reason) = check_signal(df, pair)
                         if signal:
-                            last_trade = None
-                            for t in reversed(closed_trades_today):
-                                if t.get('pair') == pair:
-                                    last_trade = t
+                            # RULE 5a — scan ALL closed trades today (not only the last one for this pair)
+                            _already_taken = None
+                            for t in closed_trades_today:
+                                if t.get('pair') == pair and t.get('setup', '').lower() == setup_type.lower() and t.get('type', '').lower() == direction.lower():
+                                    _already_taken = t
                                     break
-                            if last_trade and last_trade.get('setup', '').lower() == setup_type.lower():
-                                msg = f'Single Setup Rule: Already took a {setup_type} trade on {pair} today. Setup rejected.'
+                            last_trade = _already_taken
+                            if last_trade:
+                                msg = f'Single Setup Rule: Already took a {setup_type} {direction.upper()} trade on {pair} today. Setup rejected.'
+                                print(f' -> REJECTED {pair}: {msg}')
+                                rejected_signals.append({'time': now.strftime('%H:%M:%S'), 'pair': pair, 'buy_reason': msg if direction == 'buy' else '', 'sell_reason': msg if direction == 'sell' else '', 'spread': spread})
+                                save_rejected_to_file()
+                                continue
+                            # RULE 5b — scan ALL closed trades today: ANY loss in same pair + same direction blocks a new trade in that direction.
+                            # Example: BUY win (+0.8R) then BUY loss (-1R) then BUY signal -> REJECTED (the loss is in the list),
+                            # even though the very last trade for the pair might have been a SELL win.
+                            _any_same_dir_loss = None
+                            for _t in closed_trades_today:
+                                if _t.get('pair') == pair and _t.get('type', '').lower() == direction.lower() and float(_t.get('pnl', 0)) < 0:
+                                    _any_same_dir_loss = _t
+                                    break
+                            if _any_same_dir_loss is not None:
+                                msg = f"Same-Direction-After-Loss Rule: A previous {direction.upper()} on {pair} today was a loss ({float(_any_same_dir_loss.get('pnl', 0)):.2f} CAD at {_any_same_dir_loss.get('time', '?')}). New {direction.upper()} {setup_type} rejected — ALL trades today checked, not only the last one."
                                 print(f' -> REJECTED {pair}: {msg}')
                                 rejected_signals.append({'time': now.strftime('%H:%M:%S'), 'pair': pair, 'buy_reason': msg if direction == 'buy' else '', 'sell_reason': msg if direction == 'sell' else '', 'spread': spread})
                                 save_rejected_to_file()
