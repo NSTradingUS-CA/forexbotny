@@ -1,13 +1,7 @@
 # Live Log — Forex Sniper
 
-Session du 2026-11-25 — MAJ 09:31:01 ET — Bot: running
+Session du 2026-11-25 — MAJ 09:32:04 ET — Bot: running
 
-- `08:24:05` 💓 Heartbeat 08:24:04 - Phase 0 — Trades 1/3
-- `08:24:15` 💓 Heartbeat 08:24:15 - Phase 0 — Trades 1/3
-- `08:24:26` 💓 Heartbeat 08:24:26 - Phase 0 — Trades 1/3
-- `08:24:36` 💓 Heartbeat 08:24:36 - Phase 0 — Trades 1/3
-- `08:24:47` 💓 Heartbeat 08:24:46 - Phase 0 — Trades 1/3
-- `08:24:57` 💓 Heartbeat 08:24:57 - Phase 0 — Trades 1/3
 - `08:25:08` 📰 Imminent news - Partial 33% GBP_USD
 - `08:25:08` 💓 Heartbeat 08:25:07 - Phase 0 — Trades 1/3
 - `08:25:18` 🔄 Trailing ATR -> 20.0p (x1.5) sur GBP_USD
@@ -402,3 +396,9 @@ Session du 2026-11-25 — MAJ 09:31:01 ET — Bot: running
 - `09:30:40` 💓 Heartbeat 09:30:40 - Phase no trade — Trades 1/3
 - `09:30:50` 💓 Heartbeat 09:30:50 - Phase no trade — Trades 1/3
 - `09:31:01` 💓 Heartbeat 09:31:00 - Phase no trade — Trades 1/3
+- `09:31:12` 💓 Heartbeat 09:31:12 - Phase no trade — Trades 1/3
+- `09:31:24` 💓 Heartbeat 09:31:22 - Phase no trade — Trades 1/3
+- `09:31:34` 💓 Heartbeat 09:31:34 - Phase no trade — Trades 1/3
+- `09:31:44` 💓 Heartbeat 09:31:44 - Phase no trade — Trades 1/3
+- `09:31:54` 💓 Heartbeat 09:31:54 - Phase no trade — Trades 1/3
+- `09:32:04` 💓 Heartbeat 09:32:04 - Phase no trade — Trades 1/3
