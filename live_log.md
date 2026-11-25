@@ -1,21 +1,9 @@
 # Live Log — Forex Sniper
 
-Session du 2026-11-25 — MAJ 07:37:09 ET — Bot: running
+Session du 2026-11-25 — MAJ 07:38:12 ET — Bot: running
 
 **Trade actif :** GBP_USD sell @ 1.30594 — Phase 0 — Peak 1.3p
 
-- `06:30:39` 🟢 Session start v2 — 🟢 Forex Sniper 7-12 Multi-Setup v2 started – max 3 trades/day, buffer 15min. State machine: Phase 0 fixed SL -> Phase 1 BE+2 at 0.5R -> Phase 2 TP1 (partial closure) -> Phase 3 ATR trailing. (0 already taken)
-📅 News pause: 7 min pre + 10 min post.
-
-📰 <b>Upcoming high-impact news:</b>
-• GDP at 08:30 (Wed 25 Nov)
-
-- `06:30:44` 💾 Periodic backup - trades + rejected
-- `06:30:44` 💓 Heartbeat 06:30:41 - Phase no trade — Trades 0/3
-- `06:30:54` 💓 Heartbeat 06:30:54 - Phase no trade — Trades 0/3
-- `06:31:04` 💓 Heartbeat 06:31:04 - Phase no trade — Trades 0/3
-- `06:31:14` 💓 Heartbeat 06:31:14 - Phase no trade — Trades 0/3
-- `06:31:24` 💓 Heartbeat 06:31:24 - Phase no trade — Trades 0/3
 - `06:31:34` 💓 Heartbeat 06:31:34 - Phase no trade — Trades 0/3
 - `06:31:45` 💓 Heartbeat 06:31:44 - Phase no trade — Trades 0/3
 - `06:31:56` 💓 Heartbeat 06:31:55 - Phase no trade — Trades 0/3
@@ -409,3 +397,10 @@ Session du 2026-11-25 — MAJ 07:37:09 ET — Bot: running
 - `07:36:48` 💓 Heartbeat 07:36:47 - Phase 0 — Trades 1/3
 - `07:36:58` 💓 Heartbeat 07:36:58 - Phase 0 — Trades 1/3
 - `07:37:09` 💾 Periodic backup - trades + rejected
+- `07:37:10` 💓 Heartbeat 07:37:08 - Phase 0 — Trades 1/3
+- `07:37:21` 💓 Heartbeat 07:37:20 - Phase 0 — Trades 1/3
+- `07:37:31` 💓 Heartbeat 07:37:31 - Phase 0 — Trades 1/3
+- `07:37:42` 💓 Heartbeat 07:37:41 - Phase 0 — Trades 1/3
+- `07:37:52` 💓 Heartbeat 07:37:52 - Phase 0 — Trades 1/3
+- `07:38:02` 💓 Heartbeat 07:38:02 - Phase 0 — Trades 1/3
+- `07:38:12` 💓 Heartbeat 07:38:12 - Phase 0 — Trades 1/3
