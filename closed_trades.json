@@ -12,6 +12,19 @@
       "entry": 1.30594,
       "exit": 1.30727,
       "score": 67.5
+    },
+    {
+      "pair": "GBP_USD",
+      "type": "Sell",
+      "setup": "Pin Bar",
+      "pnl": -749.11,
+      "pnl_usd": -526.62,
+      "time": "11:41:14",
+      "r_multiple": -1.0,
+      "units": 176139,
+      "entry": 1.30565,
+      "exit": 1.30861,
+      "score": 60.0
     }
   ],
   "last_cleanup": "2026-11-25"
