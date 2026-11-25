@@ -1,5 +1,5 @@
 {
-  "time": "2026-11-25 08:22:59",
+  "time": "2026-11-25 08:28:06",
   "bot_status": "running",
   "session": {
     "trades_today": 1,
@@ -11,22 +11,22 @@
     "pair": "GBP_USD",
     "type": "Sell",
     "entry": 1.30594,
-    "sl": 1.30851,
+    "sl": 1.30902,
     "tp1": 1.3040157142857143,
     "tp2": 1.3002954285714288,
     "tp2_initial": 1.3002954285714288,
     "tp2_initial_locked": false,
     "trailing_stop": "ATR apres TP1 seulement (v2)",
-    "phase": 0,
-    "current_price": 1.30667,
-    "unrealized_pnl_usd": -108.04,
-    "unrealized_pnl_cad": -153.95,
-    "usd_cad_rate": 1.4249,
-    "distance_to_sl_pips": 18.4,
-    "distance_to_tp2_pips": 63.7,
+    "phase": 3,
+    "current_price": 1.30697,
+    "unrealized_pnl_usd": -102.14,
+    "unrealized_pnl_cad": -145.49,
+    "usd_cad_rate": 1.4244,
+    "distance_to_sl_pips": 20.5,
+    "distance_to_tp2_pips": 66.7,
     "atr": 0.0012828571428571411,
     "be_triggered": false,
-    "tp1_hit": false,
+    "tp1_hit": true,
     "tp2_widened": false,
     "peak_profit_pips": 1.7000000000000348,
     "time_lock_done": false,
@@ -35,9 +35,9 @@
     "risk_percent": 0.4,
     "initial_risk": 0.0025657142857142823,
     "opened_at": "2026-11-25T07:00:09.214941-05:00",
-    "units": -148006,
+    "units": -99165,
     "score": 67.5,
-    "news_partial_done": false,
+    "news_partial_done": true,
     "early_secure_done": false,
     "early_widen_done": false
   },
@@ -49,6 +49,10 @@
   "strategy": "H1 Multi-Setup \u2014 State machine v2 (stop fixe -> BE+2 -> TP1 -> trailing ATR)",
   "max_risk_per_trade_percent": 0.65,
   "daily_loss_limit_percent": 2.0,
-  "blocked_pairs": [],
-  "active_pairs": []
+  "blocked_pairs": [
+    "GBP_USD"
+  ],
+  "active_pairs": [
+    "EUR_USD"
+  ]
 }
