@@ -5,10 +5,14 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 import pandas as pd
 
-st.set_page_config(page_title="Forex Sniper 7-12", layout="wide")
+st.set_page_config(
+    page_title="Forex Sniper 7-12",
+    layout="wide"
+)
 
 # ---------- CSS global ----------
-st.markdown("""
+st.markdown(
+    """
 <style>
     div.stButton > button {
         background-color: #FF9100 !important;
@@ -64,6 +68,16 @@ st.markdown("""
         margin: 0.5rem 0;
         border-radius: 5px;
     }
+    .half-size-banner {
+        background-color: #6f42c1;
+        color: white;
+        text-align: center;
+        font-weight: bold;
+        font-size: 1rem;
+        padding: 0.6rem;
+        margin: 0.5rem 0;
+        border-radius: 5px;
+    }
     .footer {
         position: fixed;
         left: 0;
@@ -110,7 +124,6 @@ st.markdown("""
         margin-top: -0.5rem;
         margin-bottom: 0.5rem;
     }
-    /* Style pour le tableau HTML natif (évite pyarrow) */
     .perf-table {
         width: 100%;
         border-collapse: collapse;
@@ -129,16 +142,23 @@ st.markdown("""
         background-color: #1a1a1a;
     }
 </style>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True
+)
 
 # ---------- Authentification ----------
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 
 if not st.session_state.authenticated:
-    st.markdown("<h1 style='text-align: center; color: #00C853;'>🔐 Forex Sniper 7‑12 • Cockpit Access</h1>",
-                unsafe_allow_html=True)
-    pwd = st.text_input("Password", type="password")
+    st.markdown(
+        "<h1 style='text-align: center; color: #00C853;'>\u0001F510 Forex Sniper 7-12 \u2022 Cockpit Access</h1>",
+        unsafe_allow_html=True
+    )
+    pwd = st.text_input(
+        "Password",
+        type="password"
+    )
     if st.button("Sign in"):
         if pwd == st.secrets["DASHBOARD_PASSWORD"]:
             st.session_state.authenticated = True
@@ -150,39 +170,36 @@ if not st.session_state.authenticated:
 # ---------- Utilitaires ----------
 MONTREAL_TZ = ZoneInfo("America/Toronto")
 
+
 @st.cache_data(ttl=5)
 def fetch_json(filename):
     repo = st.secrets["GITHUB_REPOSITORY"]
     cache_buster = int(time.time())
     url = f"https://raw.githubusercontent.com/{repo}/main/{filename}?t={cache_buster}"
     try:
-        resp = requests.get(url, timeout=10)
+        resp = requests.get(
+            url,
+            timeout=10
+        )
         if resp.status_code == 200:
             return resp.json()
     except Exception:
         pass
     return None
 
-def fetch_status():
-    """
-    Récupère status.json et neutralise les données périmées.
 
-    Si le fichier a été écrit un autre jour que celui d'aujourd'hui, le bot
-    n'a pas tourné aujourd'hui → on remet à zéro tous les compteurs du jour
-    et on marque le statut comme 'stopped' pour éviter d'afficher des valeurs
-    figées (ex. trades_today=2/3 un samedi alors que le bot est mort vendredi
-    à 17:05).
-    """
+def fetch_status():
     data = fetch_json("status.json")
     if not data:
         return None
-
     time_str = data.get("time", "")
     try:
-        status_date = datetime.strptime(time_str, "%Y-%m-%d %H:%M:%S").date()
+        status_date = datetime.strptime(
+            time_str,
+            "%Y-%m-%d %H:%M:%S"
+        ).date()
         today = datetime.now(MONTREAL_TZ).date()
         if status_date != today:
-            # status.json périmé → jour sans session
             data["_stale"] = True
             data["_stale_date"] = status_date.strftime("%a %d %b")
             if "session" in data:
@@ -193,10 +210,9 @@ def fetch_status():
             data["next_news_event"] = None
             data["bot_status"] = "stopped"
     except (ValueError, TypeError):
-        # Format de date inattendu → on laisse passer tel quel
         pass
-
     return data
+
 
 def fetch_pair_indicators():
     data = fetch_json("pair_indicators.json")
@@ -204,21 +220,28 @@ def fetch_pair_indicators():
         return data
     return {}
 
+
 def fetch_closed_trades():
     data = fetch_json("closed_trades.json")
     if data:
         today_str = datetime.now(MONTREAL_TZ).strftime("%Y-%m-%d")
-        if data.get("last_cleanup") == today_str or data.get("last_cleanup") is None:
+        if data.get("last_cleanup") == today_str:
+            return data.get("trades", [])
+        if data.get("last_cleanup") is None:
             return data.get("trades", [])
     return []
+
 
 def fetch_rejected_signals():
     data = fetch_json("rejected_signals.json")
     if data:
         today_str = datetime.now(MONTREAL_TZ).strftime("%Y-%m-%d")
-        if data.get("last_cleanup") == today_str or data.get("last_cleanup") is None:
+        if data.get("last_cleanup") == today_str:
+            return data.get("signals", [])
+        if data.get("last_cleanup") is None:
             return data.get("signals", [])
     return []
+
 
 def fetch_pause_state():
     data = fetch_json("pause_state.json")
@@ -226,18 +249,25 @@ def fetch_pause_state():
         return data.get("pause_until", 0)
     return 0
 
+
 def check_bot_running():
-    """Fallback : vérifie via l'API GitHub si un workflow est en cours."""
     token = st.secrets.get("GH_PAT")
     repo = st.secrets["GITHUB_REPOSITORY"]
-    headers = {"Accept": "application/vnd.github.v3+json"}
+    headers = {}
+    headers["Accept"] = "application/vnd.github.v3+json"
     if token:
         headers["Authorization"] = f"token {token}"
     url = f"https://api.github.com/repos/{repo}/actions/runs"
     for status in ("in_progress", "queued"):
-        params = {"status": status}
+        params = {}
+        params["status"] = status
         try:
-            resp = requests.get(url, headers=headers, params=params, timeout=10)
+            resp = requests.get(
+                url,
+                headers=headers,
+                params=params,
+                timeout=10
+            )
             if resp.status_code == 200:
                 runs = resp.json()
                 if runs.get("workflow_runs"):
@@ -246,11 +276,13 @@ def check_bot_running():
             pass
     return False
 
+
 def safe_float(value, default=0.0):
     try:
         return float(value)
     except (ValueError, TypeError):
         return default
+
 
 def fmt_num(value, decimals=5):
     try:
@@ -258,34 +290,57 @@ def fmt_num(value, decimals=5):
     except (ValueError, TypeError):
         return "--"
 
+
 def fmt_optional(value, decimals=2, suffix=""):
-    if value is None or value == "":
+    if value is None:
+        return "--"
+    if value == "":
         return "--"
     try:
         return f"{float(value):.{decimals}f}{suffix}"
     except (ValueError, TypeError):
         return str(value)
 
+
 def display_setup(item):
-    return str(item.get("setup", item.get("setup_type", "--"))).upper()
+    setup = item.get("setup", item.get("setup_type", "--"))
+    return str(setup).upper()
+
 
 def display_score(item):
-    # Lecture du score depuis 'score' (présent dans active_trade et closed_trades)
     score = item.get("score", item.get("setup_score"))
-    return fmt_optional(score, 1) if score is not None else "--"
+    if score is not None:
+        return fmt_optional(score, 1)
+    return "--"
+
 
 def display_r(item):
-    r_value = item.get("r_multiple", item.get("r", item.get("realized_r", item.get("current_r"))))
-    if r_value is None or r_value == "":
+    r_value = item.get("r_multiple")
+    if r_value is None:
+        r_value = item.get("r")
+    if r_value is None:
+        r_value = item.get("realized_r")
+    if r_value is None:
+        r_value = item.get("current_r")
+    if r_value is None:
+        return "--"
+    if r_value == "":
         return "--"
     try:
         return f"{float(r_value):+.2f}R"
     except (ValueError, TypeError):
         return str(r_value)
 
+
 def display_risk(item):
-    risk = item.get("risk_pct", item.get("risk_percent", item.get("risk")))
-    if risk is None or risk == "":
+    risk = item.get("risk_pct")
+    if risk is None:
+        risk = item.get("risk_percent")
+    if risk is None:
+        risk = item.get("risk")
+    if risk is None:
+        return "--"
+    if risk == "":
         return "--"
     try:
         value = float(risk)
@@ -293,32 +348,69 @@ def display_risk(item):
     except (ValueError, TypeError):
         return str(risk)
 
-def display_trade_status(item):
-    status = item.get("trade_status", item.get("status", item.get("management_status")))
-    return str(status).upper() if status not in (None, "") else "--"
 
-def status_badge(condition, true_text="✅", false_text="❌"):
-    return true_text if condition else false_text
+def display_trade_status(item):
+    status = item.get("trade_status")
+    if status is None:
+        status = item.get("status")
+    if status is None:
+        status = item.get("management_status")
+    if status is None:
+        return "--"
+    if status == "":
+        return "--"
+    return str(status).upper()
+
+
+def tp1_display(active):
+    tp1_hit = bool(active.get("tp1_hit", False))
+    news_partial_close = bool(active.get("news_partial_close", False))
+    news_partial_done = bool(active.get("news_partial_done", False))
+    news_partial = False
+    if news_partial_close:
+        news_partial = True
+    if news_partial_done:
+        if not tp1_hit:
+            news_partial = True
+    if tp1_hit:
+        return "\u2705"
+    if news_partial:
+        return "\U0001F4F0 News partial (NOT TP1)"
+    return "\u274C"
+
+
+def status_badge(condition, true_text="\u2705", false_text="\u274C"):
+    if condition:
+        return true_text
+    return false_text
 
 # ---------- Logo + nom du bot ----------
 LOGO_URL = "https://raw.githubusercontent.com/NSTradingUS-CA/forexbotny/main/assets/logo.png"
-st.markdown(f"""
+st.markdown(
+    f"""
 <div style="display: flex; align-items: center; justify-content: center;">
     <img src="{LOGO_URL}" class="logo-rounded" style="width: 80px; height: auto; margin-right: 20px;">
-    <h2 style="color: #FF9100; margin: 0;">Forex Sniper 7‑12</h2>
+    <h2 style="color: #FF9100; margin: 0;">Forex Sniper 7-12</h2>
 </div>
 <p style="text-align: center; color: #AAAAAA; font-size: 1.1rem; font-style: italic; margin-top: 10px; margin-bottom: 10px;">
-    A fully autonomous trading bot that analyzes EURUSD and GBPUSD across London & New York sessions using a multi-criteria scoring engine. It takes up to 3 high-conviction trades per day.  
+    A fully autonomous trading bot that analyzes EURUSD and GBPUSD across London & New York sessions using a multi-criteria scoring engine. It takes up to 3 high-conviction trades per day.
     Comes with built-in risk management, crash-resilient performance, real-time dashboard, and instant Telegram alerts.
 </p>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True
+)
 
 # ---------- Bouton Sign out ----------
-col_empty, col_signout = st.columns([8, 1])
+col_empty = None
+col_signout = None
+cols_signout = st.columns([8, 1])
+col_empty = cols_signout[0]
+col_signout = cols_signout[1]
 with col_signout:
     if st.button("Sign out"):
         st.session_state.authenticated = False
         st.rerun()
+
 
 @st.fragment(run_every="10s")
 def render_dashboard():
@@ -329,138 +421,196 @@ def render_dashboard():
     pause_until = fetch_pause_state()
     now_mtl = datetime.now(MONTREAL_TZ)
     now_str = now_mtl.strftime('%H:%M:%S')
-
     if not data:
-        st.error("Status unavailable – retrying in 10s")
+        st.error("Status unavailable - retrying in 10s")
         return
-
-    # ---------- Bannière de données périmées ----------
     if data.get("_stale"):
+        stale_date = data.get("_stale_date", "?")
+        stale_html = f'<div class="stale-banner">\u26a0 Last bot activity: {stale_date} - no session today, counters reset to zero.</div>'
         st.markdown(
-            f'<div class="stale-banner">⚠️ Last bot activity: {data.get("_stale_date", "?")} '
-            f'– no session today, counters reset to zero.</div>',
+            stale_html,
             unsafe_allow_html=True
         )
-
-    # ---------- Déterminer si le bot est en cours d'exécution ----------
     bot_status = data.get("bot_status")
     if bot_status == "stopped":
         bot_is_running = False
     else:
         bot_is_running = check_bot_running()
-
-    # ---------- Bannière de pause news ----------
+    if data.get("news_day_half_size"):
+        half_info = data.get("news_day_half_size_info", "news detected 07:00-16:55")
+        half_html = f'<div class="half-size-banner">\U0001F4C9 HALF-SIZE DAY (50%) - {half_info} - all trades today at 50% size</div>'
+        st.markdown(
+            half_html,
+            unsafe_allow_html=True
+        )
     if pause_until > now_mtl.timestamp():
-        resume_time = datetime.fromtimestamp(pause_until, MONTREAL_TZ).strftime('%H:%M')
+        resume_time = datetime.fromtimestamp(
+            pause_until,
+            MONTREAL_TZ
+        ).strftime('%H:%M')
         news_event = data.get("next_news_event", {})
         event_title = news_event.get("title", "")
         event_time = news_event.get("time", "")
         blocked_pairs = data.get("blocked_pairs", [])
         active_pairs = data.get("active_pairs", [])
-
-        if blocked_pairs and active_pairs:
-            blocked_str = ", ".join(blocked_pairs)
-            active_str = ", ".join(active_pairs)
-            banner_text = (
-                f"📅 {event_title} at {event_time} – "
-                f"Trading paused on {blocked_str} until {resume_time} "
-                f"(Active pairs: {active_str})"
-            )
-        elif blocked_pairs:
-            blocked_str = ", ".join(blocked_pairs)
-            banner_text = (
-                f"📅 {event_title} at {event_time} – "
-                f"Trading paused on {blocked_str} until {resume_time}"
-            )
+        if blocked_pairs:
+            if active_pairs:
+                blocked_str = ", ".join(blocked_pairs)
+                active_str = ", ".join(active_pairs)
+                banner_text = f"\U0001F4C5 {event_title} at {event_time} - Trading paused on {blocked_str} until {resume_time} (Active pairs: {active_str})"
+            else:
+                blocked_str = ", ".join(blocked_pairs)
+                banner_text = f"\U0001F4C5 {event_title} at {event_time} - Trading paused on {blocked_str} until {resume_time}"
         else:
-            banner_text = f"📅 High-impact news detected – Trading paused until {resume_time}"
-
+            banner_text = f"\U0001F4C5 High-impact news detected - Trading paused until {resume_time}"
+        banner_html = f'<div class="news-pause-banner">{banner_text}</div>'
         st.markdown(
-            f'<div class="news-pause-banner">{banner_text}</div>',
+            banner_html,
             unsafe_allow_html=True
         )
-
-    # ---------- Session ----------
-    st.markdown('<div class="session-metrics">', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="session-metrics">',
+        unsafe_allow_html=True
+    )
     sess = data.get("session", {})
-    col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
+    cols_session = st.columns([1, 1, 1, 1])
+    col1 = cols_session[0]
+    col2 = cols_session[1]
+    col3 = cols_session[2]
+    col4 = cols_session[3]
     trades = sess.get('trades_today', 0)
     max_tr = sess.get('max_trades', 3)
-
     col1.markdown("#### Trades")
-    col1.metric("Trades", f"{trades}/{max_tr}", label_visibility="collapsed")
-
+    col1.metric(
+        "Trades",
+        f"{trades}/{max_tr}",
+        label_visibility="collapsed"
+    )
     col2.markdown("#### Session")
-    col2.metric("Session", "07:00–12:00", label_visibility="collapsed")
-
+    col2.metric(
+        "Session",
+        "07:00-12:00",
+        label_visibility="collapsed"
+    )
     col3.markdown("#### Status")
-    col3.metric("Status", "🟢" if bot_is_running else "🔴", label_visibility="collapsed")
-
+    if bot_is_running:
+        status_icon = "\U0001F7E2"
+    else:
+        status_icon = "\U0001F534"
+    col3.metric(
+        "Status",
+        status_icon,
+        label_visibility="collapsed"
+    )
     col4.markdown("#### Time")
-    col4.metric("Time", now_str, label_visibility="collapsed")
-    st.markdown('</div>', unsafe_allow_html=True)
-
-    # ---------- Paires ----------
+    col4.metric(
+        "Time",
+        now_str,
+        label_visibility="collapsed"
+    )
+    st.markdown(
+        '</div>',
+        unsafe_allow_html=True
+    )
     st.markdown("---")
     cols = st.columns(2)
     for i, pair in enumerate(["EUR_USD", "GBP_USD"]):
         with cols[i]:
-            p = pair_data.get(pair, {})
+            pp = pair_data.get(pair, {})
             st.markdown(f"**{pair}**")
-
-            price = p.get('price')
-            st.metric("Price", f"{price:.5f}" if price is not None else "--")
-
-            spread_val = p.get('spread', '--')
-            spread_str = f"{safe_float(spread_val):.5f}" if spread_val != '--' else '--'
-            adx_str = fmt_num(p.get('adx'))
-            plus_di_str = fmt_num(p.get('plus_di'))
-            minus_di_str = fmt_num(p.get('minus_di'))
-            ema50 = p.get('ema50')
-            ema200 = p.get('ema200')
-            rsi_val = p.get('rsi')
-            atr_val = p.get('atr')
-
-            ema50_str = f"{ema50:.5f}" if ema50 is not None else "--"
-            ema200_str = f"{ema200:.5f}" if ema200 is not None else "--"
-            rsi_str = f"{rsi_val:.1f}" if rsi_val is not None else "--"
-            atr_str = f"{atr_val:.5f}" if atr_val is not None else "--"
-
-            line1 = (
-                f"<span class='orange-label'>Spread:</span> {spread_str} | "
-                f"<span class='orange-label'>ADX:</span> {adx_str} | "
-                f"<span class='orange-label'>+DI:</span> {plus_di_str} | "
-                f"<span class='orange-label'>-DI:</span> {minus_di_str}"
+            price = pp.get('price')
+            if price is not None:
+                price_str = f"{price:.5f}"
+            else:
+                price_str = "--"
+            st.metric(
+                "Price",
+                price_str
             )
-            line2 = (
-                f"<span class='orange-label'>EMA50:</span> {ema50_str} | "
-                f"<span class='orange-label'>EMA200:</span> {ema200_str} | "
-                f"<span class='orange-label'>RSI:</span> {rsi_str} | "
-                f"<span class='orange-label'>ATR:</span> {atr_str}"
+            spread_val = pp.get('spread', '--')
+            if spread_val != '--':
+                spread_str = f"{safe_float(spread_val):.5f}"
+            else:
+                spread_str = '--'
+            adx_str = fmt_num(pp.get('adx'))
+            plus_di_str = fmt_num(pp.get('plus_di'))
+            minus_di_str = fmt_num(pp.get('minus_di'))
+            ema50 = pp.get('ema50')
+            ema200 = pp.get('ema200')
+            rsi_val = pp.get('rsi')
+            atr_val = pp.get('atr')
+            if ema50 is not None:
+                ema50_str = f"{ema50:.5f}"
+            else:
+                ema50_str = "--"
+            if ema200 is not None:
+                ema200_str = f"{ema200:.5f}"
+            else:
+                ema200_str = "--"
+            if rsi_val is not None:
+                rsi_str = f"{rsi_val:.1f}"
+            else:
+                rsi_str = "--"
+            if atr_val is not None:
+                atr_str = f"{atr_val:.5f}"
+            else:
+                atr_str = "--"
+            line1 = f"<span class='orange-label'>Spread:</span> {spread_str} | "
+            line1 = line1 + f"<span class='orange-label'>ADX:</span> {adx_str} | "
+            line1 = line1 + f"<span class='orange-label'>+DI:</span> {plus_di_str} | "
+            line1 = line1 + f"<span class='orange-label'>-DI:</span> {minus_di_str}"
+            line2 = f"<span class='orange-label'>EMA50:</span> {ema50_str} | "
+            line2 = line2 + f"<span class='orange-label'>EMA200:</span> {ema200_str} | "
+            line2 = line2 + f"<span class='orange-label'>RSI:</span> {rsi_str} | "
+            line2 = line2 + f"<span class='orange-label'>ATR:</span> {atr_str}"
+            st.markdown(
+                f"<div class='indicators-line'>{line1}</div>",
+                unsafe_allow_html=True
             )
-
-            st.markdown(f"<div class='indicators-line'>{line1}</div>", unsafe_allow_html=True)
-            st.markdown(f"<div class='indicators-line'>{line2}</div>", unsafe_allow_html=True)
-
-            sig = p.get('last_signal')
+            st.markdown(
+                f"<div class='indicators-line'>{line2}</div>",
+                unsafe_allow_html=True
+            )
+            sig = pp.get('last_signal')
             if sig:
-                st.markdown(f"Signal: <span class='green'>{sig.upper()}</span>", unsafe_allow_html=True)
+                sig_upper = sig.upper()
+                st.markdown(
+                    f"Signal: <span class='green'>{sig_upper}</span>",
+                    unsafe_allow_html=True
+                )
 
     # ---------- Active Trade ----------
     active = data.get("active_trade")
     if active:
         st.markdown("---")
-        st.markdown("#### 🔥 Active Trade")
-        st.markdown('<div class="active-trade-metrics">', unsafe_allow_html=True)
-
-        # Métriques principales
-        c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Pair", active.get("pair", ""))
-        c2.metric("Type", active.get("type", ""))
-        c3.metric("Entry", f"{active.get('entry',0):.5f}")
-        c4.metric("Current", f"{active.get('current_price',0):.5f}")
-
-        # P&L : on utilise CAD si disponible, sinon USD
+        st.markdown("#### \U0001F525 Active Trade")
+        st.markdown(
+            '<div class="active-trade-metrics">',
+            unsafe_allow_html=True
+        )
+        cols_active = st.columns(4)
+        c1 = cols_active[0]
+        c2 = cols_active[1]
+        c3 = cols_active[2]
+        c4 = cols_active[3]
+        c1.metric(
+            "Pair",
+            active.get("pair", "")
+        )
+        c2.metric(
+            "Type",
+            active.get("type", "")
+        )
+        entry_val = active.get('entry', 0)
+        c3.metric(
+            "Entry",
+            f"{entry_val:.5f}"
+        )
+        current_val = active.get('current_price', 0)
+        c4.metric(
+            "Current",
+            f"{current_val:.5f}"
+        )
         pnl_cad = active.get('unrealized_pnl_cad')
         if pnl_cad is not None:
             pnl = pnl_cad
@@ -468,69 +618,111 @@ def render_dashboard():
         else:
             pnl = active.get('unrealized_pnl', 0)
             currency = "USD"
-
-        c1.metric("P&L", f"{pnl:.2f} {currency}", delta_color="normal" if pnl>=0 else "inverse")
-
+        if pnl >= 0:
+            delta_color = "normal"
+        else:
+            delta_color = "inverse"
+        c1.metric(
+            "P&L",
+            f"{pnl:.2f} {currency}",
+            delta_color=delta_color
+        )
         tp1_val = active.get('tp1')
         tp2_val = active.get('tp2')
         if tp1_val is not None:
-            c2.metric("TP1 (partial)", f"{tp1_val:.5f}")
+            c2.metric(
+                "TP1 (partial)",
+                f"{tp1_val:.5f}"
+            )
         if tp2_val is not None:
-            c3.metric("TP2 (final)", f"{tp2_val:.5f}")
-        c4.metric("SL", f"{active.get('sl',0):.5f} ({active.get('distance_to_sl_pips',0)} pips)")
-
-        # Informations de trailing
+            c3.metric(
+                "TP2 (final)",
+                f"{tp2_val:.5f}"
+            )
+        sl_val = active.get('sl', 0)
+        dist_sl = active.get('distance_to_sl_pips', 0)
+        c4.metric(
+            "SL",
+            f"{sl_val:.5f} ({dist_sl} pips)"
+        )
         trail_info = active.get('trailing_stop', '')
         atr_active = active.get('atr', None)
         if atr_active is not None:
             trail_info = f"{trail_info} (ATR: {atr_active:.5f})"
         if trail_info:
             st.caption(f"Trailing Stop: {trail_info}")
-
-        st.caption(f"Volume: {abs(active.get('units', 0))} units")
-
+        units_val = active.get('units', 0)
+        st.caption(f"Volume: {abs(units_val)} units")
+        if active.get('half_size'):
+            st.caption("\U0001F4C9 Half-size trade (50%) - news day 07:00-16:55")
+        if active.get('news_partial_close'):
+            st.caption("\U0001F4F0 News partial close already taken on this trade - TP1 NOT hit by that partial")
         setup = display_setup(active)
-        score = display_score(active)   # <--- utilise active.get("score")
+        score = display_score(active)
         risk = display_risk(active)
         current_r = display_r(active)
         management = display_trade_status(active)
-
         be_triggered = active.get('be_triggered', False)
-        tp1_hit = active.get('tp1_hit', False)
-        be_str = "✅" if be_triggered else "❌"
-        tp1_str = "✅" if tp1_hit else "❌"
-
+        tp1_str = tp1_display(active)
+        if be_triggered:
+            be_str = "\u2705"
+        else:
+            be_str = "\u274C"
+        info_line = f"<div class='indicators-line'>"
+        info_line = info_line + f"<span class='orange-label'>Setup:</span> {setup} | "
+        info_line = info_line + f"<span class='orange-label'>Score:</span> {score} | "
+        info_line = info_line + f"<span class='orange-label'>Risk:</span> {risk} | "
+        info_line = info_line + f"<span class='orange-label'>R:</span> {current_r} | "
+        info_line = info_line + f"<span class='orange-label'>Status:</span> {management} | "
+        info_line = info_line + f"<span class='orange-label'>BE:</span> {be_str} | "
+        info_line = info_line + f"<span class='orange-label'>TP1:</span> {tp1_str}"
+        info_line = info_line + f"</div>"
         st.markdown(
-            f"<div class='indicators-line'>"
-            f"<span class='orange-label'>Setup:</span> {setup} | "
-            f"<span class='orange-label'>Score:</span> {score} | "
-            f"<span class='orange-label'>Risk:</span> {risk} | "
-            f"<span class='orange-label'>R:</span> {current_r} | "
-            f"<span class='orange-label'>Status:</span> {management} | "
-            f"<span class='orange-label'>BE:</span> {be_str} | "
-            f"<span class='orange-label'>TP1:</span> {tp1_str}"
-            f"</div>",
+            info_line,
             unsafe_allow_html=True
         )
-        st.markdown('</div>', unsafe_allow_html=True)
-
+        st.markdown(
+            '</div>',
+            unsafe_allow_html=True
+        )
     # ---------- Historique + Rejets + Performance ----------
     st.markdown("---")
-    tab1, tab2, tab3 = st.tabs(["📜 Closed", "🚫 Rejected", "📊 Setups Performance"])
-
+    tabs = st.tabs(
+        [
+            "\U0001F4DC Closed",
+            "\U0001F6AB Rejected",
+            "\U0001F4CA Setups Performance"
+        ]
+    )
+    tab1 = tabs[0]
+    tab2 = tabs[1]
+    tab3 = tabs[2]
     # === ONGLET CLOSED ===
     with tab1:
         if closed_trades:
             for t in closed_trades[::-1]:
-                pnl = t.get('pnl', 0)        # déjà en CAD
-                color = "green" if pnl >= 0 else "red"
+                pnl = t.get('pnl', 0)
+                if pnl >= 0:
+                    color = "green"
+                else:
+                    color = "red"
+                pair_t = t.get('pair', '')
+                type_t = t.get('type', '')
+                setup_t = display_setup(t)
+                r_t = display_r(t)
+                score_t = display_score(t)
+                units_t = abs(t.get('units', 0))
+                time_t = t.get('time', '')
+                news_tag = ""
+                if t.get('news_partial_close'):
+                    news_tag = " | \U0001F4F0 News partial"
+                closed_line = f"<span class='{color}'>{pair_t} - Dir: {type_t} | Type: {setup_t} | R: {r_t} | Score: {score_t} | Vol: {units_t} units | PnL: {pnl:.2f} CAD ({time_t}){news_tag}</span>"
                 st.markdown(
-                    f"<span class='{color}'>{t.get('pair','')} — Dir: {t.get('type','')} | Type: {display_setup(t)} | R: {display_r(t)} | Score: {display_score(t)} | Vol: {abs(t.get('units', 0))} units | PnL: {pnl:.2f} CAD ({t.get('time','')})</span>",
+                    closed_line,
                     unsafe_allow_html=True
                 )
         else:
             st.write("No closed trades.")
-
     # === ONGLET REJECTED ===
     with tab2:
         if rejected:
@@ -539,19 +731,20 @@ def render_dashboard():
                 buy_reason = r.get('buy_reason', '')
                 sell_reason = r.get('sell_reason', '')
                 ct_diag = r.get('ct_diagnostic', '')
+                rejected_line = f"**{time_pair}** - \U0001F535 **BUY:** {buy_reason}    |    \U0001F534 **SELL:** {sell_reason}"
                 st.markdown(
-                    f"**{time_pair}** – 🔵 **BUY:** {buy_reason}    |    🔴 **SELL:** {sell_reason}",
+                    rejected_line,
                     unsafe_allow_html=True
                 )
                 if ct_diag:
+                    ct_html = f"<div class='ct-diagnostic'>\U0001F504 CT scan: {ct_diag}</div>"
                     st.markdown(
-                        f"<div class='ct-diagnostic'>🔄 CT scan: {ct_diag}</div>",
+                        ct_html,
                         unsafe_allow_html=True
                     )
                 st.markdown("---")
         else:
             st.write("No rejected setups.")
-
     # === ONGLET SETUPS PERFORMANCE ===
     with tab3:
         if not closed_trades:
@@ -559,98 +752,146 @@ def render_dashboard():
         else:
             df_trades = pd.DataFrame(closed_trades)
             df_trades['setup'] = df_trades['setup'].str.upper()
-            df_trades['r_multiple'] = pd.to_numeric(df_trades['r_multiple'], errors='coerce')
-
+            df_trades['r_multiple'] = pd.to_numeric(
+                df_trades['r_multiple'],
+                errors='coerce'
+            )
             if 'score' in df_trades.columns:
-                df_trades['score'] = pd.to_numeric(df_trades['score'], errors='coerce')
+                df_trades['score'] = pd.to_numeric(
+                    df_trades['score'],
+                    errors='coerce'
+                )
             else:
                 df_trades['score'] = pd.NA
-
-            df_trades['pnl'] = pd.to_numeric(df_trades['pnl'], errors='coerce')
-
+            df_trades['pnl'] = pd.to_numeric(
+                df_trades['pnl'],
+                errors='coerce'
+            )
             all_setups = df_trades['setup'].unique()
-            setup_groups = list(all_setups) + ["Global"]
+            setup_groups = list(all_setups)
+            setup_groups.append("Global")
 
             def compute_metrics(df):
                 if df.empty:
-                    return {
-                        'count': 0,
-                        'win_rate': 0.0,
-                        'avg_r': 0.0,
-                        'expectancy': 0.0,
-                        'profit_factor': 0.0,
-                        'max_drawdown': 0.0,
-                        'avg_gain': 0.0,
-                        'avg_loss': 0.0
-                    }
+                    result = {}
+                    result['count'] = 0
+                    result['win_rate'] = 0.0
+                    result['avg_r'] = 0.0
+                    result['expectancy'] = 0.0
+                    result['profit_factor'] = 0.0
+                    result['max_drawdown'] = 0.0
+                    result['avg_gain'] = 0.0
+                    result['avg_loss'] = 0.0
+                    return result
                 count = len(df)
                 wins = df[df['pnl'] > 0]
                 losses = df[df['pnl'] <= 0]
-                win_rate = len(wins) / count * 100 if count > 0 else 0.0
-                avg_r = df['r_multiple'].mean() if not df['r_multiple'].isna().all() else 0.0
-                avg_win_r = wins['r_multiple'].mean() if not wins.empty and not wins['r_multiple'].isna().all() else 0.0
-                avg_loss_r = losses['r_multiple'].abs().mean() if not losses.empty and not losses['r_multiple'].isna().all() else 0.0
-                expectancy = (win_rate/100 * avg_win_r) - ((100-win_rate)/100 * avg_loss_r) if count > 0 else 0.0
-                sum_gain_r = wins['r_multiple'].sum() if not wins.empty else 0.0
-                sum_loss_r = losses['r_multiple'].abs().sum() if not losses.empty else 0.0
-                profit_factor = sum_gain_r / sum_loss_r if sum_loss_r != 0 else 0.0
+                if count > 0:
+                    win_rate = len(wins) / count * 100
+                else:
+                    win_rate = 0.0
+                if not df['r_multiple'].isna().all():
+                    avg_r = df['r_multiple'].mean()
+                else:
+                    avg_r = 0.0
+                if not wins.empty:
+                    if not wins['r_multiple'].isna().all():
+                        avg_win_r = wins['r_multiple'].mean()
+                    else:
+                        avg_win_r = 0.0
+                else:
+                    avg_win_r = 0.0
+                if not losses.empty:
+                    if not losses['r_multiple'].isna().all():
+                        avg_loss_r = losses['r_multiple'].abs().mean()
+                    else:
+                        avg_loss_r = 0.0
+                else:
+                    avg_loss_r = 0.0
+                if count > 0:
+                    expectancy = (win_rate / 100 * avg_win_r) - ((100 - win_rate) / 100 * avg_loss_r)
+                else:
+                    expectancy = 0.0
+                if not wins.empty:
+                    sum_gain_r = wins['r_multiple'].sum()
+                else:
+                    sum_gain_r = 0.0
+                if not losses.empty:
+                    sum_loss_r = losses['r_multiple'].abs().sum()
+                else:
+                    sum_loss_r = 0.0
+                if sum_loss_r != 0:
+                    profit_factor = sum_gain_r / sum_loss_r
+                else:
+                    profit_factor = 0.0
                 cum_r = df['r_multiple'].cumsum()
                 peak = cum_r.expanding().max()
                 drawdown = peak - cum_r
-                max_drawdown = drawdown.max() if not drawdown.empty else 0.0
-                avg_gain = wins['pnl'].mean() if not wins.empty else 0.0
-                avg_loss = losses['pnl'].abs().mean() if not losses.empty else 0.0
-                return {
-                    'count': count,
-                    'win_rate': win_rate,
-                    'avg_r': avg_r,
-                    'expectancy': expectancy,
-                    'profit_factor': profit_factor,
-                    'max_drawdown': max_drawdown,
-                    'avg_gain': avg_gain,
-                    'avg_loss': avg_loss
-                }
+                if not drawdown.empty:
+                    max_drawdown = drawdown.max()
+                else:
+                    max_drawdown = 0.0
+                if not wins.empty:
+                    avg_gain = wins['pnl'].mean()
+                else:
+                    avg_gain = 0.0
+                if not losses.empty:
+                    avg_loss = losses['pnl'].abs().mean()
+                else:
+                    avg_loss = 0.0
+                result = {}
+                result['count'] = count
+                result['win_rate'] = win_rate
+                result['avg_r'] = avg_r
+                result['expectancy'] = expectancy
+                result['profit_factor'] = profit_factor
+                result['max_drawdown'] = max_drawdown
+                result['avg_gain'] = avg_gain
+                result['avg_loss'] = avg_loss
+                return result
 
-            metrics_data = {
-                'Métrique': [
-                    'Nombre de trades',
-                    'Win rate',
-                    'Avg R',
-                    'Expectancy',
-                    'Profit factor',
-                    'Max drawdown (R)',
-                    'Gain moyen (CAD)',
-                    'Perte moyenne (CAD)'
-                ]
-            }
-
+            metrics_data = {}
+            metrics_data['Métrique'] = []
+            metrics_data['Métrique'].append('Nombre de trades')
+            metrics_data['Métrique'].append('Win rate')
+            metrics_data['Métrique'].append('Avg R')
+            metrics_data['Métrique'].append('Expectancy')
+            metrics_data['Métrique'].append('Profit factor')
+            metrics_data['Métrique'].append('Max drawdown (R)')
+            metrics_data['Métrique'].append('Gain moyen (CAD)')
+            metrics_data['Métrique'].append('Perte moyenne (CAD)')
             for setup_name in setup_groups:
                 if setup_name == "Global":
                     df_filtered = df_trades
                 else:
                     df_filtered = df_trades[df_trades['setup'] == setup_name]
                 metrics = compute_metrics(df_filtered)
-                metrics_data[setup_name] = [
-                    f"{metrics['count']}",
-                    f"{metrics['win_rate']:.1f}%",
-                    f"{metrics['avg_r']:.2f}R",
-                    f"{metrics['expectancy']:.2f}R",
-                    f"{metrics['profit_factor']:.2f}",
-                    f"-{metrics['max_drawdown']:.2f}R",
-                    f"{metrics['avg_gain']:.2f} CAD",
-                    f"{metrics['avg_loss']:.2f} CAD"
-                ]
-
+                column = []
+                column.append(f"{metrics['count']}")
+                column.append(f"{metrics['win_rate']:.1f}%")
+                column.append(f"{metrics['avg_r']:.2f}R")
+                column.append(f"{metrics['expectancy']:.2f}R")
+                column.append(f"{metrics['profit_factor']:.2f}")
+                column.append(f"-{metrics['max_drawdown']:.2f}R")
+                column.append(f"{metrics['avg_gain']:.2f} CAD")
+                column.append(f"{metrics['avg_loss']:.2f} CAD")
+                metrics_data[setup_name] = column
             df_table = pd.DataFrame(metrics_data)
-            
-            # Rendu HTML natif — évite la dépendance pyarrow
-            html_table = df_table.to_html(index=False, escape=False, classes="perf-table", border=0)
-            st.markdown(html_table, unsafe_allow_html=True)
+            html_table = df_table.to_html(
+                index=False,
+                escape=False,
+                classes="perf-table",
+                border=0
+            )
+            st.markdown(
+                html_table,
+                unsafe_allow_html=True
+            )
 
 render_dashboard()
 
 # ---------- Footer ----------
 st.markdown(
-    '<div class="footer">NorthSentinel Trading • Forex Sniper 7‑12 • August, 2026 ©</div>',
+    '<div class="footer">NorthSentinel Trading \u2022 Forex Sniper 7-12 \u2022 August, 2026 \u00a9</div>',
     unsafe_allow_html=True
 )
