@@ -1,5 +1,5 @@
 {
-  "time": "2026-11-25 08:38:17",
+  "time": "2026-11-25 08:43:22",
   "bot_status": "running",
   "session": {
     "trades_today": 1,
@@ -18,12 +18,12 @@
     "tp2_initial_locked": false,
     "trailing_stop": "ATR apres TP1 seulement (v2)",
     "phase": 3,
-    "current_price": 1.30712,
-    "unrealized_pnl_usd": -117.01,
-    "unrealized_pnl_cad": -166.62,
-    "usd_cad_rate": 1.424,
-    "distance_to_sl_pips": 16.4,
-    "distance_to_tp2_pips": 68.2,
+    "current_price": 1.30694,
+    "unrealized_pnl_usd": -99.16,
+    "unrealized_pnl_cad": -141.17,
+    "usd_cad_rate": 1.4236,
+    "distance_to_sl_pips": 18.2,
+    "distance_to_tp2_pips": 66.4,
     "atr": 0.0012828571428571411,
     "be_triggered": false,
     "tp1_hit": true,
@@ -49,10 +49,9 @@
   "strategy": "H1 Multi-Setup \u2014 State machine v2 (stop fixe -> BE+2 -> TP1 -> trailing ATR)",
   "max_risk_per_trade_percent": 0.65,
   "daily_loss_limit_percent": 2.0,
-  "blocked_pairs": [
-    "GBP_USD"
-  ],
+  "blocked_pairs": [],
   "active_pairs": [
-    "EUR_USD"
+    "EUR_USD",
+    "GBP_USD"
   ]
 }
