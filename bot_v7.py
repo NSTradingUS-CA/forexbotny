@@ -1997,7 +1997,7 @@ def main():
                                 active_trade['news_partial_close'] = True
                                 active_trade['units'] = remaining if active_trade['direction'] == 'buy' else -remaining
                                 sl_state = 'trailing (BE)' if active_trade.get('be_triggered') else 'initial SL'
-                                send_telegram_message(f'📰 <b>Imminent News – Partial close (NOT TP1)</b>\nPair: {pair}\nSetup: {setup_type.upper()} ({setup_label})\nNews: {news_title} at {news_time}\nClosed: {int(close_pct * 100)}% ({partial_units} units)\nRunner: {remaining} units ({sl_state} intact)\nP&L: {pnl_cad:+.2f} CAD')
+                                send_telegram_message(f'📰 <b>Imminent News – Partial close (Not TP1)</b>\nPair: {pair}\nSetup: {setup_type.upper()} ({setup_label})\nNews: {news_title} at {news_time}\nClosed: {int(close_pct * 100)}% ({partial_units} units)\nRunner: {remaining} units ({sl_state} intact)\nP&L: {pnl_cad:+.2f} CAD')
                                 live_log(f'📰 Imminent news - Partial {int(close_pct * 100)}% {pair}')
                                 print(f'Imminent news - {pair}: {int(close_pct * 100)}% closed.')
                             else:
