@@ -1,22 +1,9 @@
 # Live Log — Forex Sniper
 
-Session du 2026-11-25 — MAJ 10:53:23 ET — Bot: running
+Session du 2026-11-25 — MAJ 10:55:47 ET — Bot: running
 
 **Trade actif :** GBP_USD sell @ 1.30565 — Phase 0 — Peak 2.9p
 
-- `09:50:46` 💓 Heartbeat 09:50:46 - Phase no trade — Trades 1/3
-- `09:50:56` 📶 SIGNAL sell GBP_USD [Pin Bar] Pin Bar selected (score 60.0)
-- `09:50:57` 💓 Heartbeat 09:50:56 - Phase no trade — Trades 1/3
-- `09:51:07` 📶 SIGNAL sell GBP_USD [Pin Bar] Pin Bar selected (score 60.0)
-- `09:51:08` 💓 Heartbeat 09:51:07 - Phase no trade — Trades 1/3
-- `09:51:18` 📶 SIGNAL sell GBP_USD [Pin Bar] Pin Bar selected (score 60.0)
-- `09:51:18` 💓 Heartbeat 09:51:18 - Phase no trade — Trades 1/3
-- `09:51:28` 📶 SIGNAL sell GBP_USD [Pin Bar] Pin Bar selected (score 60.0)
-- `09:51:28` 💓 Heartbeat 09:51:28 - Phase no trade — Trades 1/3
-- `09:51:39` 📶 SIGNAL sell GBP_USD [Pin Bar] Pin Bar selected (score 60.0)
-- `09:51:39` 💓 Heartbeat 09:51:38 - Phase no trade — Trades 1/3
-- `09:51:49` 📶 SIGNAL sell GBP_USD [Pin Bar] Pin Bar selected (score 60.0)
-- `09:51:50` 💓 Heartbeat 09:51:49 - Phase no trade — Trades 1/3
 - `09:52:00` 📶 SIGNAL sell GBP_USD [Pin Bar] Pin Bar selected (score 60.0)
 - `09:52:02` 💓 Heartbeat 09:52:00 - Phase no trade — Trades 1/3
 - `09:52:12` 📶 SIGNAL sell GBP_USD [Pin Bar] Pin Bar selected (score 60.0)
@@ -404,3 +391,16 @@ Session du 2026-11-25 — MAJ 10:53:23 ET — Bot: running
 - `10:53:01` 💓 Heartbeat 10:53:01 - Phase 0 — Trades 2/3
 - `10:53:11` 💓 Heartbeat 10:53:11 - Phase 0 — Trades 2/3
 - `10:53:23` 💓 Heartbeat 10:53:23 - Phase 0 — Trades 2/3
+- `10:53:35` 💓 Heartbeat 10:53:34 - Phase 0 — Trades 2/3
+- `10:53:45` 💓 Heartbeat 10:53:45 - Phase 0 — Trades 2/3
+- `10:53:55` 💓 Heartbeat 10:53:55 - Phase 0 — Trades 2/3
+- `10:54:07` 💓 Heartbeat 10:54:05 - Phase 0 — Trades 2/3
+- `10:54:17` 💓 Heartbeat 10:54:17 - Phase 0 — Trades 2/3
+- `10:54:28` 💓 Heartbeat 10:54:27 - Phase 0 — Trades 2/3
+- `10:54:39` 💓 Heartbeat 10:54:38 - Phase 0 — Trades 2/3
+- `10:54:51` 💓 Heartbeat 10:54:50 - Phase 0 — Trades 2/3
+- `10:55:01` 💓 Heartbeat 10:55:01 - Phase 0 — Trades 2/3
+- `10:55:12` 💓 Heartbeat 10:55:12 - Phase 0 — Trades 2/3
+- `10:55:23` 💓 Heartbeat 10:55:23 - Phase 0 — Trades 2/3
+- `10:55:35` 💓 Heartbeat 10:55:35 - Phase 0 — Trades 2/3
+- `10:55:47` 💓 Heartbeat 10:55:47 - Phase 0 — Trades 2/3
