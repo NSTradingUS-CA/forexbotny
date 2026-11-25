@@ -1,20 +1,9 @@
 # Live Log — Forex Sniper
 
-Session du 2026-11-25 — MAJ 10:56:51 ET — Bot: running
+Session du 2026-11-25 — MAJ 10:58:56 ET — Bot: running
 
 **Trade actif :** GBP_USD sell @ 1.30565 — Phase 0 — Peak 2.9p
 
-- `09:52:32` 💓 Heartbeat 09:52:32 - Phase no trade — Trades 1/3
-- `09:52:43` 📶 SIGNAL sell GBP_USD [Pin Bar] Pin Bar selected (score 60.0)
-- `09:52:43` 💓 Heartbeat 09:52:42 - Phase no trade — Trades 1/3
-- `09:52:53` 📶 SIGNAL sell GBP_USD [Pin Bar] Pin Bar selected (score 60.0)
-- `09:52:53` 💓 Heartbeat 09:52:53 - Phase no trade — Trades 1/3
-- `09:53:03` 📶 SIGNAL sell GBP_USD [Pin Bar] Pin Bar selected (score 60.0)
-- `09:53:04` 💓 Heartbeat 09:53:03 - Phase no trade — Trades 1/3
-- `09:53:14` 📶 SIGNAL sell GBP_USD [Pin Bar] Pin Bar selected (score 60.0)
-- `09:53:14` 💓 Heartbeat 09:53:14 - Phase no trade — Trades 1/3
-- `09:53:25` 📶 SIGNAL sell GBP_USD [Pin Bar] Pin Bar selected (score 60.0)
-- `09:53:25` 💓 Heartbeat 09:53:24 - Phase no trade — Trades 1/3
 - `09:53:35` 📶 SIGNAL sell GBP_USD [Pin Bar] Pin Bar selected (score 60.0)
 - `09:53:35` 💓 Heartbeat 09:53:35 - Phase no trade — Trades 1/3
 - `09:53:45` 📶 SIGNAL sell GBP_USD [Pin Bar] Pin Bar selected (score 60.0)
@@ -404,3 +393,14 @@ Session du 2026-11-25 — MAJ 10:56:51 ET — Bot: running
 - `10:56:31` 💓 Heartbeat 10:56:30 - Phase 0 — Trades 2/3
 - `10:56:41` 💓 Heartbeat 10:56:41 - Phase 0 — Trades 2/3
 - `10:56:51` 💓 Heartbeat 10:56:51 - Phase 0 — Trades 2/3
+- `10:57:03` 💓 Heartbeat 10:57:03 - Phase 0 — Trades 2/3
+- `10:57:13` 💓 Heartbeat 10:57:13 - Phase 0 — Trades 2/3
+- `10:57:24` 💓 Heartbeat 10:57:23 - Phase 0 — Trades 2/3
+- `10:57:34` 💓 Heartbeat 10:57:34 - Phase 0 — Trades 2/3
+- `10:57:44` 💓 Heartbeat 10:57:44 - Phase 0 — Trades 2/3
+- `10:57:55` 💓 Heartbeat 10:57:54 - Phase 0 — Trades 2/3
+- `10:58:07` 💓 Heartbeat 10:58:06 - Phase 0 — Trades 2/3
+- `10:58:18` 💓 Heartbeat 10:58:18 - Phase 0 — Trades 2/3
+- `10:58:30` 💓 Heartbeat 10:58:30 - Phase 0 — Trades 2/3
+- `10:58:44` 💓 Heartbeat 10:58:44 - Phase 0 — Trades 2/3
+- `10:58:56` 💓 Heartbeat 10:58:56 - Phase 0 — Trades 2/3
