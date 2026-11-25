@@ -1,4 +1,20 @@
 {
-  "signals": [],
+  "signals": [
+    {
+      "time": "09:38:57",
+      "pair": "EUR_USD",
+      "buy_reason": "H1 not up",
+      "sell_reason": "No SELL setup",
+      "spread": 0.00016000000000016001,
+      "adx": 21.77115242895116,
+      "plus_di": 17.94003184243952,
+      "minus_di": 17.949080828507714,
+      "ema50": 1.094700788510881,
+      "ema200": 1.0987234626468687,
+      "rsi": 44.4162790650935,
+      "atr": 0.0011035714285714418,
+      "diagnostic": "[Best hypothetical: Pullback SELL score=50.9]"
+    }
+  ],
   "last_cleanup": "2026-11-25"
 }
