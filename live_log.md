@@ -1,19 +1,7 @@
 # Live Log — Forex Sniper
 
-Session du 2026-11-25 — MAJ 09:49:54 ET — Bot: running
+Session du 2026-11-25 — MAJ 09:50:56 ET — Bot: running
 
-- `08:53:35` 💾 Periodic backup - trades + rejected
-- `08:53:35` 💓 Heartbeat 08:53:34 - Phase 3 — Trades 1/3
-- `08:53:46` 💓 Heartbeat 08:53:45 - Phase 3 — Trades 1/3
-- `08:53:57` 💓 Heartbeat 08:53:56 - Phase 3 — Trades 1/3
-- `08:54:07` 💓 Heartbeat 08:54:07 - Phase 3 — Trades 1/3
-- `08:54:17` 💓 Heartbeat 08:54:17 - Phase 3 — Trades 1/3
-- `08:54:28` 💓 Heartbeat 08:54:27 - Phase 3 — Trades 1/3
-- `08:54:38` 💓 Heartbeat 08:54:38 - Phase 3 — Trades 1/3
-- `08:54:48` 💓 Heartbeat 08:54:48 - Phase 3 — Trades 1/3
-- `08:55:00` 💓 Heartbeat 08:55:00 - Phase 3 — Trades 1/3
-- `08:55:11` 💓 Heartbeat 08:55:10 - Phase 3 — Trades 1/3
-- `08:55:21` 💓 Heartbeat 08:55:21 - Phase 3 — Trades 1/3
 - `08:55:31` 💓 Heartbeat 08:55:31 - Phase 3 — Trades 1/3
 - `08:55:42` 💓 Heartbeat 08:55:41 - Phase 3 — Trades 1/3
 - `08:55:52` 💓 Heartbeat 08:55:52 - Phase 3 — Trades 1/3
@@ -402,3 +390,15 @@ Session du 2026-11-25 — MAJ 09:49:54 ET — Bot: running
 - `09:49:44` 📶 SIGNAL sell GBP_USD [Pin Bar] Pin Bar selected (score 60.0)
 - `09:49:44` 💓 Heartbeat 09:49:43 - Phase no trade — Trades 1/3
 - `09:49:54` 📶 SIGNAL sell GBP_USD [Pin Bar] Pin Bar selected (score 60.0)
+- `09:49:55` 💓 Heartbeat 09:49:54 - Phase no trade — Trades 1/3
+- `09:50:05` 📶 SIGNAL sell GBP_USD [Pin Bar] Pin Bar selected (score 60.0)
+- `09:50:05` 💓 Heartbeat 09:50:05 - Phase no trade — Trades 1/3
+- `09:50:15` 📶 SIGNAL sell GBP_USD [Pin Bar] Pin Bar selected (score 60.0)
+- `09:50:15` 💓 Heartbeat 09:50:15 - Phase no trade — Trades 1/3
+- `09:50:26` 📶 SIGNAL sell GBP_USD [Pin Bar] Pin Bar selected (score 60.0)
+- `09:50:26` 💓 Heartbeat 09:50:25 - Phase no trade — Trades 1/3
+- `09:50:36` 📶 SIGNAL sell GBP_USD [Pin Bar] Pin Bar selected (score 60.0)
+- `09:50:36` 💓 Heartbeat 09:50:36 - Phase no trade — Trades 1/3
+- `09:50:46` 📶 SIGNAL sell GBP_USD [Pin Bar] Pin Bar selected (score 60.0)
+- `09:50:46` 💓 Heartbeat 09:50:46 - Phase no trade — Trades 1/3
+- `09:50:56` 📶 SIGNAL sell GBP_USD [Pin Bar] Pin Bar selected (score 60.0)
