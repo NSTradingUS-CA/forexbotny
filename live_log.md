@@ -1,13 +1,7 @@
 # Live Log — Forex Sniper
 
-Session du 2026-11-26 — MAJ 09:06:40 ET — Bot: running
+Session du 2026-11-26 — MAJ 09:07:44 ET — Bot: running
 
-- `07:58:52` 💓 Heartbeat 07:58:52 - Phase no trade — Trades 0/3
-- `07:59:03` 💓 Heartbeat 07:59:02 - Phase no trade — Trades 0/3
-- `07:59:13` 💓 Heartbeat 07:59:13 - Phase no trade — Trades 0/3
-- `07:59:24` 💓 Heartbeat 07:59:24 - Phase no trade — Trades 0/3
-- `07:59:34` 💓 Heartbeat 07:59:34 - Phase no trade — Trades 0/3
-- `07:59:44` 💓 Heartbeat 07:59:44 - Phase no trade — Trades 0/3
 - `07:59:55` 💓 Heartbeat 07:59:54 - Phase no trade — Trades 0/3
 - `08:00:05` 📦 ORB EXACT EUR_USD : 7h-8h Toronto high=1.09782 low=1.09692 (M15 x4, kept until midnight)
 - `08:00:05` 💓 Heartbeat 08:00:05 - Phase no trade — Trades 0/3
@@ -402,3 +396,9 @@ Session du 2026-11-26 — MAJ 09:06:40 ET — Bot: running
 - `09:06:20` 💓 Heartbeat 09:06:20 - Phase no trade — Trades 0/3
 - `09:06:30` 💓 Heartbeat 09:06:30 - Phase no trade — Trades 0/3
 - `09:06:40` 💓 Heartbeat 09:06:40 - Phase no trade — Trades 0/3
+- `09:06:51` 💓 Heartbeat 09:06:51 - Phase no trade — Trades 0/3
+- `09:07:03` 💓 Heartbeat 09:07:01 - Phase no trade — Trades 0/3
+- `09:07:13` 💓 Heartbeat 09:07:13 - Phase no trade — Trades 0/3
+- `09:07:23` 💓 Heartbeat 09:07:23 - Phase no trade — Trades 0/3
+- `09:07:33` 💓 Heartbeat 09:07:33 - Phase no trade — Trades 0/3
+- `09:07:44` 💓 Heartbeat 09:07:43 - Phase no trade — Trades 0/3
