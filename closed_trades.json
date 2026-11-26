@@ -25,6 +25,32 @@
       "entry": 1.30565,
       "exit": 1.30861,
       "score": 60.0
+    },
+    {
+      "pair": "GBP_USD",
+      "type": "Sell",
+      "setup": "recovered",
+      "pnl": -749.11,
+      "pnl_usd": -527.05,
+      "time": "11:41:09",
+      "r_multiple": -1.0,
+      "units": 176139,
+      "entry": 1.30565,
+      "exit": 1.30861,
+      "score": null
+    },
+    {
+      "pair": "GBP_USD",
+      "type": "Sell",
+      "setup": "recovered",
+      "pnl": -283.12,
+      "pnl_usd": -199.19,
+      "time": "09:23:37",
+      "r_multiple": -0.52,
+      "units": 148006,
+      "entry": 1.30594,
+      "exit": 1.30727,
+      "score": null
     }
   ],
   "last_cleanup": "2026-11-25"
