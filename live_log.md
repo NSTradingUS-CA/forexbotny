@@ -1,14 +1,7 @@
 # Live Log — Forex Sniper
 
-Session du 2026-11-26 — MAJ 09:53:10 ET — Bot: running
+Session du 2026-11-26 — MAJ 09:54:13 ET — Bot: running
 
-- `08:45:17` 💓 Heartbeat 08:45:16 - Phase no trade — Trades 0/3
-- `08:45:27` 💓 Heartbeat 08:45:27 - Phase no trade — Trades 0/3
-- `08:45:37` 💓 Heartbeat 08:45:37 - Phase no trade — Trades 0/3
-- `08:45:48` 💓 Heartbeat 08:45:48 - Phase no trade — Trades 0/3
-- `08:45:59` 💓 Heartbeat 08:45:58 - Phase no trade — Trades 0/3
-- `08:46:09` 💓 Heartbeat 08:46:09 - Phase no trade — Trades 0/3
-- `08:46:19` 💓 Heartbeat 08:46:19 - Phase no trade — Trades 0/3
 - `08:46:29` 💓 Heartbeat 08:46:29 - Phase no trade — Trades 0/3
 - `08:46:40` 💓 Heartbeat 08:46:39 - Phase no trade — Trades 0/3
 - `08:46:52` 💓 Heartbeat 08:46:51 - Phase no trade — Trades 0/3
@@ -402,3 +395,10 @@ Session du 2026-11-26 — MAJ 09:53:10 ET — Bot: running
 - `09:52:49` 💓 Heartbeat 09:52:48 - Phase no trade — Trades 0/3
 - `09:52:59` 💓 Heartbeat 09:52:59 - Phase no trade — Trades 0/3
 - `09:53:10` 💓 Heartbeat 09:53:09 - Phase no trade — Trades 0/3
+- `09:53:21` 💓 Heartbeat 09:53:21 - Phase no trade — Trades 0/3
+- `09:53:31` 💓 Heartbeat 09:53:31 - Phase no trade — Trades 0/3
+- `09:53:41` 💓 Heartbeat 09:53:41 - Phase no trade — Trades 0/3
+- `09:53:51` 💓 Heartbeat 09:53:51 - Phase no trade — Trades 0/3
+- `09:54:02` 💾 Periodic backup - trades + rejected
+- `09:54:02` 💓 Heartbeat 09:54:01 - Phase no trade — Trades 0/3
+- `09:54:13` 💓 Heartbeat 09:54:12 - Phase no trade — Trades 0/3
