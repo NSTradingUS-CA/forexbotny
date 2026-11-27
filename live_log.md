@@ -1,18 +1,9 @@
 # Live Log — Forex Sniper
 
-Session du 2026-11-27 — MAJ 12:10:03 ET — Bot: running
+Session du 2026-11-27 — MAJ 12:11:08 ET — Bot: running
 
 **Trade actif :** EUR_USD sell @ 1.09498 — Phase 1 — Peak 16.0p
 
-- `10:59:38` 💓 Heartbeat 10:59:38 - Phase 1 — Trades 1/3
-- `10:59:49` 💓 Heartbeat 10:59:48 - Phase 1 — Trades 1/3
-- `11:00:00` 💓 Heartbeat 10:59:59 - Phase 1 — Trades 1/3
-- `11:00:12` ⏰ <b>11:00 checkpoint</b> · EUR_USD SELL · ORB
-Peak +16.0p (92% TP1) · Now +10.6 · Retrace 34%
-Phase 1
-- `11:00:13` 💓 Heartbeat 11:00:11 - Phase 1 — Trades 1/3
-- `11:00:24` 💓 Heartbeat 11:00:23 - Phase 1 — Trades 1/3
-- `11:00:35` 💓 Heartbeat 11:00:34 - Phase 1 — Trades 1/3
 - `11:00:46` 💓 Heartbeat 11:00:45 - Phase 1 — Trades 1/3
 - `11:00:56` 💓 Heartbeat 11:00:56 - Phase 1 — Trades 1/3
 - `11:01:07` 💓 Heartbeat 11:01:06 - Phase 1 — Trades 1/3
@@ -406,3 +397,10 @@ Phase 1
 - `12:09:41` 💓 Heartbeat 12:09:40 - Phase 1 — Trades 1/3
 - `12:09:52` 💓 Heartbeat 12:09:51 - Phase 1 — Trades 1/3
 - `12:10:03` 💓 Heartbeat 12:10:02 - Phase 1 — Trades 1/3
+- `12:10:14` 💓 Heartbeat 12:10:14 - Phase 1 — Trades 1/3
+- `12:10:25` 💓 Heartbeat 12:10:24 - Phase 1 — Trades 1/3
+- `12:10:36` 💓 Heartbeat 12:10:35 - Phase 1 — Trades 1/3
+- `12:10:46` 💓 Heartbeat 12:10:46 - Phase 1 — Trades 1/3
+- `12:10:57` 💾 Periodic backup - trades + rejected
+- `12:10:57` 💓 Heartbeat 12:10:56 - Phase 1 — Trades 1/3
+- `12:11:08` 💓 Heartbeat 12:11:07 - Phase 1 — Trades 1/3
