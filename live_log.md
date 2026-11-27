@@ -1,11 +1,9 @@
 # Live Log — Forex Sniper
 
-Session du 2026-11-27 — MAJ 09:00:43 ET — Bot: running
+Session du 2026-11-27 — MAJ 09:01:19 ET — Bot: running
 
-- `07:50:49` 💓 Heartbeat 07:50:48 - Phase no trade — Trades 0/3
-- `07:51:00` 💓 Heartbeat 07:50:59 - Phase no trade — Trades 0/3
-- `07:51:10` 💓 Heartbeat 07:51:10 - Phase no trade — Trades 0/3
-- `07:51:22` 💾 Periodic backup - trades + rejected
+**Trade actif :** EUR_USD sell @ 1.09498 — Phase 0 — Peak 0.0p
+
 - `07:51:22` 💓 Heartbeat 07:51:20 - Phase no trade — Trades 0/3
 - `07:51:32` 💓 Heartbeat 07:51:32 - Phase no trade — Trades 0/3
 - `07:51:44` 💓 Heartbeat 07:51:44 - Phase no trade — Trades 0/3
@@ -402,3 +400,7 @@ Session du 2026-11-27 — MAJ 09:00:43 ET — Bot: running
 - `09:00:23` 💓 Heartbeat 09:00:21 - Phase no trade — Trades 0/3
 - `09:00:33` 💓 Heartbeat 09:00:33 - Phase no trade — Trades 0/3
 - `09:00:43` 💓 Heartbeat 09:00:43 - Phase no trade — Trades 0/3
+- `09:00:55` 💓 Heartbeat 09:00:55 - Phase no trade — Trades 0/3
+- `09:01:05` 💓 Heartbeat 09:01:05 - Phase no trade — Trades 0/3
+- `09:01:18` 📶 SIGNAL sell EUR_USD [ORB] ORB selected (score 60.1)
+- `09:01:19` ✅ Trade opened EUR_USD sell ORB @ 1.09498 SL 1.09730 TP1 1.09324 TP2 1.08919 — Phase 0
