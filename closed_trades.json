@@ -1,4 +1,18 @@
 {
-  "trades": [],
+  "trades": [
+    {
+      "pair": "EUR_USD",
+      "type": "Sell",
+      "setup": "ORB",
+      "pnl": 466.82,
+      "pnl_usd": 327.7,
+      "time": "16:55:12",
+      "r_multiple": 0.7,
+      "units": 202671,
+      "entry": 1.09498,
+      "exit": 1.09335,
+      "score": 60.1
+    }
+  ],
   "last_cleanup": "2026-11-27"
 }
