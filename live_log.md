@@ -1,11 +1,7 @@
 # Live Log — Forex Sniper
 
-Session du 2026-11-27 — MAJ 16:55:11 ET — Bot: running
+Session du 2026-11-27 — MAJ 16:55:23 ET — Bot: stopped
 
-**Trade actif :** EUR_USD sell @ 1.09498 — Phase 1 — Peak 19.5p
-
-- `15:48:27` 💓 Heartbeat 15:48:27 - Phase 1 — Trades 1/3
-- `15:48:39` 💓 Heartbeat 15:48:38 - Phase 1 — Trades 1/3
 - `15:48:49` 💓 Heartbeat 15:48:49 - Phase 1 — Trades 1/3
 - `15:48:59` 💓 Heartbeat 15:48:59 - Phase 1 — Trades 1/3
 - `15:49:10` 💓 Heartbeat 15:49:09 - Phase 1 — Trades 1/3
@@ -404,3 +400,5 @@ Session du 2026-11-27 — MAJ 16:55:11 ET — Bot: running
 - `16:54:56` 💓 Heartbeat 16:54:55 - Phase 1 — Trades 1/3
 - `16:55:06` 🔒 Forced close EUR_USD PnL 302.63 CAD
 - `16:55:11` 🔴 Trade closed EUR_USD sell ORB Exit 1.09335 PnL +466.82 CAD R +0.70 Phase 1
+- `16:55:12` 💓 Heartbeat 16:55:06 - Phase no trade — Trades 1/3
+- `16:55:23` 🔴 End of session 12:05 - no active trade
