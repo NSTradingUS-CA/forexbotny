@@ -1,15 +1,9 @@
 # Live Log — Forex Sniper
 
-Session du 2026-11-27 — MAJ 15:09:34 ET — Bot: running
+Session du 2026-11-27 — MAJ 15:10:37 ET — Bot: running
 
 **Trade actif :** EUR_USD sell @ 1.09498 — Phase 1 — Peak 18.5p
 
-- `14:01:34` 💓 Heartbeat 14:01:34 - Phase 1 — Trades 1/3
-- `14:01:45` 💓 Heartbeat 14:01:44 - Phase 1 — Trades 1/3
-- `14:01:55` 💓 Heartbeat 14:01:55 - Phase 1 — Trades 1/3
-- `14:02:05` 💓 Heartbeat 14:02:05 - Phase 1 — Trades 1/3
-- `14:02:17` 💓 Heartbeat 14:02:17 - Phase 1 — Trades 1/3
-- `14:02:27` 💓 Heartbeat 14:02:27 - Phase 1 — Trades 1/3
 - `14:02:37` 💓 Heartbeat 14:02:37 - Phase 1 — Trades 1/3
 - `14:02:48` 💓 Heartbeat 14:02:47 - Phase 1 — Trades 1/3
 - `14:02:58` 💓 Heartbeat 14:02:58 - Phase 1 — Trades 1/3
@@ -404,3 +398,9 @@ Session du 2026-11-27 — MAJ 15:09:34 ET — Bot: running
 - `15:09:13` 💓 Heartbeat 15:09:13 - Phase 1 — Trades 1/3
 - `15:09:24` 💓 Heartbeat 15:09:23 - Phase 1 — Trades 1/3
 - `15:09:34` 💓 Heartbeat 15:09:34 - Phase 1 — Trades 1/3
+- `15:09:45` 💓 Heartbeat 15:09:45 - Phase 1 — Trades 1/3
+- `15:09:56` 💓 Heartbeat 15:09:55 - Phase 1 — Trades 1/3
+- `15:10:06` 💓 Heartbeat 15:10:06 - Phase 1 — Trades 1/3
+- `15:10:16` 💓 Heartbeat 15:10:16 - Phase 1 — Trades 1/3
+- `15:10:27` 💓 Heartbeat 15:10:26 - Phase 1 — Trades 1/3
+- `15:10:37` 💓 Heartbeat 15:10:37 - Phase 1 — Trades 1/3
