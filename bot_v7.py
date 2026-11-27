@@ -517,7 +517,7 @@ def save_status_json(force=False):
         units_abs = abs(int(active_trade['units']))
         unreal = (active_trade['entry_price'] - current_price) * units_abs if active_trade['direction'] == 'sell' else (current_price - active_trade['entry_price']) * units_abs
         usd_cad = get_usd_cad_rate()
-        status['active_trade'] = {'pair': pair, 'type': 'Buy' if active_trade['direction'] == 'buy' else 'Sell', 'entry': active_trade['entry_price'], 'sl': active_trade['sl'], 'tp1': active_trade.get('tp1'), 'tp2': active_trade.get('tp2'), 'tp2_initial': active_trade.get('tp2_initial'), 'tp2_initial_locked': active_trade.get('tp2_initial_locked', False), 'trailing_stop': 'ATR after TP1 only', 'phase': active_trade.get('phase', 0), 'current_price': current_price, 'unrealized_pnl_usd': round(unreal, 2), 'unrealized_pnl_cad': round(unreal * usd_cad, 2), 'usd_cad_rate': round(usd_cad, 4), 'distance_to_sl_pips': round(sl_distance / 0.0001, 1), 'distance_to_tp2_pips': round(tp_distance / 0.0001, 1) if tp_distance else 0, 'atr': active_trade.get('atr'), 'be_triggered': active_trade.get('be_triggered', False), 'tp1_hit': active_trade.get('tp1_hit', False), 'tp2_widened': active_trade.get('tp2_widened', False), 'peak_profit_pips': active_trade.get('peak_profit_pips', 0.0), 'time_lock_done': active_trade.get('time_lock_done', False), 'regime_adverse_handled': active_trade.get('regime_adverse_handled', False), 'setup_type': active_trade.get('setup_type'), 'risk_percent': active_trade.get('risk_percent'), 'initial_risk': active_trade.get('initial_risk'), 'opened_at': active_trade.get('opened_at'), 'units': active_trade.get('units'), 'score': active_trade.get('quality_score'), 'news_partial_done': active_trade.get('news_partial_done', False), 'news_partial_close': active_trade.get('news_partial_close', False), 'half_size': active_trade.get('half_size', False), 'early_secure_done': active_trade.get('early_secure_done', False), 'early_widen_done': active_trade.get('early_widen_done', False)}
+        status['active_trade'] = {'pair': pair, 'type': 'Buy' if active_trade['direction'] == 'buy' else 'Sell', 'entry': active_trade['entry_price'], 'sl': active_trade['sl'], 'tp1': active_trade.get('tp1'), 'tp2': active_trade.get('tp2'), 'tp2_initial': active_trade.get('tp2_initial'), 'tp2_initial_locked': active_trade.get('tp2_initial_locked', False), 'trailing_stop': 'ATR after TP1 only (v2)', 'phase': active_trade.get('phase', 0), 'current_price': current_price, 'unrealized_pnl_usd': round(unreal, 2), 'unrealized_pnl_cad': round(unreal * usd_cad, 2), 'usd_cad_rate': round(usd_cad, 4), 'distance_to_sl_pips': round(sl_distance / 0.0001, 1), 'distance_to_tp2_pips': round(tp_distance / 0.0001, 1) if tp_distance else 0, 'atr': active_trade.get('atr'), 'be_triggered': active_trade.get('be_triggered', False), 'tp1_hit': active_trade.get('tp1_hit', False), 'tp2_widened': active_trade.get('tp2_widened', False), 'peak_profit_pips': active_trade.get('peak_profit_pips', 0.0), 'time_lock_done': active_trade.get('time_lock_done', False), 'regime_adverse_handled': active_trade.get('regime_adverse_handled', False), 'setup_type': active_trade.get('setup_type'), 'risk_percent': active_trade.get('risk_percent'), 'initial_risk': active_trade.get('initial_risk'), 'opened_at': active_trade.get('opened_at'), 'units': active_trade.get('units'), 'score': active_trade.get('quality_score'), 'news_partial_done': active_trade.get('news_partial_done', False), 'news_partial_close': active_trade.get('news_partial_close', False), 'half_size': active_trade.get('half_size', False), 'early_secure_done': active_trade.get('early_secure_done', False), 'early_widen_done': active_trade.get('early_widen_done', False), 'tp1_order_id': active_trade.get('tp1_order_id'), 'initial_units': active_trade.get('initial_units')}
     push_status_json(status, force=force)
 
 def count_all_trades_today():
@@ -536,6 +536,39 @@ def count_all_trades_today():
         print(f'Count error: {e}')
     return count
 
+def find_tp1_order_id(instrument, direction):
+    try:
+        pending_orders = retry_api_call(ctx.order.list_pending, ACCOUNT_ID)
+    except Exception as e:
+        print(f'⚠ pending orders lookup failed: {e}')
+        return None
+    for o in pending_orders.body.get('orders', []):
+        try:
+            o_instrument = getattr(o, 'instrument', None)
+            o_type = getattr(o, 'type', None)
+            o_units = getattr(o, 'units', None)
+            o_id = getattr(o, 'id', None)
+            if o_instrument is None and isinstance(o, dict):
+                o_instrument = o.get('instrument')
+                o_type = o.get('type')
+                o_units = o.get('units')
+                o_id = o.get('id')
+            if o_instrument != instrument:
+                continue
+            if o_type != 'LIMIT':
+                continue
+            if o_units is None or int(o_units) == 0:
+                continue
+            if direction == 'buy' and int(o_units) < 0:
+                return o_id
+            if direction == 'sell' and int(o_units) > 0:
+                return o_id
+        except Exception as e:
+            print(f'⚠ skipping pending order during TP1 restore: {e}')
+            continue
+    return None
+
+
 def load_existing_open_position():
     global active_trade
     saved_flags = {}
@@ -545,7 +578,7 @@ def load_existing_open_position():
                 status_data = json.load(f)
             saved_trade = status_data.get('active_trade')
             if saved_trade:
-                saved_flags = {'be_triggered': saved_trade.get('be_triggered', False), 'tp1_hit': saved_trade.get('tp1_hit', False), 'tp2_widened': saved_trade.get('tp2_widened', False), 'tp2_initial': saved_trade.get('tp2_initial'), 'tp2_initial_locked': saved_trade.get('tp2_initial_locked', False), 'peak_profit_pips': saved_trade.get('peak_profit_pips', 0.0), 'time_lock_done': saved_trade.get('time_lock_done', False), 'regime_adverse_handled': saved_trade.get('regime_adverse_handled', False), 'setup_type': saved_trade.get('setup_type'), 'risk_percent': saved_trade.get('risk_percent'), 'initial_risk': saved_trade.get('initial_risk'), 'opened_at': saved_trade.get('opened_at'), 'atr': saved_trade.get('atr'), 'units': saved_trade.get('units'), 'quality_score': saved_trade.get('score'), 'last_peak_time': saved_trade.get('last_peak_time'), 'news_partial_done': saved_trade.get('news_partial_done', False), 'news_partial_close': saved_trade.get('news_partial_close', False), 'half_size': saved_trade.get('half_size', False), 'early_secure_done': saved_trade.get('early_secure_done', False), 'early_widen_done': saved_trade.get('early_widen_done', False), 'phase': saved_trade.get('phase', 0)}
+                saved_flags = {'be_triggered': saved_trade.get('be_triggered', False), 'tp1_hit': saved_trade.get('tp1_hit', False), 'tp2_widened': saved_trade.get('tp2_widened', False), 'tp2_initial': saved_trade.get('tp2_initial'), 'tp2_initial_locked': saved_trade.get('tp2_initial_locked', False), 'peak_profit_pips': saved_trade.get('peak_profit_pips', 0.0), 'time_lock_done': saved_trade.get('time_lock_done', False), 'regime_adverse_handled': saved_trade.get('regime_adverse_handled', False), 'setup_type': saved_trade.get('setup_type'), 'risk_percent': saved_trade.get('risk_percent'), 'initial_risk': saved_trade.get('initial_risk'), 'opened_at': saved_trade.get('opened_at'), 'atr': saved_trade.get('atr'), 'units': saved_trade.get('units'), 'quality_score': saved_trade.get('score'), 'last_peak_time': saved_trade.get('last_peak_time'), 'news_partial_done': saved_trade.get('news_partial_done', False), 'news_partial_close': saved_trade.get('news_partial_close', False), 'half_size': saved_trade.get('half_size', False), 'early_secure_done': saved_trade.get('early_secure_done', False), 'early_widen_done': saved_trade.get('early_widen_done', False), 'phase': saved_trade.get('phase', 0), 'tp1_order_id': saved_trade.get('tp1_order_id'), 'initial_units': saved_trade.get('initial_units')}
         except Exception as e:
             print(f'Could not read status.json: {e}')
     try:
@@ -573,22 +606,19 @@ def load_existing_open_position():
             initial_risk = saved_risk if saved_risk is not None and saved_risk > 0 else abs(entry_price - sl_price) if sl_price is not None else 0.0
             _tp1_dist = initial_risk * TP1_R_MULT
             tp1_price = entry_price + _tp1_dist if direction == 'buy' else entry_price - _tp1_dist
-            tp1_order_id = None
-            try:
-                pending_orders = retry_api_call(ctx.order.list_pending, ACCOUNT_ID)
-                for o in pending_orders.body.get('orders', []):
-                    if o.instrument == instrument and o.type == 'LIMIT' and (int(o.units) != 0):
-                        if direction == 'buy' and int(o.units) < 0 or (direction == 'sell' and int(o.units) > 0):
-                            tp1_order_id = o.id
-                            break
-            except Exception as e:
-                print(f'⚠ pending orders restore: {e}')
+            tp1_order_id = saved_flags.get('tp1_order_id')
+            if not tp1_order_id:
+                tp1_order_id = find_tp1_order_id(instrument, direction)
+            if tp1_order_id:
+                print(f'🔍 TP1 Limit restored: {tp1_order_id}')
+            else:
+                print('⚠ TP1 Limit NOT found in pending orders (may be filled, cancelled, or restore failed) — fallback units check will run in manage_active_trade.')
             phase = saved_flags.get('phase', 0)
             if saved_flags.get('tp1_hit'):
                 phase = 3
             elif saved_flags.get('be_triggered'):
                 phase = 1
-            active_trade = {'trade_id': trade_id, 'tp1_order_id': tp1_order_id, 'pair': instrument, 'units': int(trade.currentUnits), 'initial_units': abs(int(trade.currentUnits)), 'entry_price': entry_price, 'sl': sl_price, 'tp1': tp1_price, 'tp2': tp_price, 'tp2_initial': saved_flags.get('tp2_initial', tp_price), 'tp2_initial_locked': saved_flags.get('tp2_initial_locked', False), 'tp': tp_price, 'direction': direction, 'setup_type': saved_flags.get('setup_type', 'recovered'), 'risk_percent': saved_flags.get('risk_percent', RISK_PULLBACK), 'initial_risk': initial_risk, 'be_triggered': saved_flags.get('be_triggered', False), 'tp1_hit': saved_flags.get('tp1_hit', tp1_order_id is None), 'tp2_widened': saved_flags.get('tp2_widened', False), 'peak_profit_pips': saved_flags.get('peak_profit_pips', 0.0), 'last_peak_time': saved_flags.get('last_peak_time', datetime.now(tz).isoformat()), 'time_lock_done': saved_flags.get('time_lock_done', False), 'regime_adverse_handled': saved_flags.get('regime_adverse_handled', False), 'checkpoint_sent': False, 'opened_at': saved_flags.get('opened_at', str(trade.openTime) if getattr(trade, 'openTime', None) else None), 'atr': saved_flags.get('atr'), 'quality_score': saved_flags.get('quality_score'), 'news_partial_done': saved_flags.get('news_partial_done', False), 'early_secure_done': saved_flags.get('early_secure_done', False), 'early_widen_done': saved_flags.get('early_widen_done', False), 'phase': phase, 'trailing_active': phase >= 3}
+            active_trade = {'trade_id': trade_id, 'tp1_order_id': tp1_order_id, 'pair': instrument, 'units': int(trade.currentUnits), 'initial_units': saved_flags.get('initial_units') or abs(int(trade.currentUnits)), 'entry_price': entry_price, 'sl': sl_price, 'tp1': tp1_price, 'tp2': tp_price, 'tp2_initial': saved_flags.get('tp2_initial', tp_price), 'tp2_initial_locked': saved_flags.get('tp2_initial_locked', False), 'tp': tp_price, 'direction': direction, 'setup_type': saved_flags.get('setup_type', 'recovered'), 'risk_percent': saved_flags.get('risk_percent', RISK_PULLBACK), 'initial_risk': initial_risk, 'be_triggered': saved_flags.get('be_triggered', False), 'tp1_hit': saved_flags.get('tp1_hit', False), 'tp2_widened': saved_flags.get('tp2_widened', False), 'peak_profit_pips': saved_flags.get('peak_profit_pips', 0.0), 'last_peak_time': saved_flags.get('last_peak_time', datetime.now(tz).isoformat()), 'time_lock_done': saved_flags.get('time_lock_done', False), 'regime_adverse_handled': saved_flags.get('regime_adverse_handled', False), 'checkpoint_sent': False, 'opened_at': saved_flags.get('opened_at', str(trade.openTime) if getattr(trade, 'openTime', None) else None), 'atr': saved_flags.get('atr'), 'quality_score': saved_flags.get('quality_score'), 'news_partial_done': saved_flags.get('news_partial_done', False), 'early_secure_done': saved_flags.get('early_secure_done', False), 'early_widen_done': saved_flags.get('early_widen_done', False), 'phase': phase, 'trailing_active': phase >= 3}
             print(f"Existing open position loaded: {instrument} {direction} phase={phase} early_secure={active_trade['early_secure_done']}")
             return
     except Exception as e:
@@ -885,7 +915,7 @@ def close_partial_position(units_to_close, expected_remaining=None):
     if r is None or r.status_code != 200:
         if r is not None:
             print(f'⚠ {field} rejected {r.status_code}: {r.text[:150]}')
-        print(f'↻ Fallback units pour partial {pair}')
+        print(f'↻ Fallback units for partial {pair}')
         r = _oanda_http_retry('PUT', url, json_body={'units': units_abs})
     if r is None or r.status_code != 200:
         print(f'❌ Partial close failed {pair}')
@@ -958,7 +988,7 @@ def update_trade_sl_tp(trade_id, sl_price=None, tp_price=None):
     return True
 
 def move_sl_to_be():
-    """Early Secure: fixed SL -> BE + 2 pips. Never tight trailing."""
+    """v2 Early Secure: fixed SL -> BE + 2 pips. Never tight trailing."""
     global active_trade
     if active_trade is None:
         return False
@@ -1080,6 +1110,23 @@ def manage_active_trade():
         return
     phase = active_trade.get('phase', 0)
     tp1_order_id = active_trade.get('tp1_order_id')
+    if (not tp1_order_id) and (not active_trade.get('tp1_hit', False)):
+        tp1_order_id = find_tp1_order_id(active_trade['pair'], active_trade['direction'])
+        if tp1_order_id:
+            active_trade['tp1_order_id'] = tp1_order_id
+            print(f'🔍 TP1 Limit rediscovered: {tp1_order_id}')
+    if (not tp1_order_id) and (not active_trade.get('tp1_hit', False)) and (not active_trade.get('news_partial_done', False)):
+        try:
+            _cu_now = int(active_trade.get('units', 0) or 0)
+        except Exception:
+            _cu_now = 0
+        _initial = active_trade.get('initial_units') or 0
+        if _initial and _cu_now and abs(_cu_now) <= abs(_initial) * 0.75:
+            active_trade['tp1_hit'] = True
+            active_trade['phase'] = 3
+            live_log(f"🎯 TP1 reached {active_trade['pair']} — detected by units drop (fallback, TP1 order ID missing): {abs(_initial)} -> {abs(_cu_now)}", force=True)
+            send_telegram_message(f"🎯 TP1 reached on {active_trade['pair']} (units fallback: {abs(_initial)} -> {abs(_cu_now)}). Runner continues.")
+            save_status_json(force=True)
     if tp1_order_id and (not active_trade.get('tp1_hit', False)):
         try:
             o_check = retry_api_call(ctx.order.get, ACCOUNT_ID, tp1_order_id)
@@ -1093,11 +1140,17 @@ def manage_active_trade():
         except Exception as e:
             if '404' in str(e) or 'not found' in str(e).lower():
                 if not active_trade.get('tp1_hit', False):
-                    active_trade['tp1_hit'] = True
-                    active_trade['phase'] = 3
-                    live_log(f"🎯 TP1 reached {active_trade['pair']} — Phase 3", force=True)
-                    send_telegram_message(f"🎯 TP1 reached on {active_trade['pair']}. Runner continues.")
-                    save_status_json(force=True)
+                    _cu = active_trade.get('units', 0) or 0
+                    _init = active_trade.get('initial_units', 0) or 0
+                    if _init and _cu and abs(_cu) <= abs(_init) * 0.75:
+                        active_trade['tp1_hit'] = True
+                        active_trade['phase'] = 3
+                        live_log(f"🎯 TP1 reached {active_trade['pair']} — Phase 3 (order 404 + units drop {abs(_init)} -> {abs(_cu)})", force=True)
+                        send_telegram_message(f"🎯 TP1 reached on {active_trade['pair']} (order gone + units drop). Runner continues.")
+                        save_status_json(force=True)
+                    else:
+                        print(f'⚠ TP1 order 404 but no units drop ({_init} -> {_cu}): NOT counting as TP1 fill. TP1 order marked lost; units fallback still active.')
+                        active_trade['tp1_order_id'] = None
     try:
         trade_json = fetch_trade_raw(active_trade['trade_id'])
         if trade_json:
@@ -1659,10 +1712,10 @@ def place_trade(instrument, entry_price_signal, sl_signal, tp_signal, direction,
     real_sl_distance = abs(actual_entry_price - new_sl)
     real_tp1_dist = real_sl_distance * TP1_R_MULT
     real_tp1_price = actual_entry_price + real_tp1_dist if direction == 'buy' else actual_entry_price - real_tp1_dist
-    active_trade = {'trade_id': trade.tradeID, 'tp1_order_id': tp1_order_id, 'pair': instrument, 'units': int(trade.units), 'initial_units': new_units, 'entry_price': actual_entry_price, 'sl': new_sl, 'tp1': real_tp1_price, 'tp2': new_tp, 'tp2_initial': new_tp, 'tp2_initial_locked': False, 'direction': direction, 'setup_type': setup_type, 'risk_percent': risk_percent, 'initial_risk': real_sl_distance, 'be_triggered': False, 'tp1_hit': False if tp1_order_id else True, 'tp2_widened': False, 'peak_profit_pips': 0.0, 'last_peak_time': datetime.now(tz).isoformat(), 'time_lock_done': False, 'regime_adverse_handled': False, 'checkpoint_sent': False, 'trailing_active': False, 'atr': atr_val, 'opened_at': datetime.now(tz).isoformat(), 'quality_score': quality_score, 'news_partial_done': False, 'news_partial_close': False, 'half_size': _half_size_applied, 'early_secure_done': False, 'early_widen_done': False, 'phase': 0, 'stagnation_done': False}
+    active_trade = {'trade_id': trade.tradeID, 'tp1_order_id': tp1_order_id, 'pair': instrument, 'units': int(trade.units), 'initial_units': new_units, 'entry_price': actual_entry_price, 'sl': new_sl, 'tp1': real_tp1_price, 'tp2': new_tp, 'tp2_initial': new_tp, 'tp2_initial_locked': False, 'direction': direction, 'setup_type': setup_type, 'risk_percent': risk_percent, 'initial_risk': real_sl_distance, 'be_triggered': False, 'tp1_hit': False, 'tp2_widened': False, 'peak_profit_pips': 0.0, 'last_peak_time': datetime.now(tz).isoformat(), 'time_lock_done': False, 'regime_adverse_handled': False, 'checkpoint_sent': False, 'trailing_active': False, 'atr': atr_val, 'opened_at': datetime.now(tz).isoformat(), 'quality_score': quality_score, 'news_partial_done': False, 'news_partial_close': False, 'half_size': _half_size_applied, 'early_secure_done': False, 'early_widen_done': False, 'phase': 0, 'stagnation_done': False}
     trades_today += 1
     rr_ratio = SETUP_RR.get(setup_type.lower().replace(' ', '').replace('/', ''), 2.0)
-    msg = f"<b>✅ Trade opened ({trades_today}/{MAX_TRADES_PER_DAY})</b>\nPair: {instrument}\nSetup: {setup_type.upper()}\nType: {('Buy' if direction == 'buy' else 'Sell')}\nRisk: {risk_percent:.2f}%\nVolume: {new_units} units\nEntry: {actual_entry_price:.5f} (slippage {slippage_pips:.1f}p)\nInitial SL (Fixed): {new_sl:.5f} — Phase 0, Trailing OFF\nTP1: {real_tp1_price:.5f} ({TP1_R_MULT:.2f}R, {TP_PARTIAL_RATIO:.0%}) - Server-side Limit\nTP2: {new_tp:.5f} ({rr_ratio:.1f}R)\nR/R: 1:{rr_ratio:.1f}\nQuality: {quality_score:.1f}\nTime: {datetime.now(tz).strftime('%Y-%m-%d %H:%M:%S')}\n🛡 Early Secure -> SL (BE+2p at 0.5R) · ATR Trailing after TP1 only"
+    msg = f"<b>✅ Trade opened ({trades_today}/{MAX_TRADES_PER_DAY})</b>\nPair: {instrument}\nSetup: {setup_type.upper()}\nType: {('Buy' if direction == 'buy' else 'Sell')}\nRisk: {risk_percent:.2f}%\nVolume: {new_units} units\nEntry: {actual_entry_price:.5f} (slippage {slippage_pips:.1f}p)\nInitial SL (FIXED): {new_sl:.5f} — Phase 0, trailing OFF\nTP1: {real_tp1_price:.5f} ({TP1_R_MULT:.2f}R, {TP_PARTIAL_RATIO:.0%}) - Server-side Limit\nTP2: {new_tp:.5f} ({rr_ratio:.1f}R)\nR/R: 1:{rr_ratio:.1f}\nQuality: {quality_score:.1f}\nTime: {datetime.now(tz).strftime('%Y-%m-%d %H:%M:%S')}\n🛡 v2: Early Secure -> SL BE+2p at 0.5R · ATR trailing after TP1 only"
     send_telegram_message(msg)
     live_log(f'✅ Trade opened {instrument} {direction} {setup_type} @ {actual_entry_price:.5f} SL {new_sl:.5f} TP1 {real_tp1_price:.5f} TP2 {new_tp:.5f} — Phase 0', force=True)
     log_trade({'time': datetime.now(tz).isoformat(), 'pair': instrument, 'setup': setup_type, 'entry': actual_entry_price, 'sl': new_sl, 'tp1': real_tp1_price, 'tp2': new_tp, 'units': new_units, 'direction': direction, 'risk_percent': risk_percent, 'status': 'OPEN'})
@@ -1690,7 +1743,7 @@ def check_closed_trade():
                 our_trade = t
                 break
         if our_trade is None:
-            print(f'⚠ Trade {our_trade_id} pas encore CLOSED {pair} – retry.')
+            print(f'⚠ Trade {our_trade_id} not CLOSED yet {pair} – retry.')
             return
         latest = our_trade
         total_pnl_cad = float(latest.realizedPL)
@@ -1852,7 +1905,7 @@ def main():
         lines.append('Relay runs until 17:05 ET (forced close at 16:55).')
         start_msg = '\n'.join(lines)
     else:
-        start_msg = (f'📉 Half-Size Day (50%): news detected {NEWS_DAY_HALF_SIZE_INFO} (07:00-16:55). All trades today at 50% size.\n' if NEWS_DAY_HALF_SIZE else '') + f'🟢 Forex Sniper 7-12 Multi-Setup v2 started – max {MAX_TRADES_PER_DAY} trades/day, buffer {MIN_MINUTES_BETWEEN_TRADES}min. State machine: Phase 0 (Fixed SL)-> Phase 1 (BE+2 at 0.5R) -> Phase 2 TP1 (Partial closure) -> Phase 3 (ATR Trailing). ({trades_today} already taken)\n📅 News pause: {NEWS_BLOCK_PRE_MINUTES} min pre + {NEWS_BLOCK_POST_MINUTES} min post.'
+        start_msg = (f'📉 HALF-SIZE DAY (50%): news detected {NEWS_DAY_HALF_SIZE_INFO} (07:00-16:55). All trades today at 50% size.\n' if NEWS_DAY_HALF_SIZE else '') + f'🟢 Forex Sniper 7-12 Multi-Setup v2 started – max {MAX_TRADES_PER_DAY} trades/day, buffer {MIN_MINUTES_BETWEEN_TRADES}min. State machine: Phase 0 fixed stop -> Phase 1 BE+2 at 0.5R -> Phase 2 TP1 -> Phase 3 ATR trailing. ({trades_today} already taken)\n📅 News pause: {NEWS_BLOCK_PRE_MINUTES} min pre + {NEWS_BLOCK_POST_MINUTES} min post.'
         if future_events:
             start_msg += '\n\n📰 <b>Upcoming high-impact news:</b>\n'
             for e in future_events:
@@ -1997,7 +2050,7 @@ def main():
                                 active_trade['news_partial_close'] = True
                                 active_trade['units'] = remaining if active_trade['direction'] == 'buy' else -remaining
                                 sl_state = 'trailing (BE)' if active_trade.get('be_triggered') else 'initial SL'
-                                send_telegram_message(f'📰 <b>Imminent News – Partial close (Not TP1)</b>\nPair: {pair}\nSetup: {setup_type.upper()} ({setup_label})\nNews: {news_title} at {news_time}\nClosed: {int(close_pct * 100)}% ({partial_units} units)\nRunner: {remaining} units ({sl_state} intact)\nP&L: {pnl_cad:+.2f} CAD')
+                                send_telegram_message(f'📰 <b>Imminent News – Partial close (NOT TP1)</b>\nPair: {pair}\nSetup: {setup_type.upper()} ({setup_label})\nNews: {news_title} at {news_time}\nClosed: {int(close_pct * 100)}% ({partial_units} units)\nRunner: {remaining} units ({sl_state} intact)\nP&L: {pnl_cad:+.2f} CAD')
                                 live_log(f'📰 Imminent news - Partial {int(close_pct * 100)}% {pair}')
                                 print(f'Imminent news - {pair}: {int(close_pct * 100)}% closed.')
                             else:
